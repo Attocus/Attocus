@@ -235,8 +235,8 @@ Verifies that:
 
 - **Sukainah Alramadhan** ([@sukainahAlramadhan](https://github.com/sukainahAlramadhan))
 - **Bariqa aljarallah** ([@Bariqa1](https://github.com/Bariqa1))
-- **Rana**
-- **Taif** 
+- **Rana Alosaimi** ([@Rana-21](https://github.com/Rana-21))
+- **Taif Alanzi** ([@taifl2](https://github.com/taifl2))
 ---
 
 <div align="center">
