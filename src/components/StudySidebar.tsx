@@ -36,6 +36,9 @@ interface StudySidebarProps {
   onToggleCollapse?: () => void;
 }
 
+const ALERT_THRESHOLD_MS = 30000; // 30 ثانية
+const GRACE_PERIOD_MS = 3000;     // 3 ثوانٍ فترة سماح
+
 export const StudySidebar: React.FC<StudySidebarProps> = ({
   slides,
   currentPage,
@@ -57,47 +60,234 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
   onToggleCollapse
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
   const [autoScanEnabled] = useState(true);
+
+  // مراجع التتبع والتحكم
+  const phoneStartTimeRef = useRef<number | null>(null);
+  const lastPhoneSeenTimeRef = useRef<number | null>(null);
+
+  const sleepyStartTimeRef = useRef<number | null>(null);
+  const lastSleepySeenTimeRef = useRef<number | null>(null);
+
+  // منع تكرار الإشعار عدة مرات
+  const phoneAlertFiredRef = useRef<boolean>(false);
+  const sleepAlertFiredRef = useRef<boolean>(false);
+
+  const lastAudioPlayTimeRef = useRef<number>(0);
+
+  const callbacksRef = useRef({
+    onTriggerPhoneDetected,
+    onTriggerSleepingDetected,
+    onTriggerGazeDrift,
+    onTriggerFocused
+  });
+
+  useEffect(() => {
+    callbacksRef.current = {
+      onTriggerPhoneDetected,
+      onTriggerSleepingDetected,
+      onTriggerGazeDrift,
+      onTriggerFocused
+    };
+  }, [onTriggerPhoneDetected, onTriggerSleepingDetected, onTriggerGazeDrift, onTriggerFocused]);
+
+  // الصوت الأصلي الدقيق الموجود في index.html (C5 + E5)
+  const triggerAudioAlert = () => {
+    const now = Date.now();
+    if (now - lastAudioPlayTimeRef.current < 1500) return;
+    lastAudioPlayTimeRef.current = now;
+
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // النغمة الأولى (C5)
+      const osc1 = audioCtx.createOscillator();
+      const gain1 = audioCtx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(523.25, audioCtx.currentTime); 
+      gain1.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+      osc1.connect(gain1);
+      gain1.connect(audioCtx.destination);
+      osc1.start();
+      osc1.stop(audioCtx.currentTime + 0.3);
+
+      // النغمة الثانية (E5) بعد 150ms
+      setTimeout(() => {
+        try {
+          const osc2 = audioCtx.createOscillator();
+          const gain2 = audioCtx.createGain();
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime); 
+          gain2.gain.setValueAtTime(0.1, audioCtx.currentTime);
+          gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+          osc2.connect(gain2);
+          gain2.connect(audioCtx.destination);
+          osc2.start();
+          osc2.stop(audioCtx.currentTime + 0.4);
+        } catch (e) {}
+      }, 150);
+    } catch (e) {
+      console.warn('Audio playback failed:', e);
+    }
+  };
 
   useEffect(() => {
     if (videoRef.current && cameraStream && cameraActive) {
       videoRef.current.srcObject = cameraStream;
       videoRef.current.play().catch(err => {
-        console.warn('Video auto-play interrupted or waiting for user gesture:', err);
+        console.warn('Video auto-play interrupted:', err);
       });
     }
   }, [cameraStream, cameraActive]);
 
-  // Capture frame from video element
+  useEffect(() => {
+    if (!cameraActive) {
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+      phoneStartTimeRef.current = null;
+      lastPhoneSeenTimeRef.current = null;
+      sleepyStartTimeRef.current = null;
+      lastSleepySeenTimeRef.current = null;
+      phoneAlertFiredRef.current = false;
+      sleepAlertFiredRef.current = false;
+      return;
+    }
+
+    const socket = new WebSocket('ws://127.0.0.1:8000/ws/detect');
+    socketRef.current = socket;
+
+    socket.onopen = () => {
+      console.log('Connected to Python Attention Monitor WebSocket Server');
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        const now = Date.now();
+
+        // 1. معالجة حالة كشف الجوال
+        if (data.phone_detected) {
+          lastPhoneSeenTimeRef.current = now;
+          if (!phoneStartTimeRef.current) phoneStartTimeRef.current = now;
+        } else {
+          if (
+            lastPhoneSeenTimeRef.current &&
+            now - lastPhoneSeenTimeRef.current > GRACE_PERIOD_MS
+          ) {
+            phoneStartTimeRef.current = null;
+            lastPhoneSeenTimeRef.current = null;
+            phoneAlertFiredRef.current = false; // إعادة الضبط التلقائي بمجرد ترك الجوال
+          }
+        }
+
+        if (phoneStartTimeRef.current) {
+          const elapsed = now - phoneStartTimeRef.current;
+          if (elapsed >= ALERT_THRESHOLD_MS) {
+            triggerAudioAlert();
+
+            // إرسال الإشعار مرة واحدة فقط للواجهة لمنع إظهار النافذة 3 مرات
+            if (!phoneAlertFiredRef.current) {
+              phoneAlertFiredRef.current = true;
+              callbacksRef.current.onTriggerPhoneDetected(
+                `Phone used for over 30 seconds! (${data.confidence}% confidence)`
+              );
+            }
+          }
+          sleepyStartTimeRef.current = null;
+          lastSleepySeenTimeRef.current = null;
+          sleepAlertFiredRef.current = false;
+          return;
+        }
+
+        // 2. معالجة حالة كشف النعاس
+        if (data.is_sleepy) {
+          lastSleepySeenTimeRef.current = now;
+          if (!sleepyStartTimeRef.current) sleepyStartTimeRef.current = now;
+        } else {
+          if (
+            lastSleepySeenTimeRef.current &&
+            now - lastSleepySeenTimeRef.current > GRACE_PERIOD_MS
+          ) {
+            sleepyStartTimeRef.current = null;
+            lastSleepySeenTimeRef.current = null;
+            sleepAlertFiredRef.current = false;
+          }
+        }
+
+        if (sleepyStartTimeRef.current) {
+          const elapsed = now - sleepyStartTimeRef.current;
+          if (elapsed >= ALERT_THRESHOLD_MS) {
+            triggerAudioAlert();
+
+            if (!sleepAlertFiredRef.current) {
+              sleepAlertFiredRef.current = true;
+              callbacksRef.current.onTriggerSleepingDetected(
+                'Drowsiness detected continuously for over 30 seconds!'
+              );
+            }
+          }
+          return;
+        }
+
+        // 3. عودة الحالة إلى التركيز
+        if (phoneAlertFiredRef.current || sleepAlertFiredRef.current) {
+          phoneAlertFiredRef.current = false;
+          sleepAlertFiredRef.current = false;
+          callbacksRef.current.onTriggerFocused();
+        }
+      } catch (err) {
+        console.error('Error parsing WebSocket response:', err);
+      }
+    };
+
+    socket.onerror = (err) => {
+      console.error('WebSocket Error:', err);
+    };
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+    };
+  }, [cameraActive]);
+
   const captureFrame = async () => {
-    if (!videoRef.current || !cameraActive || isAnalyzingFrame) return;
+    if (!videoRef.current || !cameraActive) return;
     try {
       const video = videoRef.current;
       if (video.videoWidth === 0) return;
+
       const canvas = document.createElement('canvas');
-      canvas.width = Math.min(320, video.videoWidth);
-      canvas.height = Math.min(240, video.videoHeight);
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
+
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
-        await onAnalyzeFrameSnapshot(dataUrl);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          socketRef.current.send(dataUrl);
+        }
       }
     } catch (err) {
       console.warn('Frame capture error:', err);
     }
   };
 
-  // Periodic automated scan when camera is active and autoScan is enabled
   useEffect(() => {
     if (!cameraActive || !autoScanEnabled) return;
     const interval = setInterval(() => {
       captureFrame();
-    }, 12000); // scan every 12s
+    }, 200);
     return () => clearInterval(interval);
   }, [cameraActive, autoScanEnabled]);
 
-  // Render minimal collapsed view
   if (isCollapsed) {
     return (
       <aside className="w-12 h-full border-r border-[#E6E8E2] bg-[#FDFDFC] flex flex-col items-center py-3 select-none shrink-0 transition-all duration-300">
@@ -136,7 +326,6 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
 
   return (
     <aside className="w-80 h-full border-r border-[#E6E8E2] bg-[#FDFDFC] flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all duration-300">
-      {/* Sidebar Header with Collapse Button */}
       <div className="p-3 border-b border-[#E8EAE4] bg-[#F7F8F5] flex items-center justify-between">
         <span className="text-xs font-bold text-[#3D4247] uppercase tracking-wider">
           Study Workspace
@@ -154,7 +343,6 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
         )}
       </div>
 
-      {/* SECTION 1: Live Camera Feed & Attention Monitor */}
       <div className="p-4 border-b border-[#E8EAE4] bg-white">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
@@ -211,7 +399,6 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
           </button>
         </div>
 
-        {/* Camera Feed Container */}
         {cameraActive ? (
           <div className="relative rounded-xl overflow-hidden bg-[#1E2022] aspect-video border border-[#DCDED8] shadow-2xs group">
             <video
@@ -222,7 +409,6 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
               className="w-full h-full object-cover mirror -scale-x-100"
             />
 
-            {/* Status Overlays */}
             <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-xs text-[10px] text-white flex items-center gap-1 font-mono">
               <Eye className="w-2.5 h-2.5 text-emerald-400" />
               <span>Gaze & State</span>
@@ -291,7 +477,6 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
           </div>
         )}
 
-        {/* Subtle camera active status note */}
         {cameraActive && (
           <div className="mt-2.5 pt-2 border-t border-[#ECEEE8] flex items-center justify-between text-[11px] text-[#6D7278]">
             <span className="flex items-center gap-1.5 font-medium">
@@ -303,7 +488,6 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
         )}
       </div>
 
-      {/* SECTION 2: Slide Contents & Topics */}
       <div className="flex-1 flex flex-col min-h-0">
         <div className="p-3 border-b border-[#E8EAE4] bg-[#F7F8F5] flex items-center justify-between">
           <span className="text-xs font-semibold text-[#454A50] tracking-wide uppercase">
@@ -358,7 +542,6 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
         </div>
       </div>
 
-      {/* Privacy note at bottom */}
       <div className="p-3 border-t border-[#E8EAE4] bg-[#F7F8F5] text-[11px] text-[#71777E] flex items-center gap-2">
         <ShieldCheck className="w-3.5 h-3.5 text-[#546E7A] shrink-0" />
         <span className="leading-tight">
