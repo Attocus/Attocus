@@ -143,6 +143,7 @@ export interface AttentionTrackingState {
   tabSwitchToast: {
     show: boolean;
     timestamp: number;
+    message?: string;
   } | null;
 }
 

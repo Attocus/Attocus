@@ -6,12 +6,14 @@ interface QuickQuizModalProps {
   isOpen: boolean;
   onClose: () => void;
   slide: Slide;
+  lectureTitle?: string;
 }
 
 export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
   isOpen,
   onClose,
-  slide
+  slide,
+  lectureTitle
 }) => {
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>([]);
@@ -35,7 +37,7 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
       const res = await fetch('/api/coach/quiz/quick', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slide })
+        body: JSON.stringify({ slide, lectureTitle })
       });
       const data = await res.json();
       setQuestion(data.question || `What is the key principle of ${slide.title}?`);
@@ -43,9 +45,12 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
       setCorrectAnswer(data.correctAnswer || data.options?.[0] || '');
       setExplanation(data.explanation || 'Verified from the lecture notes.');
     } catch {
+      const cleanKeyPoints = (slide.keyPoints || []).filter(
+        kp => !kp.toLowerCase().includes('visual and conceptual takeaways') && !kp.toLowerCase().includes('visual presentation')
+      );
       setQuestion(`Regarding ${slide.title}, which of the following is accurate?`);
       const opts = [
-        (slide.keyPoints || [])[0] || 'It preserves state machine consistency across all replicas.',
+        cleanKeyPoints[0] || 'It preserves state machine consistency across all replicas.',
         'It allows uncommitted writes to bypass majority quorum checks.',
         'It requires physical clock synchronization across nodes.',
         'It only operates when all cluster nodes are active.'

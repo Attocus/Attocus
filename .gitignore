@@ -4,5 +4,27 @@ dist/
 coverage/
 .DS_Store
 *.log
+
+# Environment files
 .env*
 !.env.example
+
+# Service Account Keys & Secrets
+*serviceAccount*.json
+serviceAccountKey.json
+firebase-adminsdk*.json
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+
+# Testing & Observability caches
+.pytest_cache/
+.deepeval/
+.mypy_cache/
+.ruff_cache/

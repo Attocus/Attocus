@@ -1,13 +1,25 @@
+# FastAPI & Server
 fastapi>=0.110.0
-uvicorn>=0.28.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+python-dotenv>=1.0.0
+python-multipart>=0.0.9
+websockets>=12.0
+
+# Multi-Agent AI & Shared Vector RAG
+openai>=1.14.0
+google-cloud-firestore>=2.14.0
+pypdf>=4.0.0
+langchain-text-splitters>=0.0.1
+
+# Computer Vision & Attention Telemetry (YOLO & MediaPipe)
 ultralytics>=8.1.0
 opencv-python>=4.9.0
-websockets>=12.0
 mediapipe==0.10.11
 numpy>=1.26.0
 
-
-# python -m venv venv
-# .\venv\Scripts\Activate.ps1
-# pip install -r requirements.txt
-# python app.py
+# Observability, Evaluation & Testing
+langsmith>=0.1.0
+deepeval>=2.9.0,<3.0.0
+pytest>=8.0.0
+pytest-asyncio>=0.23.0

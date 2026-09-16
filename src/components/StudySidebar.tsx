@@ -36,8 +36,8 @@ interface StudySidebarProps {
   onToggleCollapse?: () => void;
 }
 
-const ALERT_THRESHOLD_MS = 30000; // 30 ثانية
-const GRACE_PERIOD_MS = 3000;     // 3 ثوانٍ فترة سماح
+const ALERT_THRESHOLD_MS = 1500;
+const GRACE_PERIOD_MS = 1500;
 
 export const StudySidebar: React.FC<StudySidebarProps> = ({
   slides,
@@ -100,12 +100,12 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
 
     try {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
+
       // النغمة الأولى (C5)
       const osc1 = audioCtx.createOscillator();
       const gain1 = audioCtx.createGain();
       osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(523.25, audioCtx.currentTime); 
+      osc1.frequency.setValueAtTime(523.25, audioCtx.currentTime);
       gain1.gain.setValueAtTime(0.1, audioCtx.currentTime);
       gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
       osc1.connect(gain1);
@@ -119,14 +119,14 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
           const osc2 = audioCtx.createOscillator();
           const gain2 = audioCtx.createGain();
           osc2.type = 'sine';
-          osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime); 
+          osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime);
           gain2.gain.setValueAtTime(0.1, audioCtx.currentTime);
           gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
           osc2.connect(gain2);
           gain2.connect(audioCtx.destination);
           osc2.start();
           osc2.stop(audioCtx.currentTime + 0.4);
-        } catch (e) {}
+        } catch (e) { }
       }, 150);
     } catch (e) {
       console.warn('Audio playback failed:', e);
@@ -180,7 +180,10 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
           ) {
             phoneStartTimeRef.current = null;
             lastPhoneSeenTimeRef.current = null;
-            phoneAlertFiredRef.current = false; // إعادة الضبط التلقائي بمجرد ترك الجوال
+            if (phoneAlertFiredRef.current) {
+              phoneAlertFiredRef.current = false;
+              callbacksRef.current.onTriggerFocused();
+            }
           }
         }
 
@@ -189,18 +192,13 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
           if (elapsed >= ALERT_THRESHOLD_MS) {
             triggerAudioAlert();
 
-            // إرسال الإشعار مرة واحدة فقط للواجهة لمنع إظهار النافذة 3 مرات
             if (!phoneAlertFiredRef.current) {
               phoneAlertFiredRef.current = true;
               callbacksRef.current.onTriggerPhoneDetected(
-                `Phone used for over 30 seconds! (${data.confidence}% confidence)`
+                `Phone detected in hand! (${data.confidence || 90}% confidence)`
               );
             }
           }
-          sleepyStartTimeRef.current = null;
-          lastSleepySeenTimeRef.current = null;
-          sleepAlertFiredRef.current = false;
-          return;
         }
 
         // 2. معالجة حالة كشف النعاس
@@ -214,7 +212,10 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
           ) {
             sleepyStartTimeRef.current = null;
             lastSleepySeenTimeRef.current = null;
-            sleepAlertFiredRef.current = false;
+            if (sleepAlertFiredRef.current) {
+              sleepAlertFiredRef.current = false;
+              callbacksRef.current.onTriggerFocused();
+            }
           }
         }
 
@@ -226,15 +227,18 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
             if (!sleepAlertFiredRef.current) {
               sleepAlertFiredRef.current = true;
               callbacksRef.current.onTriggerSleepingDetected(
-                'Drowsiness detected continuously for over 30 seconds!'
+                'Drowsiness or eye closure detected!'
               );
             }
           }
-          return;
         }
 
-        // 3. عودة الحالة إلى التركيز
-        if (phoneAlertFiredRef.current || sleepAlertFiredRef.current) {
+        // 3. عودة الحالة إلى التركيز تلقائياً إذا لم يعد هناك جوال أو نعاس
+        if (
+          !phoneStartTimeRef.current &&
+          !sleepyStartTimeRef.current &&
+          (phoneAlertFiredRef.current || sleepAlertFiredRef.current)
+        ) {
           phoneAlertFiredRef.current = false;
           sleepAlertFiredRef.current = false;
           callbacksRef.current.onTriggerFocused();
@@ -263,13 +267,15 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
       if (video.videoWidth === 0) return;
 
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      const targetW = 640;
+      const scale = Math.min(1, targetW / (video.videoWidth || 640));
+      canvas.width = Math.round((video.videoWidth || 640) * scale);
+      canvas.height = Math.round((video.videoHeight || 480) * scale);
       const ctx = canvas.getContext('2d');
 
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
 
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
           socketRef.current.send(dataUrl);
@@ -308,11 +314,10 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                 key={slide.id}
                 type="button"
                 onClick={() => onSelectPage(slide.pageNumber)}
-                className={`w-8 h-8 rounded-md flex items-center justify-center text-xs font-mono transition-all ${
-                  isCurrent
-                    ? 'bg-[#2E7D32] text-white font-bold'
-                    : 'bg-[#E5E7E2] text-[#555A60] hover:bg-[#DCDED8]'
-                }`}
+                className={`w-8 h-8 rounded-md flex items-center justify-center text-xs font-mono transition-all ${isCurrent
+                  ? 'bg-[#2E7D32] text-white font-bold'
+                  : 'bg-[#E5E7E2] text-[#555A60] hover:bg-[#DCDED8]'
+                  }`}
                 title={`Slide ${slide.pageNumber}: ${slide.title}`}
               >
                 {slide.pageNumber}
@@ -347,27 +352,26 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <span
-              className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                cameraActive && detectedState === 'focused'
-                  ? 'bg-[#2E7D32] animate-pulse'
-                  : cameraActive && detectedState === 'using_phone'
+              className={`w-2.5 h-2.5 rounded-full transition-colors ${cameraActive && detectedState === 'focused'
+                ? 'bg-[#2E7D32] animate-pulse'
+                : cameraActive && detectedState === 'using_phone'
                   ? 'bg-[#DC2626] animate-ping'
                   : cameraActive && detectedState === 'sleeping'
-                  ? 'bg-[#2563EB]'
-                  : cameraActive && (detectedState === 'distracted' || attentionDrifted)
-                  ? 'bg-[#E65100]'
-                  : 'bg-[#9E9E9E]'
-              }`}
+                    ? 'bg-[#2563EB]'
+                    : cameraActive && (detectedState === 'distracted' || attentionDrifted)
+                      ? 'bg-[#E65100]'
+                      : 'bg-[#9E9E9E]'
+                }`}
             />
             <span className="text-xs font-semibold text-[#303336] tracking-tight">
               {cameraActive
                 ? detectedState === 'using_phone'
                   ? 'Phone Detected 📱'
                   : detectedState === 'sleeping'
-                  ? 'Sleeping Detected 💤'
-                  : detectedState === 'distracted' || attentionDrifted
-                  ? 'Attention Drifted'
-                  : 'Attention Monitor: Active'
+                    ? 'Sleeping Detected 💤'
+                    : detectedState === 'distracted' || attentionDrifted
+                      ? 'Attention Drifted'
+                      : 'Attention Monitor: Active'
                 : 'Attention Monitor: Off'}
             </span>
           </div>
@@ -507,18 +511,16 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                 id={`sidebar-slide-link-${slide.pageNumber}`}
                 type="button"
                 onClick={() => onSelectPage(slide.pageNumber)}
-                className={`w-full text-left p-2.5 rounded-lg transition-all flex items-start gap-2.5 ${
-                  isCurrent
-                    ? 'bg-[#EDF2EC] border border-[#CDE0CC] text-[#1E3A24]'
-                    : 'hover:bg-[#F2F4F0] border border-transparent text-[#383D42]'
-                }`}
+                className={`w-full text-left p-2.5 rounded-lg transition-all flex items-start gap-2.5 ${isCurrent
+                  ? 'bg-[#EDF2EC] border border-[#CDE0CC] text-[#1E3A24]'
+                  : 'hover:bg-[#F2F4F0] border border-transparent text-[#383D42]'
+                  }`}
               >
                 <div
-                  className={`w-5 h-5 rounded-md flex items-center justify-center text-xs font-mono shrink-0 mt-0.5 ${
-                    isCurrent
-                      ? 'bg-[#2E7D32] text-white font-bold'
-                      : 'bg-[#E5E7E2] text-[#555A60]'
-                  }`}
+                  className={`w-5 h-5 rounded-md flex items-center justify-center text-xs font-mono shrink-0 mt-0.5 ${isCurrent
+                    ? 'bg-[#2E7D32] text-white font-bold'
+                    : 'bg-[#E5E7E2] text-[#555A60]'
+                    }`}
                 >
                   {slide.pageNumber}
                 </div>

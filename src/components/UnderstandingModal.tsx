@@ -209,7 +209,7 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
                 <span className="leading-relaxed">{turn.studentAnswer}</span>
               </div>
 
-              {turn.analysis?.feedback && (
+              {turn.analysis?.feedback && turn.analysis.feedback !== currentQuestion && turn.analysis.feedback !== turn.question && (
                 <div className="p-2.5 rounded-lg bg-[#FAF7F0] border border-[#EDE4D0] text-[11px] text-[#5D5545] ml-4 flex items-center gap-2">
                   <Sparkles className="w-3.5 h-3.5 text-[#B78103] shrink-0" />
                   <span>{turn.analysis.feedback}</span>

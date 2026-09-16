@@ -16,17 +16,22 @@ async function parsePdfFile(file: File, title: string, onProgress?: (pct: number
   try {
     // Attempt to load pdfjs-dist dynamically
     const pdfjsLib = await import('pdfjs-dist');
-    // Set worker source if available
+    // Set worker source to local same-origin file to avoid browser CORS/cross-origin worker blocking
     try {
       if (pdfjsLib.GlobalWorkerOptions) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.0.379'}/pdf.worker.min.mjs`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
       }
     } catch {
       // ignore
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(arrayBuffer),
+      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + (pdfjsLib.version || '6.3.289') + '/cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + (pdfjsLib.version || '6.3.289') + '/standard_fonts/',
+    });
     const pdf = await loadingTask.promise;
     // Support all pages (e.g. 41+ pages) up to 120
     const numPages = Math.min(pdf.numPages, 120);
@@ -41,54 +46,67 @@ async function parsePdfFile(file: File, title: string, onProgress?: (pct: number
       // 1. Render actual PDF page to ultra-crisp high-res image data URL
       let pageImageUrl: string | undefined = undefined;
       try {
-        // High DPI rendering (scale 2.2) ensures text, equations, and diagrams remain razor sharp
-        const viewport = page.getViewport({ scale: 2.2 });
+        // High DPI rendering (scale 2.0) ensures text, equations, and diagrams remain razor sharp
+        const viewport = page.getViewport({ scale: 2.0 });
         const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
         const ctx = canvas.getContext('2d');
         if (ctx) {
+          // Fill white background first (vital for transparent PDFs so they don't turn black in JPEG)
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = 'high';
-          await (page.render as any)({ canvas, canvasContext: ctx, viewport }).promise;
-          pageImageUrl = canvas.toDataURL('image/jpeg', 0.92);
+          const renderTask = (page.render as any)({
+            canvasContext: ctx,
+            viewport: viewport
+          });
+          await renderTask.promise;
+          pageImageUrl = canvas.toDataURL('image/jpeg', 0.90);
         }
       } catch (renderErr) {
-        console.warn('Canvas rendering for PDF page skipped:', renderErr);
+        console.warn(`[PDF] Canvas rendering for page ${i} skipped:`, renderErr);
       }
 
       // 2. Extract text for AI Coach analysis
-      const textContent = await page.getTextContent();
-      const rawText = textContent.items
-        .map((item: any) => item.str)
-        .join(' ')
-        .trim();
+      let rawText = '';
+      try {
+        const textContent = await page.getTextContent();
+        rawText = textContent.items
+          .map((item: any) => item.str || '')
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      } catch (textErr) {
+        console.warn(`[PDF] Text extraction on page ${i}:`, textErr);
+      }
 
       const lines = rawText
         .split(/\s{2,}|\.\s+|\n+/)
         .map(l => l.trim())
-        .filter(l => l.length > 4);
+        .filter(l => l.length > 3);
 
-      const pageTitle = lines[0] ? lines[0].slice(0, 65) : `Page ${i}`;
-      const subtitle = lines[1] && lines[1].length < 80 ? lines[1] : undefined;
+      const pageTitle = lines[0] ? lines[0].slice(0, 75) : `Slide ${i}`;
+      const subtitle = lines[1] && lines[1].length < 90 && lines[1] !== pageTitle ? lines[1] : undefined;
       const content = lines.slice(subtitle ? 2 : 1, 8);
       const keyPoints = content.slice(0, 3);
 
       slides.push({
         id: `pdf-page-${i}`,
         pageNumber: i,
-        title: pageTitle || `Section ${i}`,
+        title: pageTitle || `Slide ${i}`,
         subtitle,
-        content: content.length > 0 ? content : [rawText ? rawText.slice(0, 300) : `Reading visual page ${i} from original PDF.`],
-        keyPoints: keyPoints.length > 0 ? keyPoints : [`Key visual and theoretical elements from page ${i}`],
-        topic: pageTitle || `Page ${i}`,
+        content: content.length > 0 ? content : (rawText ? [rawText.slice(0, 300)] : []),
+        keyPoints: keyPoints.length > 0 ? keyPoints : (content.length > 0 ? content.slice(0, 3) : (pageTitle ? [pageTitle] : [])),
+        topic: pageTitle || `Slide ${i}`,
         densityScore: Math.min(5, Math.max(2, Math.round(lines.length / 3))),
         pageImageUrl
       });
     }
 
     if (slides.length === 0) {
-      throw new Error('No readable text in PDF');
+      throw new Error('Could not parse any pages from PDF');
     }
 
     return {

@@ -27,9 +27,96 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setProgressStatus(`Analyzing and rendering "${file.name}"...`);
 
     try {
-      const parsedLecture = await parseUploadedFile(file, pct => {
+      let parsedLecture = await parseUploadedFile(file, pct => {
         setProgressStatus(`Processing pages & high-res slides (${pct}%)...`);
       });
+
+      // Ingest PDF into Shared Firestore RAG & Enrich slides
+      if (file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.pptx')) {
+        setProgressStatus(`Indexing in AI Knowledge Base...`);
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('session_id', parsedLecture.id || 'default');
+
+          const ragRes = await fetch('/api/rag/upload', {
+            method: 'POST',
+            body: formData
+          });
+
+          if (ragRes.ok) {
+            const ragData = await ragRes.json();
+            console.log('[RAG] Indexed successfully:', ragData);
+
+            // Always enrich slides with backend extracted text from Shared RAG
+            if (ragData.pages && ragData.pages.length > 0) {
+              console.log('[Upload] Enriching lecture from backend RAG pages:', ragData.pages.length);
+              
+              const baseLength = Math.max(parsedLecture.slides.length, ragData.pages.length);
+              const enrichedSlides = [];
+
+              for (let idx = 0; idx < baseLength; idx++) {
+                const existingSlide = parsedLecture.slides[idx];
+                const backendPage = ragData.pages[idx];
+                const backendText = (backendPage?.text || '').trim();
+                const backendLines = backendText
+                  ? backendText.split(/\n+/).map((l: string) => l.trim()).filter((l: string) => l.length > 2)
+                  : [];
+
+                const currentContentStr = (existingSlide?.content || []).join(' ');
+                const currentKeyPointsStr = (existingSlide?.keyPoints || []).join(' ');
+                const isPlaceholder = !existingSlide ||
+                  !currentContentStr ||
+                  currentContentStr.includes('Visual presentation content') ||
+                  currentContentStr.includes('Section notes and key lecture points') ||
+                  currentKeyPointsStr.includes('Visual and conceptual takeaways') ||
+                  currentContentStr.length < 30;
+
+                let title = existingSlide?.title;
+                const isGenericTitle = !title || title.toLowerCase().startsWith('slide ') || title.includes('Introduction');
+                if (isGenericTitle && backendLines.length > 0) {
+                  title = backendLines[0].slice(0, 75);
+                }
+
+                let content = existingSlide?.content || [];
+                let keyPoints = existingSlide?.keyPoints || [];
+
+                if (isPlaceholder && backendLines.length > 0) {
+                  content = backendLines.slice(backendLines[0] === title ? 1 : 0, 8);
+                  if (content.length === 0) content = [backendText.slice(0, 350)];
+                  keyPoints = content.slice(0, 3);
+                } else if (isPlaceholder && backendText) {
+                  content = [backendText.slice(0, 350)];
+                  keyPoints = [backendText.slice(0, 100)];
+                }
+
+                enrichedSlides.push({
+                  id: existingSlide?.id || `slide-${idx + 1}`,
+                  pageNumber: idx + 1,
+                  title: title || `Slide ${idx + 1}`,
+                  subtitle: existingSlide?.subtitle,
+                  content: content.length > 0 ? content : (backendText ? [backendText.slice(0, 300)] : [`Slide ${idx + 1}`]),
+                  keyPoints: keyPoints.length > 0 ? keyPoints : (content.slice(0, 3)),
+                  topic: title || `Slide ${idx + 1}`,
+                  densityScore: existingSlide?.densityScore || 3,
+                  pageImageUrl: existingSlide?.pageImageUrl,
+                  rawText: backendText || (existingSlide as any)?.rawText || ''
+                });
+              }
+
+              parsedLecture = {
+                ...parsedLecture,
+                title: parsedLecture.title || file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+                totalPages: enrichedSlides.length,
+                slides: enrichedSlides
+              };
+            }
+          }
+        } catch (ragErr) {
+          console.warn('[RAG] Background indexing error:', ragErr);
+        }
+      }
+
       setIsProcessing(false);
       onLectureCreated(parsedLecture);
       onClose();

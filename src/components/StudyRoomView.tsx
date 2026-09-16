@@ -23,7 +23,8 @@ import {
   Brain,
   CheckCircle2,
   X,
-  Maximize2
+  Maximize2,
+  Upload
 } from 'lucide-react';
 import { SlideViewer } from './SlideViewer';
 import { AnnotationCanvas } from './AnnotationCanvas';
@@ -38,12 +39,13 @@ import { StuckInterventionCard } from './StuckInterventionCard';
 import { PomodoroTimer } from './PomodoroTimer';
 import { PhoneAlertModal } from './PhoneAlertModal';
 import { SleepingAlertModal } from './SleepingAlertModal';
-
+import { UploadModal } from './UploadModal';
 
 interface StudyRoomViewProps {
   lecture: Lecture;
   onReturnHome: () => void;
   onUpdateLecture: (updated: Lecture) => void;
+  onUploadLecture?: (newLecture: Lecture) => void;
   onAddFocusPoints: (points: number) => void;
 }
 
@@ -51,11 +53,13 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   lecture,
   onReturnHome,
   onUpdateLecture,
+  onUploadLecture,
   onAddFocusPoints
 }) => {
   const [currentPage, setCurrentPage] = useState<number>(lecture.currentPage || 1);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [showToolLabel, setShowToolLabel] = useState<boolean>(true);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   // Sidebar collapse state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
@@ -114,6 +118,9 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   const lastActivityTimestampRef = useRef<number>(Date.now());
   const snoozedUntilRef = useRef<Record<number, number>>({});
   const documentContainerRef = useRef<HTMLDivElement | null>(null);
+  const tabHiddenTimestampRef = useRef<number | null>(null);
+  const tabSwitchesCountRef = useRef<number>(0);
+  const totalAwaySecondsRef = useRef<number>(0);
 
   const currentSlide: Slide = lecture.slides.find(s => s.pageNumber === currentPage) || lecture.slides[0];
 
@@ -224,35 +231,83 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     return () => clearInterval(interval);
   }, [currentPage]);
 
-  // Attention Tracking Case A: Tab Switching / Leaving the Page (Page Visibility API)
-  // "The moment the student switches tabs or minimizes the window, pause the timer.
-  // The moment they return, show an immediate notification — appears right away, no delay...
-  // 'Welcome back 👋 Let's get focused again'"
+  // Attention Tracking Case A: Tab Switching & Orchestrator Integration
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        // Returned to tab -> show immediate encouragement toast
+    const handleVisibilityChange = async () => {
+      if (document.hidden) {
+        // Tab hidden / switched away
+        tabHiddenTimestampRef.current = Date.now();
+        tabSwitchesCountRef.current += 1;
+      } else {
+        // Returned to tab
+        const awayMs = tabHiddenTimestampRef.current ? (Date.now() - tabHiddenTimestampRef.current) : 0;
+        const awaySeconds = awayMs / 1000;
+        totalAwaySecondsRef.current += awaySeconds;
+        tabHiddenTimestampRef.current = null;
+
+        // Default instant feedback
+        let coachMsg = "أهلاً بعودتك! 👋 لنكمل التركيز معاً";
         setAttentionState(prev => ({
           ...prev,
           tabSwitchToast: {
             show: true,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            message: coachMsg
           }
         }));
 
-        // Auto dismiss after 4 seconds
+        // Send telemetry to Python Orchestrator
+        try {
+          const res = await fetch('/api/orchestrator/telemetry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_id: `lecture-${lecture.id}`,
+              slide_number: currentPage,
+              slide_title: currentSlide.title,
+              slide_text: (currentSlide.content || []).join('\n'),
+              time_spent_seconds: pageTimeSeconds,
+              expected_seconds: stuckState.expectedSeconds,
+              tab_switches_count: tabSwitchesCountRef.current,
+              last_away_duration_seconds: awaySeconds,
+              total_away_seconds: totalAwaySecondsRef.current,
+              time_since_interaction: (Date.now() - lastActivityTimestampRef.current) / 1000,
+              language: 'ar'
+            })
+          });
+
+          if (res.ok) {
+            const decision = await res.json();
+            if (decision.message) {
+              setAttentionState(prev => ({
+                ...prev,
+                tabSwitchToast: {
+                  show: true,
+                  timestamp: Date.now(),
+                  message: decision.message
+                },
+                phoneAlertOpen: decision.alert_kind === 'phone_modal' ? true : prev.phoneAlertOpen,
+                sleepingAlertOpen: decision.alert_kind === 'sleeping_modal' ? true : prev.sleepingAlertOpen
+              }));
+            }
+          }
+        } catch (e) {
+          // Keep default toast
+        }
+
+        // Auto dismiss toast after 5 seconds
         setTimeout(() => {
           setAttentionState(prev => ({
             ...prev,
             tabSwitchToast: null
           }));
-        }, 4000);
+        }, 5000);
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+  }, [currentPage, currentSlide, lecture.id, pageTimeSeconds, stuckState.expectedSeconds]);
 
   // Camera Management
   const handleToggleCamera = async () => {
@@ -326,6 +381,45 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     }));
   };
 
+  const sendAttentionTelemetry = async (cvPayload?: { state: string; confidence: number }) => {
+    try {
+      const res = await fetch('/api/orchestrator/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: `lecture-${lecture.id}`,
+          slide_number: currentPage,
+          slide_title: currentSlide.title,
+          slide_text: (currentSlide.content || []).join('\n'),
+          time_spent_seconds: pageTimeSeconds,
+          expected_seconds: stuckState.expectedSeconds,
+          tab_switches_count: tabSwitchesCountRef.current,
+          last_away_duration_seconds: 0,
+          total_away_seconds: totalAwaySecondsRef.current,
+          time_since_interaction: (Date.now() - lastActivityTimestampRef.current) / 1000,
+          cv_data: cvPayload,
+          language: 'ar'
+        })
+      });
+
+      if (res.ok) {
+        const decision = await res.json();
+        if (decision.message) {
+          setAttentionState(prev => ({
+            ...prev,
+            tabSwitchToast: {
+              show: true,
+              timestamp: Date.now(),
+              message: decision.message
+            }
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to send attention telemetry to Orchestrator:', e);
+    }
+  };
+
   const handleTriggerPhoneDetected = (reason?: string) => {
     setAttentionState(prev => ({
       ...prev,
@@ -335,6 +429,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       sleepingAlertOpen: false,
       attentionDrifted: true
     }));
+    sendAttentionTelemetry({ state: 'using_phone', confidence: 0.95 });
   };
 
   const handleTriggerSleepingDetected = (reason?: string) => {
@@ -346,6 +441,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       phoneAlertOpen: false,
       attentionDrifted: true
     }));
+    sendAttentionTelemetry({ state: 'sleeping', confidence: 0.95 });
   };
 
   const handleTriggerGazeDrift = () => {
@@ -517,9 +613,21 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           </button>
 
           <div className="min-w-0 pr-2">
-            <h1 className="text-xs sm:text-sm font-serif font-bold text-[#191C1E] truncate">
-              {lecture.title}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xs sm:text-sm font-serif font-bold text-[#191C1E] truncate max-w-[180px] sm:max-w-xs">
+                {lecture.title}
+              </h1>
+              <button
+                type="button"
+                id="study-room-upload-btn"
+                onClick={() => setUploadModalOpen(true)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-[#2E7D32] bg-[#E8F0E6] hover:bg-[#DCE8D8] transition-colors shrink-0 cursor-pointer"
+                title="Upload or switch lecture slides"
+              >
+                <Upload className="w-3 h-3" />
+                <span className="hidden sm:inline">Upload File</span>
+              </button>
+            </div>
             <p className="text-[10px] text-[#71777E] truncate">
               {lecture.subject} · {currentSlide.topic}
             </p>
@@ -806,7 +914,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           id="tab-return-encouragement-toast"
           className="fixed top-18 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-white/95 border border-[#D5DCD0] shadow-md text-xs font-medium text-[#2E7D32] flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200"
         >
-          <span>Welcome back 👋 Let's get focused again</span>
+          <span>{attentionState.tabSwitchToast.message || "Welcome back 👋 Let's get focused again"}</span>
         </div>
       )}
 
@@ -872,6 +980,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         isOpen={quickQuizModalOpen}
         onClose={() => setQuickQuizModalOpen(false)}
         slide={currentSlide}
+        lectureTitle={lecture.title}
       />
 
       <CameraConsentModal
@@ -948,6 +1057,20 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
             detectedState: 'focused'
           }));
           onReturnHome();
+        }}
+      />
+
+      {/* Upload Modal to easily switch or import slides directly in the room */}
+      <UploadModal
+        isOpen={uploadModalOpen}
+        onClose={() => setUploadModalOpen(false)}
+        onLectureCreated={newLecture => {
+          if (onUploadLecture) {
+            onUploadLecture(newLecture);
+          } else {
+            onUpdateLecture(newLecture);
+          }
+          setCurrentPage(1);
         }}
       />
     </div>

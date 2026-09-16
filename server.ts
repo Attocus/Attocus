@@ -28,20 +28,138 @@ function getAi(): GoogleGenAI | null {
 async function startServer() {
   const app = express();
   const PORT = 3000;
+  const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://127.0.0.1:8000';
 
   app.use(express.json({ limit: '10mb' }));
 
   // Health check
-  app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', hasGeminiKey: !!process.env.GEMINI_API_KEY });
+  app.get('/api/health', async (req, res) => {
+    let pythonConnected = false;
+    try {
+      const py = await fetch(`${PYTHON_BACKEND_URL}/health`, { signal: AbortSignal.timeout(1000) });
+      if (py.ok) pythonConnected = true;
+    } catch {}
+    res.json({
+      status: 'ok',
+      hasGeminiKey: !!process.env.GEMINI_API_KEY,
+      hasOpenAiKey: !!process.env.OPENAI_API_KEY,
+      pythonBackendConnected: pythonConnected,
+      pythonUrl: PYTHON_BACKEND_URL
+    });
   });
 
-  // 1. Explain Agent
+  // Shared RAG Status Proxy
+  app.get('/api/rag/status', async (req, res) => {
+    try {
+      const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/rag/status`);
+      if (pyRes.ok) {
+        return res.json(await pyRes.json());
+      }
+    } catch {}
+    res.json({ firestore_connected: false, memory_chunks_count: 0, status: 'offline' });
+  });
+
+  // Shared RAG Context Retrieval Proxy
+  app.post('/api/rag/retrieve', async (req, res) => {
+    try {
+      const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/rag/retrieve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body)
+      });
+      if (pyRes.ok) {
+        return res.json(await pyRes.json());
+      }
+      res.status(pyRes.status).json(await pyRes.json());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to retrieve RAG context' });
+    }
+  });
+
+  // Shared RAG PDF Upload Proxy
+  app.post('/api/rag/upload', async (req, res) => {
+    try {
+      const headers: Record<string, string> = {};
+      if (req.headers['content-type']) {
+        headers['content-type'] = req.headers['content-type'] as string;
+      }
+      const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/rag/upload`, {
+        method: 'POST',
+        headers,
+        body: req as any,
+        duplex: 'half'
+      } as any);
+
+      const data = await pyRes.json();
+      return res.status(pyRes.status).json(data);
+    } catch (err: any) {
+      console.error('RAG upload proxy error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to upload PDF to RAG service' });
+    }
+  });
+
+  // Orchestrator Telemetry (Tab switching, pacing, attention)
+  app.post('/api/orchestrator/telemetry', async (req, res) => {
+    try {
+      const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/orchestrator/telemetry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body)
+      });
+      if (pyRes.ok) {
+        const data = await pyRes.json();
+        return res.json(data);
+      }
+    } catch (err) {
+      // Python backend offline fallback
+    }
+
+    const { last_away_duration_seconds, tab_switches_count, slide_title } = req.body || {};
+    if (last_away_duration_seconds >= 30) {
+      return res.json({
+        intervention_type: 'attention',
+        alert_kind: 'toast',
+        message: `أهلاً بعودتك! 👋 لنكمل مذاكرة ${slide_title || 'المحاضرة'} بكل هدوء وتركيز.`
+      });
+    }
+
+    res.json({ intervention_type: 'none', alert_kind: 'none' });
+  });
+
+
+  // 1. Explain Agent (calls Python LearningCoachAgent first)
   app.post('/api/coach/explain', async (req, res) => {
     try {
       const { lectureTitle, currentSlide, allSlides, question, chatHistory } = req.body;
-      const ai = getAi();
 
+      // Try Python Backend (OpenAI Learning Coach)
+      try {
+        const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/learning/explain`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            topic: currentSlide?.title || lectureTitle,
+            slide_content: [
+              `Title: ${currentSlide?.title || ''}`,
+              `Content: ${(currentSlide?.content || []).join('\n')}`,
+              `Key Points: ${(currentSlide?.keyPoints || []).join('\n')}`
+            ].join('\n'),
+            student_question: question,
+            chat_history: chatHistory
+          })
+        });
+        if (pyRes.ok) {
+          const data = await pyRes.json();
+          if (data.explanation) {
+            return res.json({
+              answer: data.explanation,
+              citedLecturePages: [currentSlide?.pageNumber || 1]
+            });
+          }
+        }
+      } catch {}
+
+      const ai = getAi();
       const lectureContext = `Lecture: "${lectureTitle}"
 Current Slide (Page ${currentSlide.pageNumber}):
 Title: ${currentSlide.title}
@@ -80,7 +198,7 @@ Student's question: "${question}"`;
         return;
       }
 
-      // Fallback if no Gemini key
+      // Fallback if no key
       const answer = `Based on Slide ${currentSlide.pageNumber} ("${currentSlide.title}"), the core idea is: ${(currentSlide.keyPoints || [])[0] || currentSlide.content[0]}. 
 
 To put it simply: ${(currentSlide.content || []).slice(0, 2).join(' ')}
@@ -97,18 +215,89 @@ Does that clarify how it connects to ${currentSlide.topic}?`;
     }
   });
 
-  // 2. Understanding Agent - Open question
+  // 2. Understanding Agent - Start Socratic Session (calls Python SocraticSummaryAgent)
   app.post('/api/coach/understanding/start', async (req, res) => {
     try {
       const { slide, lectureTitle } = req.body;
+
+      const rawContentList = (slide?.content || []).filter(
+        (c: string) => !c.includes('Visual presentation content') && !c.includes('Section notes and key lecture points')
+      );
+      const rawKeyPointsList = (slide?.keyPoints || []).filter(
+        (kp: string) => !kp.includes('Visual and conceptual takeaways')
+      );
+
+      let slideContext = [
+        `Lecture: ${lectureTitle || ''}`,
+        `Slide Title: ${slide?.title || ''}`,
+        `Topic: ${slide?.topic || ''}`,
+        `Key Points: ${rawKeyPointsList.join(', ')}`,
+        `Slide Notes:\n${rawContentList.join('\n')}`
+      ].join('\n');
+
+      // If slide text is empty or placeholder, retrieve real chunks from RAG
+      if (rawContentList.length === 0 && rawKeyPointsList.length === 0) {
+        try {
+          const ragQuery = slide?.topic || slide?.title || lectureTitle || 'lecture core concepts';
+          const ragRes = await fetch(`${PYTHON_BACKEND_URL}/api/rag/retrieve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: ragQuery,
+              k: 3,
+              pdf_name: lectureTitle
+            })
+          });
+          if (ragRes.ok) {
+            const ragData = await ragRes.json();
+            if (ragData.chunks && ragData.chunks.length > 0) {
+              const chunksText = ragData.chunks.map((c: any) => `[Slide ${c.page}]: ${c.text}`).join('\n\n');
+              slideContext = `Lecture: ${lectureTitle || ''}\nTopic: ${slide?.topic || slide?.title}\nContext from Lecture Materials:\n${chunksText}`;
+            }
+          }
+        } catch (ragErr) {
+          console.warn('[Understanding] RAG fallback notice:', ragErr);
+        }
+      }
+
+      // Try Python Backend (Socratic Summary Agent)
+      try {
+        const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/summary/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: `slide-${slide?.id || slide?.pageNumber || 1}`,
+            topic: slide?.topic || slide?.title || lectureTitle || 'Study Concept',
+            context: slideContext
+          })
+        });
+
+        if (pyRes.ok) {
+          const data = await pyRes.json();
+          if (data.reply) {
+            return res.json({
+              question: data.reply,
+              topic: slide?.topic || slide?.title
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Python backend summary start failed, falling back:', err);
+      }
+
       const ai = getAi();
-
       if (ai) {
-        const prompt = `You are an attentive tutor initiating a comprehension check.
-Slide Topic: "${slide.topic || slide.title}"
-Key concepts on slide: ${(slide.keyPoints || []).join(', ')}
+        const cleanTopic = slide?.topic || slide?.title || lectureTitle || 'this concept';
+        const prompt = `You are an attentive academic tutor initiating a conceptual comprehension check for a university student.
+Lecture: "${lectureTitle || ''}"
+Topic: "${cleanTopic}"
+Slide Content:
+${slideContext}
 
-Ask ONE warm, open-ended question to assess the student's genuine mental model (e.g. "In your own words, what did you understand about how [concept] works?"). Keep it under 25 words.`;
+CRITICAL RULES:
+- Ask ONE warm, open-ended question assessing the student's genuine mental model of the academic subject matter or concept.
+- NEVER ask questions about slide numbers, file titles, presentation outlines, or placeholders (e.g. NEVER ask "What did you understand about Slide 1?").
+- Keep it under 25 words.`;
 
         const response = await ai.models.generateContent({
           model: 'gemini-3.8-flash',
@@ -116,8 +305,8 @@ Ask ONE warm, open-ended question to assess the student's genuine mental model (
         });
 
         res.json({
-          question: response.text?.trim() || `What did you understand about ${slide.topic || slide.title}?`,
-          topic: slide.topic || slide.title
+          question: response.text?.trim() || `In your own words, what did you understand about ${cleanTopic}?`,
+          topic: cleanTopic
         });
         return;
       }
@@ -131,10 +320,40 @@ Ask ONE warm, open-ended question to assess the student's genuine mental model (
     }
   });
 
-  // 3. Understanding Agent - Multi-turn Step
+  // 3. Understanding Agent - Multi-turn Step (calls Python SocraticSummaryAgent)
   app.post('/api/coach/understanding/step', async (req, res) => {
     try {
       const { slide, question, studentAnswer, history, isIDontKnow } = req.body;
+
+      // Try Python Backend (Socratic Summary Agent)
+      try {
+        const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/summary/step`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: `slide-${slide?.id || slide?.pageNumber || 1}`,
+            user_input: isIDontKnow ? "I don't know / I am stuck" : (studentAnswer || '')
+          })
+        });
+
+        if (pyRes.ok) {
+          const data = await pyRes.json();
+          if (data.reply) {
+            return res.json({
+              analysis: {
+                covered: [slide?.topic || 'Concept'],
+                missing: [],
+                incorrect: []
+              },
+              followUpQuestion: data.reply,
+              isFinished: data.is_finished || false
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Python backend step failed, falling back:', err);
+      }
+
       const ai = getAi();
 
       if (isIDontKnow) {
@@ -228,10 +447,35 @@ Respond in valid JSON with schema:
     }
   });
 
-  // 4. Understanding Agent - Summarize Loop
+  // 4. Understanding Agent - Summarize Loop (calls Python SocraticSummaryAgent.force_summary)
   app.post('/api/coach/understanding/summarize', async (req, res) => {
     try {
       const { slide, history } = req.body;
+
+      // Try Python Backend (Socratic Final Summary in student's own words)
+      try {
+        const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/summary/force`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: `slide-${slide?.id || slide?.pageNumber || 1}`
+          })
+        });
+
+        if (pyRes.ok) {
+          const data = await pyRes.json();
+          if (data.final_summary) {
+            return res.json({
+              studentWordsSummary: data.final_summary,
+              inlineCorrections: [],
+              lectureTakeaways: slide?.keyPoints || ['Core concept solidified']
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Python backend summarize failed, falling back:', err);
+      }
+
       const ai = getAi();
 
       const dialogue = (history || []).map((h: any, i: number) => `Q${i+1}: ${h.question}\nA${i+1}: ${h.studentAnswer}`).join('\n\n');
@@ -294,22 +538,99 @@ Respond in JSON:
     }
   });
 
-  // 5. Quick Quiz (Stuck Intervention & Spaced Repetition)
+  // 5. Quick Quiz (calls Python QuizAgent)
   app.post('/api/coach/quiz/quick', async (req, res) => {
     try {
-      const { slide } = req.body;
-      const ai = getAi();
+      const { slide, lectureTitle, pdfName } = req.body;
 
+      const rawContentList = (slide?.content || []).filter(
+        (c: string) => !c.includes('Visual presentation content') && !c.includes('Section notes and key lecture points')
+      );
+      const rawKeyPointsList = (slide?.keyPoints || []).filter(
+        (kp: string) => !kp.includes('Visual and conceptual takeaways')
+      );
+
+      const isPlaceholder = rawContentList.length === 0 && rawKeyPointsList.length === 0;
+
+      let slideContext = [
+        `Lecture: ${lectureTitle || ''}`,
+        `Slide: ${slide?.title || ''}`,
+        `Topic: ${slide?.topic || slide?.title || ''}`,
+        `Key Points: ${rawKeyPointsList.join(', ')}`,
+        `Content:\n${rawContentList.join('\n')}`
+      ].join('\n');
+
+      // If slide text is placeholder or minimal, retrieve real chunks from RAG
+      if (isPlaceholder) {
+        try {
+          const ragQuery = slide?.topic || slide?.title || lectureTitle || 'lecture key principles';
+          const ragRes = await fetch(`${PYTHON_BACKEND_URL}/api/rag/retrieve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: ragQuery,
+              k: 3,
+              pdf_name: pdfName || lectureTitle
+            })
+          });
+          if (ragRes.ok) {
+            const ragData = await ragRes.json();
+            if (ragData.chunks && ragData.chunks.length > 0) {
+              const chunksText = ragData.chunks.map((c: any) => `[Slide ${c.page}]: ${c.text}`).join('\n\n');
+              slideContext = `Lecture: ${lectureTitle || ''}\nTopic: ${slide?.topic || slide?.title}\nContent from Lecture Materials:\n${chunksText}`;
+            }
+          }
+        } catch (ragErr) {
+          console.warn('[Quiz] RAG retrieval fallback notice:', ragErr);
+        }
+      }
+
+      // Try Python Backend (QuizAgent)
+      try {
+        const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/quiz/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            context: slideContext,
+            num_questions: 1,
+            topic: slide?.topic || slide?.title,
+            pdf_name: pdfName || lectureTitle
+          })
+        });
+
+        if (pyRes.ok) {
+          const quizData = await pyRes.json();
+          const firstQ = quizData.questions?.[0];
+          if (firstQ && firstQ.options) {
+            return res.json({
+              question: firstQ.question,
+              options: firstQ.options,
+              correctAnswer: firstQ.answer,
+              explanation: firstQ.explanation || 'Verified from slide content.'
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Python quiz generation failed, falling back:', err);
+      }
+
+      const ai = getAi();
       if (ai) {
-        const prompt = `Create ONE clean, high-quality multiple choice question to test understanding of:
-Slide: "${slide.title}"
-Topic: "${slide.topic}"
-Key Points: ${(slide.keyPoints || []).join(', ')}
+        const prompt = `Create ONE clean, high-quality multiple choice question testing genuine conceptual understanding of:
+Lecture: "${lectureTitle || ''}"
+Slide: "${slide?.title || ''}"
+Topic: "${slide?.topic || slide?.title || 'Key Concept'}"
+Content:
+${slideContext}
+
+CRITICAL RULES:
+- Test academic knowledge of principles, definitions, or algorithms.
+- NEVER ask questions about slide numbers, file names, or presentation formatting (e.g. NEVER ask "Does Slide 1 include takeaways?").
 
 Return JSON:
 {
   "question": "Question text?",
-  "options": ["A", "B", "C", "D"],
+  "options": ["Option A", "Option B", "Option C", "Option D"],
   "correctAnswer": "Exact matching option string",
   "explanation": "Friendly 1-2 sentence explanation why this is right."
 }`;
@@ -328,17 +649,18 @@ Return JSON:
         } catch {}
       }
 
-      // Fallback
+      // Safe Fallback
+      const cleanKp = rawKeyPointsList[0] || 'It ensures state machine consistency across all replicas.';
       res.json({
-        question: `Regarding ${slide.title}, which of the following is true?`,
+        question: `Regarding ${slide?.title || 'this topic'}, which of the following is true?`,
         options: [
-          (slide.keyPoints || [])[0] || 'It ensures state machine consistency across all replicas.',
+          cleanKp,
           'It allows uncommitted writes to bypass majority quorum checks.',
           'It requires physical clock synchronization across nodes.',
           'It only operates when all cluster nodes are active.'
         ],
-        correctAnswer: (slide.keyPoints || [])[0] || 'It ensures state machine consistency across all replicas.',
-        explanation: `As noted in the lecture: ${(slide.keyPoints || [])[0] || 'This maintains core invariants.'}`
+        correctAnswer: cleanKp,
+        explanation: `As noted in the lecture: ${cleanKp}`
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });

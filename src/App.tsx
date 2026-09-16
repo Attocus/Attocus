@@ -109,6 +109,7 @@ export default function App() {
           lecture={activeLecture}
           onReturnHome={() => setCurrentScreen('home')}
           onUpdateLecture={handleUpdateLecture}
+          onUploadLecture={handleUploadLecture}
           onAddFocusPoints={handleAddFocusPoints}
         />
       )}
