@@ -1,0 +1,11 @@
+{
+  "name": "Attocus",
+  "description": "A teacher-led study companion with attention monitoring, real-time comprehension loops, stuck detection, and wrap-up reviews.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
+

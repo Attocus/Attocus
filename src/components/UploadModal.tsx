@@ -1,0 +1,143 @@
+import React, { useState, useRef } from 'react';
+import { Lecture } from '../types';
+import { parseUploadedFile } from '../utils/fileUpload';
+import { Upload, FileText, X, Loader2 } from 'lucide-react';
+
+interface UploadModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onLectureCreated: (lecture: Lecture) => void;
+}
+
+export const UploadModal: React.FC<UploadModalProps> = ({
+  isOpen,
+  onClose,
+  onLectureCreated
+}) => {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progressStatus, setProgressStatus] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  if (!isOpen) return null;
+
+  const handleFile = async (file: File) => {
+    setIsProcessing(true);
+    setProgressStatus(`Analyzing and rendering "${file.name}"...`);
+
+    try {
+      const parsedLecture = await parseUploadedFile(file, pct => {
+        setProgressStatus(`Processing pages & high-res slides (${pct}%)...`);
+      });
+      setIsProcessing(false);
+      onLectureCreated(parsedLecture);
+      onClose();
+    } catch (err: any) {
+      console.error('File parsing error:', err);
+      setIsProcessing(false);
+      alert('Could not parse this file. Please make sure it is a valid PDF or slide document.');
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  return (
+    <div
+      id="upload-modal-overlay"
+      className="fixed inset-0 z-50 bg-black/45 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+    >
+      <div
+        id="upload-modal-card"
+        className="bg-[#FAFAF8] rounded-2xl border border-[#E0E2DC] shadow-xl w-full max-w-lg overflow-hidden text-[#202326] transition-all"
+      >
+        {/* Header */}
+        <div className="p-5 border-b border-[#E8EAE4] bg-white flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#E8F0E6] text-[#2E7D32] flex items-center justify-center">
+              <Upload className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-serif font-bold text-[#1A1D20]">
+                Upload Lecture Material
+              </h3>
+              <p className="text-[11px] text-[#697076]">
+                Upload your PDF lecture slides or course document
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            id="close-upload-modal-btn"
+            onClick={onClose}
+            className="w-7 h-7 rounded-lg hover:bg-[#EFF1EB] flex items-center justify-center text-[#6E747B]"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          {isProcessing ? (
+            <div className="py-12 text-center space-y-3">
+              <Loader2 className="w-8 h-8 text-[#2E7D32] animate-spin mx-auto" />
+              <div className="text-sm font-medium text-[#1E2225]">{progressStatus}</div>
+              <p className="text-xs text-[#6B7279]">Rendering ultra-crisp slides and extracting concepts...</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div
+                onDragOver={e => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
+                  isDragging
+                    ? 'border-[#2E7D32] bg-[#F0F6EE]'
+                    : 'border-[#D5D8D0] bg-white hover:border-[#2E7D32]/60 hover:bg-[#F9FAF7]'
+                }`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.pptx"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFile(f);
+                  }}
+                  className="hidden"
+                  id="modal-pdf-file-picker"
+                />
+
+                <div className="w-12 h-12 rounded-2xl bg-[#E8F0E6] text-[#2E7D32] flex items-center justify-center mx-auto mb-3">
+                  <FileText className="w-6 h-6" />
+                </div>
+
+                <h4 className="text-sm font-serif font-bold text-[#1C2023]">
+                  Select or drag your PDF here
+                </h4>
+                <p className="text-xs text-[#646A71] mt-1 max-w-xs mx-auto leading-relaxed">
+                  Supports multi-page university lecture slides, presentation PDFs, and course handouts.
+                </p>
+
+                <div className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2E7D32] text-white text-xs font-medium shadow-xs hover:bg-[#256629] transition-colors">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Choose PDF File</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
