@@ -2,7 +2,6 @@
 
 # 🦉 Attocus (أتـوكـس)
 ### Intelligent Multi-Agent Socratic Study Companion & Cognitive Focus Platform
-**منصة المذاكرة الذكية متعددة الوكلاء والتركيز المعرفي**
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
@@ -235,8 +234,9 @@ Verifies that:
 ## 👥 Contributors | المساهمون
 
 - **Sukainah Alramadhan** ([@sukainahAlramadhan](https://github.com/sukainahAlramadhan))
-- **Bariqa** ([@Bariqa1](https://github.com/Bariqa1))
-
+- **Bariqa aljarallah** ([@Bariqa1](https://github.com/Bariqa1))
+- **Rana**
+- **Taif** 
 ---
 
 <div align="center">
