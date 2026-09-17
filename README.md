@@ -1,6 +1,6 @@
 <div align="center">
   
-# 🦉 Attocus (أتـوكـس)
+# 🦉 Attocus ( أتـوكـس)
 ### Intelligent Multi-Agent Socratic Study Companion & Cognitive Focus Platform
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
