@@ -58,10 +58,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
           <div>
             <h1 className="text-base font-serif font-bold text-[#181A1C] tracking-tight">
-              AI Study Coach
+              ATTOCUS
             </h1>
             <p className="text-[11px] text-[#6E757C]">
-              A teacher sitting next to you
+              Intelligent Multi-Agent Study Companion
             </p>
           </div>
         </div>

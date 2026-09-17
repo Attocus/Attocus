@@ -67,6 +67,8 @@ export interface CompiledSummary {
   studentWordsSummary: string;
   inlineCorrections: InlineCorrection[];
   lectureTakeaways: string[];
+  corrections?: string[];
+  strengths?: string[];
 }
 
 export interface GapQuizQuestion {

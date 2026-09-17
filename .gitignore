@@ -18,8 +18,11 @@ firebase-adminsdk*.json
 __pycache__/
 *.py[cod]
 *$py.class
+.venv
 .venv/
+venv
 venv/
+env
 env/
 ENV/
 

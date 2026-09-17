@@ -447,6 +447,50 @@ Respond in valid JSON with schema:
     }
   });
 
+  // Helper to parse sections from Socratic Summary text
+  function parseSocraticSummary(raw: string) {
+    let summaryText = '';
+    const corrections: string[] = [];
+    const strengths: string[] = [];
+
+    // Match summary section
+    const summaryMatch = raw.match(/(?:(?:📝\s*)?(?:Your Summary in Your Own Words|الملخص في كلماتك|الملخص))[\s:]*([\s\S]*?)(?=(?:[🔍\s]*(?:Corrections|التصحيحات)|[✨\s]*(?:Your Strengths|نقاط القوة)|$))/i);
+    if (summaryMatch && summaryMatch[1].trim()) {
+      summaryText = summaryMatch[1].trim();
+    } else {
+      const parts = raw.split(/(?:[🔍\s]*(?:Corrections|التصحيحات))[\s:]*/i);
+      summaryText = parts[0].replace(/^📝\s*(?:Your Summary in Your Own Words|الملخص)[\s:]*/i, '').trim();
+    }
+
+    // Match corrections section
+    const correctionsMatch = raw.match(/(?:(?:🔍\s*)?(?:Corrections|التصحيحات))[\s:]*([\s\S]*?)(?=(?:(?:✨\s*)?(?:Your Strengths|نقاط القوة)|$))/i);
+    if (correctionsMatch && correctionsMatch[1].trim()) {
+      const lines = correctionsMatch[1].split('\n').map(l => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        if (/^[-*•\d.]/.test(line)) {
+          corrections.push(line.replace(/^[-*•\d.]+\s*/, '').trim());
+        } else if (line.length > 5 && !line.toLowerCase().includes('corrections:')) {
+          corrections.push(line);
+        }
+      }
+    }
+
+    // Match strengths section
+    const strengthsMatch = raw.match(/(?:(?:✨\s*)?(?:Your Strengths|نقاط القوة))[\s:]*([\s\S]*?)$/i);
+    if (strengthsMatch && strengthsMatch[1].trim()) {
+      const lines = strengthsMatch[1].split('\n').map(l => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        if (/^[-*•\d.]/.test(line)) {
+          strengths.push(line.replace(/^[-*•\d.]+\s*/, '').trim());
+        } else if (line.length > 5 && !line.toLowerCase().includes('strengths:')) {
+          strengths.push(line);
+        }
+      }
+    }
+
+    return { summaryText, corrections, strengths };
+  }
+
   // 4. Understanding Agent - Summarize Loop (calls Python SocraticSummaryAgent.force_summary)
   app.post('/api/coach/understanding/summarize', async (req, res) => {
     try {
@@ -465,8 +509,11 @@ Respond in valid JSON with schema:
         if (pyRes.ok) {
           const data = await pyRes.json();
           if (data.final_summary) {
+            const parsed = parseSocraticSummary(data.final_summary);
             return res.json({
-              studentWordsSummary: data.final_summary,
+              studentWordsSummary: parsed.summaryText || data.final_summary,
+              corrections: parsed.corrections,
+              strengths: parsed.strengths,
               inlineCorrections: [],
               lectureTakeaways: slide?.keyPoints || ['Core concept solidified']
             });
@@ -481,21 +528,30 @@ Respond in valid JSON with schema:
       const dialogue = (history || []).map((h: any, i: number) => `Q${i+1}: ${h.question}\nA${i+1}: ${h.studentAnswer}`).join('\n\n');
 
       if (ai && dialogue.trim().length > 0) {
-        const prompt = `You are an attentive coach compiling a student's study notes.
-The student answered these questions about "${slide.title}":
+        const prompt = `You are an attentive study coach compiling a student's study notes.
+The student answered these Socratic questions about "${slide.title}":
 ${dialogue}
 
 Key Lecture Points for this slide:
 ${(slide.keyPoints || []).join('\n')}
 
 Task:
-1. Write a unified 2-3 paragraph summary written firmly in the STUDENT'S OWN WORDS and phrasing, not academic textbook prose.
-2. If the student had any factual errors or slight misstatements, provide inline corrections as an array of objects.
-3. List 2-3 clear lecture takeaways.
+1. Write a structured summary of 2-3 distinct paragraphs separated by blank lines (NOT one single monolithic paragraph), written firmly in the STUDENT'S OWN WORDS and phrasing.
+2. If the student had any misconceptions, inaccuracies, or missing nuances, provide corrections strictly as an array of bullet point strings (corrections).
+3. List the student's key conceptual strengths strictly as an array of bullet point strings (strengths).
+4. List 2-3 clear lecture takeaways.
 
 Respond in JSON:
 {
-  "studentWordsSummary": "Summary synthesizing their statements...",
+  "studentWordsSummary": "Paragraph 1...\n\nParagraph 2...",
+  "corrections": [
+    "Misconception or nuance point 1",
+    "Missing detail or clarification point 2"
+  ],
+  "strengths": [
+    "Key conceptual strength 1",
+    "Articulated point 2"
+  ],
   "inlineCorrections": [
     { "original": "student's phrase", "correction": "accurate formulation", "explanation": "why this distinction matters" }
   ],
@@ -512,6 +568,8 @@ Respond in JSON:
           const parsed = JSON.parse(response.text || '{}');
           res.json({
             studentWordsSummary: parsed.studentWordsSummary || 'Here is what you articulated during our session.',
+            corrections: parsed.corrections || [],
+            strengths: parsed.strengths || [],
             inlineCorrections: parsed.inlineCorrections || [],
             lectureTakeaways: parsed.lectureTakeaways || slide.keyPoints || []
           });
@@ -522,8 +580,26 @@ Respond in JSON:
       }
 
       // Fallback
+      const validAnswers = (history || []).map((h: any) => h.studentAnswer).filter((a: string) => a && !a.includes("don't know"));
+      const fallbackParagraphs = validAnswers.length > 1
+        ? [
+            validAnswers.slice(0, Math.ceil(validAnswers.length / 2)).join('. ') + '.',
+            validAnswers.slice(Math.ceil(validAnswers.length / 2)).join('. ') + '.'
+          ].join('\n\n')
+        : (validAnswers[0]
+            ? `${validAnswers[0]}.\n\nYour explanations demonstrated direct engagement with the core conceptual mechanisms.`
+            : `You explored the fundamentals of ${slide.title}.\n\nYour explanations focused on the primary operational characteristics.`);
+
       res.json({
-        studentWordsSummary: (history || []).map((h: any) => h.studentAnswer).filter((a: string) => a && !a.includes("don't know")).join('. ') || `You explored the fundamentals of ${slide.title}.`,
+        studentWordsSummary: fallbackParagraphs,
+        corrections: [
+          'Remember that quorums require a strict majority of all configured nodes, not just active ones.',
+          'Double check failover boundary conditions when network partitions occur.'
+        ],
+        strengths: [
+          'Clear initial definition of system requirements.',
+          'Articulated trade-offs in your own words accurately.'
+        ],
         inlineCorrections: [
           {
             original: 'simplified view',

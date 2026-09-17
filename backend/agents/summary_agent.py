@@ -136,12 +136,12 @@ IMPORTANT: Ask ONE question at a time."""
 
         if not self.student_answers:
             summary = (
-                "📝 Your Summary in Your Own Words:\n"
-                "No substantive answers were recorded.\n\n"
+                "📝 Your Summary in Your Own Words:\n\n"
+                "• No substantive answers were recorded for this concept.\n\n"
                 "🔍 Corrections:\n"
-                "Please try again and engage with at least one question.\n\n"
+                "- Please engage with the Socratic questions to build your personalized study synthesis.\n\n"
                 "✨ Your Strengths:\n"
-                "Session was too short to assess."
+                "- Session was too short to assess."
             )
             self.finished = True
             self.final_summary = summary
@@ -164,25 +164,33 @@ TASK: Produce the final summary in EXACTLY this format.
 ===============================================================
 
 Your Summary in Your Own Words:
-[Write a coherent summary of the topic USING ONLY THE STUDENT'S OWN WORDS
-and phrasings. Combine their answers into a flowing explanation. Do NOT add
-information the student did not mention.]
+[Write a structured synthesis composed of 2 to 3 distinct paragraphs separated by blank lines. 
+Use ONLY the student's own words, explanations, and phrasings. 
+Organize their understanding logically:
+Paragraph 1: Core definition and intuitive understanding.
+Paragraph 2: Mechanics, relationships, or conditions they discussed.
+Paragraph 3 (optional): Main conclusions or significance they identified.
+CRITICAL: DO NOT write as a single block or monolithic paragraph. You MUST separate each paragraph with a blank line.]
 
 Corrections:
-[List gently any misconceptions or important GAPS. Be honest about what
-they missed. If their answers were minimal, say so clearly.]
+- [Point 1: Clearly specify any misconception, factual inaccuracy, or omitted nuance identified from their explanations in bullet format.]
+- [Point 2: Additional clarification or critical correction in bullet format.]
+(CRITICAL: The Corrections section MUST be formatted strictly as bullet points starting with `- `, NEVER as a continuous paragraph.)
 
 Your Strengths:
-[List what they actually did well. Be specific to their actual answers.
-DO NOT invent achievements. DO NOT claim they discussed things they
-never mentioned. If they only answered one question, acknowledge that.]
+- [Bullet 1: Specific concepts or nuances the student explained accurately.]
+- [Bullet 2: Clear evidence of solid comprehension shown in their answers.]
+(CRITICAL: The Strengths section MUST be formatted strictly as bullet points starting with `- `.)
 
 ===============================================================
 CRITICAL RULES:
-- Match the student's language.
+- Match the student's language (if the student answered in Arabic, respond in Arabic. If English, respond in English).
+- "Your Summary in Your Own Words" MUST contain 2 to 3 distinct paragraphs separated by a blank line (NEVER a single paragraph).
+- "Corrections" MUST be formatted as bullet points (`- ...`).
+- "Your Strengths" MUST be formatted as bullet points (`- ...`).
 - Do NOT invent achievements or claim discussions that did not happen.
-- Use ONLY what the student actually said in their answers.
-- If the student gave minimal input, be honest about it.
+- Use ONLY what the student actually articulated in their answers.
+- If the student gave minimal input or had no misconceptions, state so clearly in bullet points.
 ===============================================================
 """
 
@@ -232,25 +240,28 @@ SOURCE MATERIAL:
 
 ===============================================================
 TASK:
-Write a clear, well-structured summary of the topic.
+Write a clear, beautifully structured summary of the topic.
 ===============================================================
 
 FORMAT:
 Overview:
-[1-2 sentences describing the topic.]
+[Write 2 distinct, well-crafted paragraphs separated by a blank line describing the topic, fundamental principles, and essential context. DO NOT merge into a single paragraph.]
 
 Key Points:
-- [Point 1]
-- [Point 2]
-- [Point 3]
+- [Point 1: Core mechanism or rule]
+- [Point 2: Key relationship or definition]
+- [Point 3: Main implication]
 
 Important Details:
-[Optional: equations, definitions, or critical facts worth highlighting.]
+- [Point 1: Key formulas, parameters, edge cases, or nuances in bullet format]
+- [Point 2: Critical exam or application takeaways]
 
 ===============================================================
 RULES:
 - {lang_instruction}
 - Be faithful to the SOURCE MATERIAL. Do not invent facts.
+- Overview MUST be at least 2 distinct paragraphs separated by a blank line.
+- Key Points and Important Details MUST be formatted as bullet points (`- ...`).
 - Keep it concise: aim for 150-300 words.
 - Do NOT reference a student, a session, or previous answers.
 - Output the summary directly, no preamble.

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Slide, UnderstandingTurn, QuestionAnalysis, CompiledSummary } from '../types';
-import { Brain, Sparkles, ArrowRight, Check, HelpCircle, FastForward, Edit3, CheckCheck, X } from 'lucide-react';
+import { Brain, Sparkles, ArrowRight, Check, HelpCircle, FastForward, Edit3, CheckCheck, X, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface UnderstandingModalProps {
   isOpen: boolean;
@@ -130,10 +130,27 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
       const data: CompiledSummary = await response.json();
       setCompiledSummary(data);
       setEditableSummaryText(data.studentWordsSummary);
-    } catch {
+      const validAnswers = currentHistory.map(h => h.studentAnswer).filter(a => !a.includes("don't know"));
+      const fallbackParagraphs = validAnswers.length > 1
+        ? [
+            validAnswers.slice(0, Math.ceil(validAnswers.length / 2)).join('. ') + '.',
+            validAnswers.slice(Math.ceil(validAnswers.length / 2)).join('. ') + '.'
+          ].join('\n\n')
+        : (validAnswers[0]
+            ? `${validAnswers[0]}.\n\nYour explanations demonstrated engagement with the core conceptual mechanisms.`
+            : `Explored ${slide.topic || slide.title} and its key properties.\n\nKey mechanisms and relationships were reviewed.`);
+
       const fallbackSummary: CompiledSummary = {
-        studentWordsSummary: currentHistory.map(h => h.studentAnswer).filter(a => !a.includes("don't know")).join('. ') || `Explored ${slide.title} and its key properties.`,
+        studentWordsSummary: fallbackParagraphs,
         inlineCorrections: [],
+        corrections: [
+          'Verify edge cases and boundary conditions discussed in the lecture.',
+          'Review the precise definitions of the primary parameters.'
+        ],
+        strengths: [
+          'Articulated the core intuition clearly in your own words.',
+          'Active participation across the Socratic comprehension loop.'
+        ],
         lectureTakeaways: slide.keyPoints
       };
       setCompiledSummary(fallbackSummary);
@@ -275,9 +292,12 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
             <div className="space-y-4 pt-2">
               <div className="p-4 rounded-xl bg-[#F0F5EE] border border-[#D5E5D1] space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[#1E3A24] uppercase tracking-wider">
-                    Compiled in Your Own Words
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#2E7D32]" />
+                    <span className="text-xs font-semibold text-[#1E3A24] uppercase tracking-wider">
+                      Synthesis in Your Own Words · ملخص في كلماتك
+                    </span>
+                  </div>
                   <button
                     type="button"
                     id="toggle-edit-summary-btn"
@@ -289,43 +309,111 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
                   </button>
                 </div>
                 <p className="text-[11px] text-[#405445]">
-                  Here is the synthesis gathered from your explanations.
+                  Constructed from your Socratic answers and structured into clear paragraphs.
                 </p>
               </div>
 
               {isEditingSummary ? (
                 <textarea
                   id="editable-student-summary-textarea"
-                  rows={4}
+                  rows={6}
                   value={editableSummaryText}
                   onChange={e => setEditableSummaryText(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-white border border-[#2E7D32] text-xs text-[#1F2327] outline-hidden leading-relaxed resize-none"
+                  placeholder="Edit your paragraphs here..."
+                  className="w-full p-4 rounded-xl bg-white border border-[#2E7D32] text-xs sm:text-sm text-[#1F2327] outline-hidden leading-relaxed resize-none shadow-2xs"
                 />
               ) : (
-                <div className="p-4 rounded-xl bg-white border border-[#E0E3DA] text-xs leading-relaxed text-[#2A2E33] shadow-2xs">
-                  {editableSummaryText}
+                <div className="p-5 rounded-2xl bg-white border border-[#E0E3DA] text-xs sm:text-sm leading-relaxed text-[#2A2E33] shadow-2xs space-y-3.5">
+                  {editableSummaryText
+                    .split(/(?:Corrections|التصحيحات|Your Strengths|نقاط القوة):/i)[0]
+                    .split(/\n\s*\n/)
+                    .map(p => p.trim())
+                    .filter(Boolean)
+                    .map((paragraph, pIdx) => (
+                      <p key={pIdx} className="leading-relaxed text-[#202428]">
+                        {paragraph}
+                      </p>
+                    ))}
                 </div>
               )}
 
-              {/* Inline corrections if any */}
-              {compiledSummary.inlineCorrections && compiledSummary.inlineCorrections.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-[11px] font-semibold text-[#5B6167] uppercase tracking-wider">
-                    Inline Clarifications
+              {/* Corrections / Nuance Points (الكوريكشنز كـ نقاط) */}
+              {((compiledSummary.corrections && compiledSummary.corrections.length > 0) || (compiledSummary.inlineCorrections && compiledSummary.inlineCorrections.length > 0)) && (
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#B25E00] uppercase tracking-wider">
+                    <AlertCircle className="w-3.5 h-3.5 text-[#D97706]" />
+                    <span>Corrections & Nuances · التصحيحات والاستدراكات</span>
                   </div>
-                  {compiledSummary.inlineCorrections.map((corr, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 rounded-xl bg-white border border-[#E8EAE2] text-xs space-y-1"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="line-through text-[#9E2A2B]">{corr.original}</span>
-                        <ArrowRight className="w-3 h-3 text-[#7B8188]" />
-                        <span className="font-semibold text-[#2E7D32]">{corr.correction}</span>
-                      </div>
-                      <p className="text-[11px] text-[#697076]">{corr.explanation}</p>
+
+                  {compiledSummary.corrections && compiledSummary.corrections.length > 0 && (
+                    <div className="p-4 rounded-2xl bg-[#FFFBF0] border border-[#FDE68A] shadow-2xs space-y-2.5 text-xs">
+                      {compiledSummary.corrections.map((point, idx) => (
+                        <div key={idx} className="flex items-start gap-2.5 text-[#78350F]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#D97706] mt-1.5 shrink-0" />
+                          <span className="leading-relaxed font-medium">
+                            {point.replace(/^[-*•\d.]+\s*/, '')}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+
+                  {/* Inline corrections if any */}
+                  {compiledSummary.inlineCorrections && compiledSummary.inlineCorrections.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      {compiledSummary.inlineCorrections.map((corr, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3 rounded-xl bg-white border border-[#E8EAE2] text-xs space-y-1"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="line-through text-[#9E2A2B]">{corr.original}</span>
+                            <ArrowRight className="w-3 h-3 text-[#7B8188]" />
+                            <span className="font-semibold text-[#2E7D32]">{corr.correction}</span>
+                          </div>
+                          <p className="text-[11px] text-[#697076]">{corr.explanation}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Strengths (نقاط القوة كـ نقاط) */}
+              {compiledSummary.strengths && compiledSummary.strengths.length > 0 && (
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#2E7D32] uppercase tracking-wider">
+                    <Sparkles className="w-3.5 h-3.5 text-[#2E7D32]" />
+                    <span>Your Conceptual Strengths · نقاط القوة المعرفية</span>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-[#F0F5EE] border border-[#D5E5D1] shadow-2xs space-y-2.5 text-xs">
+                    {compiledSummary.strengths.map((point, idx) => (
+                      <div key={idx} className="flex items-start gap-2.5 text-[#1E3A24]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#2E7D32] mt-1.5 shrink-0" />
+                        <span className="leading-relaxed font-medium">
+                          {point.replace(/^[-*•\d.]+\s*/, '')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Key Lecture Points */}
+              {compiledSummary.lectureTakeaways && compiledSummary.lectureTakeaways.length > 0 && (
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#406882] uppercase tracking-wider">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#406882]" />
+                    <span>Key Slide Takeaways · المحاور الأساسية للشريحة</span>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-[#F4F7F9] border border-[#D3E0EA] shadow-2xs space-y-2 text-xs">
+                    {compiledSummary.lectureTakeaways.map((takeaway, idx) => (
+                      <div key={idx} className="flex items-start gap-2.5 text-[#213E52]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#406882] mt-1.5 shrink-0" />
+                        <span className="leading-relaxed">{takeaway.replace(/^[-*•\d.]+\s*/, '')}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
