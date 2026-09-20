@@ -39,6 +39,7 @@ import { StuckInterventionCard } from './StuckInterventionCard';
 import { PomodoroTimer } from './PomodoroTimer';
 import { PhoneAlertModal } from './PhoneAlertModal';
 import { SleepingAlertModal } from './SleepingAlertModal';
+import { AwayAlertModal } from './AwayAlertModal';
 import { UploadModal } from './UploadModal';
 
 interface StudyRoomViewProps {
@@ -95,6 +96,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     detectedState: 'focused',
     phoneAlertOpen: false,
     sleepingAlertOpen: false,
+    awayAlertOpen: false,
     isAnalyzingFrame: false,
     tabSwitchToast: null
   });
@@ -439,9 +441,23 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       detectionReason: reason || 'Resting head on desk or eyes closed.',
       sleepingAlertOpen: true,
       phoneAlertOpen: false,
+      awayAlertOpen: false,
       attentionDrifted: true
     }));
     sendAttentionTelemetry({ state: 'sleeping', confidence: 0.95 });
+  };
+
+  const handleTriggerAwayDetected = (reason?: string) => {
+    setAttentionState(prev => ({
+      ...prev,
+      detectedState: 'away',
+      detectionReason: reason || 'Stepped away from your study desk.',
+      awayAlertOpen: true,
+      phoneAlertOpen: false,
+      sleepingAlertOpen: false,
+      attentionDrifted: true
+    }));
+    sendAttentionTelemetry({ state: 'away', confidence: 0.95 });
   };
 
   const handleTriggerGazeDrift = () => {
@@ -464,7 +480,8 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       visualPulseActive: false,
       gentleToneModalOpen: false,
       phoneAlertOpen: false,
-      sleepingAlertOpen: false
+      sleepingAlertOpen: false,
+      awayAlertOpen: false
     }));
   };
 
@@ -842,6 +859,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           isAnalyzingFrame={attentionState.isAnalyzingFrame}
           onTriggerPhoneDetected={handleTriggerPhoneDetected}
           onTriggerSleepingDetected={handleTriggerSleepingDetected}
+          onTriggerAwayDetected={handleTriggerAwayDetected}
           onTriggerGazeDrift={handleTriggerGazeDrift}
           onTriggerFocused={handleTriggerFocused}
           onAnalyzeFrameSnapshot={handleAnalyzeFrameSnapshot}
@@ -1053,6 +1071,29 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           setAttentionState(prev => ({
             ...prev,
             sleepingAlertOpen: false,
+            attentionDrifted: false,
+            detectedState: 'focused'
+          }));
+          onReturnHome();
+        }}
+      />
+
+      {/* Stepped Away / Empty Desk Modal */}
+      <AwayAlertModal
+        isOpen={attentionState.awayAlertOpen}
+        coachMessage={attentionState.detectionReason}
+        onDismiss={() => {
+          setAttentionState(prev => ({
+            ...prev,
+            awayAlertOpen: false,
+            attentionDrifted: false,
+            detectedState: 'focused'
+          }));
+        }}
+        onTakeBreak={() => {
+          setAttentionState(prev => ({
+            ...prev,
+            awayAlertOpen: false,
             attentionDrifted: false,
             detectedState: 'focused'
           }));

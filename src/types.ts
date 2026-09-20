@@ -140,6 +140,7 @@ export interface AttentionTrackingState {
   detectionReason?: string;
   phoneAlertOpen: boolean;
   sleepingAlertOpen: boolean;
+  awayAlertOpen: boolean;
   isAnalyzingFrame: boolean;
   lastScanTimestamp?: number;
   tabSwitchToast: {

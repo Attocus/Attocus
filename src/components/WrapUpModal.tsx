@@ -51,6 +51,9 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
       });
 
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Server error during wrapup analyze');
+      }
       setCoveredPoints(data.coveredPoints || []);
       setMissingGaps(data.missingGaps || []);
       setGapQuestions(data.gapQuestions || []);
@@ -135,6 +138,9 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
       });
 
       const reportData: WrapUpReport = await response.json();
+      if (!response.ok) {
+        throw new Error((reportData as any).error || 'Server error during report generation');
+      }
       setFinalReport(reportData);
       setStep('final_report');
     } catch (err) {

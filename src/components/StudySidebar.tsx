@@ -29,6 +29,7 @@ interface StudySidebarProps {
   isAnalyzingFrame: boolean;
   onTriggerPhoneDetected: (reason?: string) => void;
   onTriggerSleepingDetected: (reason?: string) => void;
+  onTriggerAwayDetected?: (reason?: string) => void;
   onTriggerGazeDrift: () => void;
   onTriggerFocused: () => void;
   onAnalyzeFrameSnapshot: (dataUrl: string) => Promise<void>;
@@ -36,8 +37,10 @@ interface StudySidebarProps {
   onToggleCollapse?: () => void;
 }
 
-const ALERT_THRESHOLD_MS = 60000;
-const GRACE_PERIOD_MS = 60000;
+const PHONE_ALERT_THRESHOLD_MS = 3000; // 3 seconds for phone
+const SLEEP_ALERT_THRESHOLD_MS = 5000; // 5 seconds for sleep / drowsiness
+const AWAY_ALERT_THRESHOLD_MS = 5000;  // 5 seconds for stepping away
+const GRACE_PERIOD_MS = 2500;
 
 export const StudySidebar: React.FC<StudySidebarProps> = ({
   slides,
@@ -53,6 +56,7 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
   isAnalyzingFrame,
   onTriggerPhoneDetected,
   onTriggerSleepingDetected,
+  onTriggerAwayDetected,
   onTriggerGazeDrift,
   onTriggerFocused,
   onAnalyzeFrameSnapshot,
@@ -62,6 +66,9 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const [autoScanEnabled] = useState(true);
+  const [isPhoneVisible, setIsPhoneVisible] = useState(false);
+  const [isSleepyVisible, setIsSleepyVisible] = useState(false);
+  const [isAwayVisible, setIsAwayVisible] = useState(false);
 
   // مراجع التتبع والتحكم
   const phoneStartTimeRef = useRef<number | null>(null);
@@ -70,15 +77,20 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
   const sleepyStartTimeRef = useRef<number | null>(null);
   const lastSleepySeenTimeRef = useRef<number | null>(null);
 
+  const awayStartTimeRef = useRef<number | null>(null);
+  const lastAwaySeenTimeRef = useRef<number | null>(null);
+
   // منع تكرار الإشعار عدة مرات
   const phoneAlertFiredRef = useRef<boolean>(false);
   const sleepAlertFiredRef = useRef<boolean>(false);
+  const awayAlertFiredRef = useRef<boolean>(false);
 
   const lastAudioPlayTimeRef = useRef<number>(0);
 
   const callbacksRef = useRef({
     onTriggerPhoneDetected,
     onTriggerSleepingDetected,
+    onTriggerAwayDetected,
     onTriggerGazeDrift,
     onTriggerFocused
   });
@@ -87,10 +99,11 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
     callbacksRef.current = {
       onTriggerPhoneDetected,
       onTriggerSleepingDetected,
+      onTriggerAwayDetected,
       onTriggerGazeDrift,
       onTriggerFocused
     };
-  }, [onTriggerPhoneDetected, onTriggerSleepingDetected, onTriggerGazeDrift, onTriggerFocused]);
+  }, [onTriggerPhoneDetected, onTriggerSleepingDetected, onTriggerAwayDetected, onTriggerGazeDrift, onTriggerFocused]);
 
   // الصوت الأصلي الدقيق الموجود في index.html (C5 + E5)
   const triggerAudioAlert = () => {
@@ -148,12 +161,18 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
         socketRef.current.close();
         socketRef.current = null;
       }
+      setIsPhoneVisible(false);
+      setIsSleepyVisible(false);
+      setIsAwayVisible(false);
       phoneStartTimeRef.current = null;
       lastPhoneSeenTimeRef.current = null;
       sleepyStartTimeRef.current = null;
       lastSleepySeenTimeRef.current = null;
+      awayStartTimeRef.current = null;
+      lastAwaySeenTimeRef.current = null;
       phoneAlertFiredRef.current = false;
       sleepAlertFiredRef.current = false;
+      awayAlertFiredRef.current = false;
       return;
     }
 
@@ -171,9 +190,11 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
 
         // 1. معالجة حالة كشف الجوال
         if (data.phone_detected) {
+          setIsPhoneVisible(true);
           lastPhoneSeenTimeRef.current = now;
           if (!phoneStartTimeRef.current) phoneStartTimeRef.current = now;
         } else {
+          setIsPhoneVisible(false);
           if (
             lastPhoneSeenTimeRef.current &&
             now - lastPhoneSeenTimeRef.current > GRACE_PERIOD_MS
@@ -189,7 +210,7 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
 
         if (phoneStartTimeRef.current) {
           const elapsed = now - phoneStartTimeRef.current;
-          if (elapsed >= ALERT_THRESHOLD_MS) {
+          if (elapsed >= PHONE_ALERT_THRESHOLD_MS) {
             triggerAudioAlert();
 
             if (!phoneAlertFiredRef.current) {
@@ -203,9 +224,11 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
 
         // 2. معالجة حالة كشف النعاس
         if (data.is_sleepy) {
+          setIsSleepyVisible(true);
           lastSleepySeenTimeRef.current = now;
           if (!sleepyStartTimeRef.current) sleepyStartTimeRef.current = now;
         } else {
+          setIsSleepyVisible(false);
           if (
             lastSleepySeenTimeRef.current &&
             now - lastSleepySeenTimeRef.current > GRACE_PERIOD_MS
@@ -221,7 +244,7 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
 
         if (sleepyStartTimeRef.current) {
           const elapsed = now - sleepyStartTimeRef.current;
-          if (elapsed >= ALERT_THRESHOLD_MS) {
+          if (elapsed >= SLEEP_ALERT_THRESHOLD_MS) {
             triggerAudioAlert();
 
             if (!sleepAlertFiredRef.current) {
@@ -233,14 +256,48 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
           }
         }
 
-        // 3. عودة الحالة إلى التركيز تلقائياً إذا لم يعد هناك جوال أو نعاس
+        // 3. معالجة حالة مغادرة الكرسي / الابتعاد عن الكاميرا
+        if (data.is_away) {
+          setIsAwayVisible(true);
+          lastAwaySeenTimeRef.current = now;
+          if (!awayStartTimeRef.current) awayStartTimeRef.current = now;
+        } else {
+          setIsAwayVisible(false);
+          if (
+            lastAwaySeenTimeRef.current &&
+            now - lastAwaySeenTimeRef.current > GRACE_PERIOD_MS
+          ) {
+            awayStartTimeRef.current = null;
+            lastAwaySeenTimeRef.current = null;
+            if (awayAlertFiredRef.current) {
+              awayAlertFiredRef.current = false;
+              callbacksRef.current.onTriggerFocused();
+            }
+          }
+        }
+
+        if (awayStartTimeRef.current) {
+          const elapsed = now - awayStartTimeRef.current;
+          if (elapsed >= AWAY_ALERT_THRESHOLD_MS) {
+            if (!awayAlertFiredRef.current) {
+              awayAlertFiredRef.current = true;
+              callbacksRef.current.onTriggerAwayDetected?.(
+                'Stepped away from your study desk.'
+              );
+            }
+          }
+        }
+
+        // 4. عودة الحالة إلى التركيز تلقائياً إذا لم يعد هناك جوال أو نعاس أو غياب
         if (
           !phoneStartTimeRef.current &&
           !sleepyStartTimeRef.current &&
-          (phoneAlertFiredRef.current || sleepAlertFiredRef.current)
+          !awayStartTimeRef.current &&
+          (phoneAlertFiredRef.current || sleepAlertFiredRef.current || awayAlertFiredRef.current)
         ) {
           phoneAlertFiredRef.current = false;
           sleepAlertFiredRef.current = false;
+          awayAlertFiredRef.current = false;
           callbacksRef.current.onTriggerFocused();
         }
       } catch (err) {
@@ -352,26 +409,30 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <span
-              className={`w-2.5 h-2.5 rounded-full transition-colors ${cameraActive && detectedState === 'focused'
-                ? 'bg-[#2E7D32] animate-pulse'
-                : cameraActive && detectedState === 'using_phone'
-                  ? 'bg-[#DC2626] animate-ping'
-                  : cameraActive && detectedState === 'sleeping'
-                    ? 'bg-[#2563EB]'
+              className={`w-2.5 h-2.5 rounded-full transition-colors ${cameraActive && (detectedState === 'using_phone' || isPhoneVisible)
+                ? 'bg-[#DC2626] animate-ping'
+                : cameraActive && (detectedState === 'sleeping' || isSleepyVisible)
+                  ? 'bg-[#2563EB] animate-pulse'
+                  : cameraActive && (detectedState === 'away' || isAwayVisible)
+                    ? 'bg-[#EA580C] animate-pulse'
                     : cameraActive && (detectedState === 'distracted' || attentionDrifted)
                       ? 'bg-[#E65100]'
-                      : 'bg-[#9E9E9E]'
+                      : cameraActive && detectedState === 'focused'
+                        ? 'bg-[#2E7D32] animate-pulse'
+                        : 'bg-[#9E9E9E]'
                 }`}
             />
             <span className="text-xs font-semibold text-[#303336] tracking-tight">
               {cameraActive
-                ? detectedState === 'using_phone'
+                ? (detectedState === 'using_phone' || isPhoneVisible)
                   ? 'Phone Detected 📱'
-                  : detectedState === 'sleeping'
+                  : (detectedState === 'sleeping' || isSleepyVisible)
                     ? 'Sleeping Detected 💤'
-                    : detectedState === 'distracted' || attentionDrifted
-                      ? 'Attention Drifted'
-                      : 'Attention Monitor: Active'
+                    : (detectedState === 'away' || isAwayVisible)
+                      ? 'Away from Desk 🚶‍♂️'
+                      : detectedState === 'distracted' || attentionDrifted
+                        ? 'Attention Drifted'
+                        : 'Attention Monitor: Active'
                 : 'Attention Monitor: Off'}
             </span>
           </div>

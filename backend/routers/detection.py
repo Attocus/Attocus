@@ -11,6 +11,7 @@ os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 import base64
 import logging
 from pathlib import Path
+from typing import Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger("AttocusDetection")
@@ -27,8 +28,8 @@ POSSIBLE_MODEL_PATHS = [
     Path(os.getcwd()) / "backend" / "models" / "yolo11n.pt",
 ]
 
-yolo_model = None
-face_mesh_detector = None
+yolo_model: Any = None
+face_mesh_detector: Any = None
 
 # 1. Initialize YOLO
 try:
@@ -48,9 +49,10 @@ except Exception as err:
 # 2. Initialize MediaPipe FaceMesh
 try:
     import mediapipe as mp
-    try:
-        mp_face_mesh = mp.solutions.face_mesh
-    except AttributeError:
+    mp_face_mesh: Any = getattr(mp, "solutions", None)
+    if mp_face_mesh and hasattr(mp_face_mesh, "face_mesh"):
+        mp_face_mesh = mp_face_mesh.face_mesh
+    else:
         import mediapipe.solutions.face_mesh as mp_face_mesh  # type: ignore
 
     face_mesh_detector = mp_face_mesh.FaceMesh(
@@ -84,6 +86,7 @@ async def websocket_detect(websocket: WebSocket):
     logger.info("[Detection] WebSocket client connected to /ws/detect")
     
     sleepy_frame_counter = 0
+    away_frame_counter = 0
     calibration_ears = []
     baseline_ear = 0.28  # Default open-eye baseline so it detects drowsiness immediately
 
@@ -98,6 +101,7 @@ async def websocket_detect(websocket: WebSocket):
                     "phone_detected": False,
                     "confidence": 0.0,
                     "is_sleepy": False,
+                    "is_away": False,
                     "error": "No CV models available"
                 })
                 continue
@@ -116,11 +120,12 @@ async def websocket_detect(websocket: WebSocket):
             phone_detected = False
             confidence = 0.0
             is_sleepy = False
+            is_away = False
 
             # 1. Phone detection using YOLO (class 67 is cell phone in COCO)
             if yolo_model:
                 try:
-                    results = yolo_model.predict(source=frame, classes=[67], conf=0.25, verbose=False)
+                    results: Any = yolo_model.predict(source=frame, classes=[67], conf=0.25, verbose=False)
                     if results and len(results[0].boxes) > 0:
                         phone_detected = True
                         confidence = float(results[0].boxes.conf[0]) * 100
@@ -128,14 +133,16 @@ async def websocket_detect(websocket: WebSocket):
                 except Exception as yolo_err:
                     logger.warning(f"[Detection] YOLO inference error: {yolo_err}")
 
-            # 2. Drowsiness detection using MediaPipe FaceMesh EAR + Head Pitch
+            # 2. Face tracking: Drowsiness vs Stepped Away
             if face_mesh_detector:
                 try:
                     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    mesh_results = face_mesh_detector.process(rgb_frame)
+                    mesh_results: Any = face_mesh_detector.process(rgb_frame)
+                    multi_face_landmarks = getattr(mesh_results, "multi_face_landmarks", None)
 
-                    if mesh_results.multi_face_landmarks:
-                        landmarks = mesh_results.multi_face_landmarks[0].landmark
+                    if multi_face_landmarks:
+                        away_frame_counter = 0
+                        landmarks = multi_face_landmarks[0].landmark
                         left_ear = calculate_ear(landmarks, LEFT_EYE, w, h)
                         right_ear = calculate_ear(landmarks, RIGHT_EYE, w, h)
                         avg_ear = (left_ear + right_ear) / 2.0
@@ -168,18 +175,21 @@ async def websocket_detect(websocket: WebSocket):
                             is_sleepy = True
                             logger.info(f"[Detection] 😴 Sleep detected! EAR={avg_ear:.3f} (thresh={threshold:.3f}), head_down={is_head_down}")
                     else:
-                        # Face not visible (head rested completely on desk / table)
-                        sleepy_frame_counter += 1
-                        if sleepy_frame_counter >= 3:
-                            is_sleepy = True
-                            logger.info("[Detection] 😴 Face vanished / head down on desk!")
+                        # No face visible in frame: Student stepped away from desk
+                        sleepy_frame_counter = 0
+                        away_frame_counter += 1
+                        if away_frame_counter >= 3:
+                            is_away = True
+                            phone_detected = False
+                            logger.info("[Detection] 🚶‍♂️ Student stepped away from desk!")
                 except Exception as mp_err:
                     logger.warning(f"[Detection] MediaPipe inference error: {mp_err}")
 
             await websocket.send_json({
                 "phone_detected": phone_detected,
                 "confidence": round(confidence, 1),
-                "is_sleepy": is_sleepy
+                "is_sleepy": is_sleepy,
+                "is_away": is_away
             })
 
     except WebSocketDisconnect:

@@ -11,6 +11,8 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 dotenv.config({ path: path.resolve(__dirname, 'backend/.env') });
 
+import OpenAI from 'openai';
+
 let aiClient: GoogleGenAI | null = null;
 function getAi(): GoogleGenAI | null {
   if (!aiClient && process.env.GEMINI_API_KEY) {
@@ -25,6 +27,100 @@ function getAi(): GoogleGenAI | null {
   }
   return aiClient;
 }
+
+let openaiClient: OpenAI | null = null;
+function getOpenAI(): OpenAI | null {
+  if (!openaiClient && process.env.OPENAI_API_KEY) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+  }
+  return openaiClient;
+}
+
+// Unified LLM helper prioritizing OpenAI (gpt-4o-mini)
+async function generateJsonWithLLM<T = any>(prompt: string, systemPrompt?: string): Promise<T | null> {
+  // 1. Prioritize OpenAI (gpt-4o-mini)
+  const openai = getOpenAI();
+  if (openai) {
+    try {
+      const messages: any[] = [];
+      if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+      messages.push({ role: 'user', content: prompt });
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages,
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+      });
+      const text = completion.choices[0]?.message?.content;
+      if (text) {
+        return JSON.parse(text) as T;
+      }
+    } catch (err: any) {
+      console.warn('[OpenAI JSON error, trying Gemini]:', err.message);
+    }
+  }
+
+  // 2. Fallback to Gemini
+  const ai = getAi();
+  if (ai) {
+    try {
+      const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: fullPrompt,
+        config: { responseMimeType: 'application/json' }
+      });
+      if (response.text) {
+        return JSON.parse(response.text) as T;
+      }
+    } catch (err: any) {
+      console.warn('[Gemini JSON error]:', err.message);
+    }
+  }
+
+  return null;
+}
+
+async function generateTextWithLLM(prompt: string, systemPrompt?: string): Promise<string | null> {
+  // 1. Prioritize OpenAI (gpt-4o-mini)
+  const openai = getOpenAI();
+  if (openai) {
+    try {
+      const messages: any[] = [];
+      if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+      messages.push({ role: 'user', content: prompt });
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages,
+        temperature: 0.5,
+      });
+      const text = completion.choices[0]?.message?.content;
+      if (text) return text;
+    } catch (err: any) {
+      console.warn('[OpenAI Text error, trying Gemini]:', err.message);
+    }
+  }
+
+  // 2. Fallback to Gemini
+  const ai = getAi();
+  if (ai) {
+    try {
+      const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: fullPrompt
+      });
+      if (response.text) return response.text;
+    } catch (err: any) {
+      console.warn('[Gemini Text error]:', err.message);
+    }
+  }
+
+  return null;
+}
+
 
 async function startServer() {
   const app = express();
@@ -744,19 +840,19 @@ Return JSON:
     }
   });
 
-  // 6. Wrap-up Session - Analyze student summary & identify missing gaps
+  // 6. Wrap-up Session - Analyze student summary & identify missing gaps (OpenAI gpt-4o-mini prioritized)
   app.post('/api/coach/wrapup/analyze', async (req, res) => {
     try {
       const { lectureTitle, allSlides, studentSummary, sessionStats } = req.body;
-      const ai = getAi();
 
       const allKeyPoints = (allSlides || []).flatMap((s: any) => 
-        (s.keyPoints || []).map((kp: string) => `[Slide ${s.pageNumber}: ${s.topic}] ${kp}`)
+        (s.keyPoints || []).map((kp: string) => `[Slide ${s.pageNumber}: ${s.topic || s.title || ''}] ${kp}`)
       );
 
-      if (ai && studentSummary?.trim().length > 10) {
+      if (studentSummary && studentSummary.trim().length > 5) {
         const prompt = `You are the Orchestrator and Quiz Agent conducting an interactive Wrap-up Session.
-Lecture: "${lectureTitle}"
+Lecture Title: "${lectureTitle}"
+
 All Master Key Points taught in this lecture:
 ${allKeyPoints.join('\n')}
 
@@ -764,59 +860,60 @@ The student just provided their end-of-session summary in their own words:
 "${studentSummary}"
 
 Your job:
-1. Identify which key concepts the student covered well.
-2. Identify 2 to 3 SPECIFIC GAPS (concepts that were missing or inadequately explained in their summary).
-3. For EACH missing gap, generate ONE targeted quiz question (multiple choice, 4 options) addressing ONLY that specific gap.
+1. Carefully compare the student's summary against the master key points taught.
+2. Identify which key concepts the student explained or understood well ("coveredPoints").
+3. Identify 2 to 3 SPECIFIC GAPS ("missingGaps"): concepts from the lecture that were missing, incomplete, or inadequately explained in their summary.
+4. For EACH missing gap, formulate ONE targeted multiple-choice quiz question (4 options) addressing ONLY that specific gap, so the student can verify their retention.
 
-Respond in JSON:
+Respond strictly in valid JSON with this schema:
 {
-  "coveredPoints": ["concept student understood"],
-  "missingGaps": ["gap 1 title/concept", "gap 2 title/concept"],
+  "coveredPoints": ["Concept or point the student covered well"],
+  "missingGaps": ["Specific gap 1 title/concept", "Specific gap 2 title/concept"],
   "gapQuestions": [
     {
       "id": "gap-q-1",
       "concept": "concept name",
-      "question": "Targeted question addressing this gap?",
+      "question": "Targeted question addressing this specific gap?",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correctAnswer": "Option A",
-      "explanation": "Why this is correct based on the lecture."
+      "explanation": "Clear explanation of why this answer is correct according to the lecture material."
     }
   ]
 }`;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: { responseMimeType: 'application/json' }
-        });
+        const parsed = await generateJsonWithLLM<{
+          coveredPoints?: string[];
+          missingGaps?: string[];
+          gapQuestions?: any[];
+        }>(prompt, 'You are an intelligent educational Orchestrator and Quiz evaluation AI. Analyze student summaries rigorously and fairly against lecture slides.');
 
-        try {
-          const parsed = JSON.parse(response.text || '{}');
-          if (parsed.gapQuestions && parsed.gapQuestions.length > 0) {
-            res.json(parsed);
-            return;
-          }
-        } catch {}
+        if (parsed?.gapQuestions && parsed.gapQuestions.length > 0) {
+          return res.json({
+            coveredPoints: parsed.coveredPoints || [],
+            missingGaps: parsed.missingGaps || [],
+            gapQuestions: parsed.gapQuestions
+          });
+        }
       }
 
-      // Fallback gap questions
+      // Fallback gap questions if LLM unavailable or summary too brief
       const slides = allSlides || [];
       const gap1Slide = slides[1] || slides[0];
       const gap2Slide = slides[3] || slides[slides.length - 1];
 
       res.json({
         coveredPoints: [
-          `Foundations of ${slides[0]?.topic || 'the topic'}`,
+          `Foundations of ${slides[0]?.topic || slides[0]?.title || 'the lecture topic'}`,
           'High-level architectural workflow'
         ],
         missingGaps: [
-          gap1Slide?.topic || 'State Transitions & Timeouts',
-          gap2Slide?.topic || 'Safety Invariants & Edge Cases'
+          gap1Slide?.topic || gap1Slide?.title || 'State Transitions & Timeouts',
+          gap2Slide?.topic || gap2Slide?.title || 'Safety Invariants & Edge Cases'
         ],
         gapQuestions: [
           {
             id: 'gap-q-1',
-            concept: gap1Slide?.topic || 'Key Mechanism',
+            concept: gap1Slide?.topic || gap1Slide?.title || 'Key Mechanism',
             question: `In ${gap1Slide?.title || 'the lecture'}, what is the critical mechanism preventing conflicts?`,
             options: [
               (gap1Slide?.keyPoints || [])[0] || 'Randomized timeouts and strict quorum intersection',
@@ -829,7 +926,7 @@ Respond in JSON:
           },
           {
             id: 'gap-q-2',
-            concept: gap2Slide?.topic || 'Safety Invariant',
+            concept: gap2Slide?.topic || gap2Slide?.title || 'Safety Invariant',
             question: `How does ${gap2Slide?.title || 'the system'} ensure safety during network partitions?`,
             options: [
               (gap2Slide?.keyPoints || [])[0] || 'Only a majority quorum can commit new entries.',
@@ -843,34 +940,35 @@ Respond in JSON:
         ]
       });
     } catch (err: any) {
+      console.error('Wrapup analyze error:', err);
       res.status(500).json({ error: err.message });
     }
   });
 
-  // 7. Wrap-up Session - Generate Final Learning Coach Report
+  // 7. Wrap-up Session - Generate Final Learning Coach Report (OpenAI gpt-4o-mini prioritized)
   app.post('/api/coach/wrapup/report', async (req, res) => {
     try {
       const { lectureId, lectureTitle, allSlides, studentSummary, gapQuestions, sessionStats } = req.body;
-      const ai = getAi();
 
       const questionsList = (gapQuestions || []).map((q: any) => 
-        `- Concept: ${q.concept} | Correct: ${q.isCorrect ? 'YES' : 'NO'} (Student answered: "${q.studentAnswer}")`
+        `- Concept: ${q.concept} | Correct: ${q.isCorrect ? 'YES' : 'NO'} (Student selected: "${q.studentAnswer}")`
       ).join('\n');
 
-      if (ai) {
-        const prompt = `You are the Learning Coach Agent generating the final student report.
+      const prompt = `You are the Learning Coach Agent generating the final student report.
 Lecture: "${lectureTitle}"
-Student Summary: "${studentSummary}"
+Student Summary: "${studentSummary || ''}"
+
 Targeted Gap Quiz Results:
 ${questionsList}
+
 Session Focus Stats: ${sessionStats?.totalSecondsFocused || 300} seconds studied.
 
 Task:
 1. Create a concept strength/weakness map with mastery scores (0-100) and status ('mastered' | 'developing' | 'needs_review').
 2. Deliver ONE single, highly actionable, encouraging recommendation for what the student should review next.
-3. Formulate 1 spaced repetition review item for their queue (differently-worded question for retention).
+3. Formulate 1 spaced repetition review item for their queue (differently-worded challenge question for long-term retention).
 
-Respond in JSON:
+Respond strictly in valid JSON with this schema:
 {
   "conceptMap": [
     { "concept": "Concept Name", "status": "mastered", "score": 90, "note": "Strong conceptual recall" },
@@ -885,38 +983,35 @@ Respond in JSON:
       "daysUntilReview": 3,
       "lastReviewed": "${new Date().toISOString().split('T')[0]}",
       "question": "Spaced repetition challenge question?",
-      "options": ["A", "B", "C", "D"],
-      "correctAnswer": "A",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": "Option A",
       "explanation": "Brief explanation"
     }
   ]
 }`;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: { responseMimeType: 'application/json' }
-        });
+      const parsed = await generateJsonWithLLM<{
+        conceptMap?: any[];
+        primaryRecommendation?: string;
+        spacedRepetitionQueue?: any[];
+      }>(prompt, 'You are an adaptive Learning Coach AI generating encouraging, accurate mastery reports for students.');
 
-        try {
-          const parsed = JSON.parse(response.text || '{}');
-          res.json({
-            lectureId,
-            lectureTitle,
-            studyTimeMinutes: Math.max(1, Math.round((sessionStats?.totalSecondsFocused || 300) / 60)),
-            focusEfficiencyPercentage: Math.min(100, Math.round(((sessionStats?.totalSecondsFocused || 300) / Math.max(1, (sessionStats?.totalSecondsFocused || 300) + 45)) * 100)),
-            totalGapsIdentified: (gapQuestions || []).length,
-            gapsResolvedInQuiz: (gapQuestions || []).filter((q: any) => q.isCorrect).length,
-            conceptMap: parsed.conceptMap || [],
-            primaryRecommendation: parsed.primaryRecommendation || 'Great study session! Solidify the election safety checks before tomorrow.',
-            spacedRepetitionQueue: parsed.spacedRepetitionQueue || [],
-            studentFinalSummary: studentSummary
-          });
-          return;
-        } catch {}
+      if (parsed) {
+        return res.json({
+          lectureId,
+          lectureTitle,
+          studyTimeMinutes: Math.max(1, Math.round((sessionStats?.totalSecondsFocused || 300) / 60)),
+          focusEfficiencyPercentage: Math.min(100, Math.round(((sessionStats?.totalSecondsFocused || 300) / Math.max(1, (sessionStats?.totalSecondsFocused || 300) + 45)) * 100)),
+          totalGapsIdentified: (gapQuestions || []).length,
+          gapsResolvedInQuiz: (gapQuestions || []).filter((q: any) => q.isCorrect).length,
+          conceptMap: parsed.conceptMap || [],
+          primaryRecommendation: parsed.primaryRecommendation || 'Great study session! Solidify the key takeaways before your exam.',
+          spacedRepetitionQueue: parsed.spacedRepetitionQueue || [],
+          studentFinalSummary: studentSummary
+        });
       }
 
-      // Fallback report
+      // Fallback report if LLM unavailable
       const concepts = (allSlides || []).map((s: any, idx: number) => ({
         concept: s.topic || s.title,
         status: idx === 0 ? 'mastered' : idx === 1 ? 'developing' : 'needs_review',
@@ -949,6 +1044,7 @@ Respond in JSON:
         studentFinalSummary: studentSummary
       });
     } catch (err: any) {
+      console.error('Wrapup report error:', err);
       res.status(500).json({ error: err.message });
     }
   });
