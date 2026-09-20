@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { Lecture } from '../types';
-import { BookOpen, Upload, ArrowRight, Clock, Sparkles, CheckCircle, FileText, ChevronRight, Plus, Trash2, AlertTriangle, X } from 'lucide-react';
+import { BookOpen, Upload, ArrowRight, Clock, Sparkles, CheckCircle, FileText, ChevronRight, Plus, Trash2, AlertTriangle, X, LogIn, LogOut, User as UserIcon } from 'lucide-react';
 import { UploadModal } from './UploadModal';
+import { useAuth } from '../contexts/AuthContext';
+import { AuthModal } from './AuthModal';
 
 interface HomeViewProps {
   lectures: Lecture[];
@@ -22,6 +24,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
   totalFocusPoints,
   todayMinutesStudied
 }) => {
+  const { currentUser, userProfile, logout } = useAuth();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [pendingDeleteLecture, setPendingDeleteLecture] = useState<{ id: string; title: string } | null>(null);
 
@@ -66,10 +70,48 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </div>
 
-        {/* Quiet Focus Points in Corner */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[#E2E4DE] shadow-2xs text-xs text-[#52575C] font-mono">
-          <Sparkles className="w-3.5 h-3.5 text-[#2E7D32]" />
-          <span>{totalFocusPoints} Focus Points</span>
+        {/* Quiet Focus Points & User Profile */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[#E2E4DE] shadow-2xs text-xs text-[#52575C] font-mono">
+            <Sparkles className="w-3.5 h-3.5 text-[#2E7D32]" />
+            <span>{totalFocusPoints} Focus Points</span>
+          </div>
+
+          {currentUser ? (
+            <div className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-full bg-white border border-[#E2E4DE] shadow-2xs text-xs text-[#303336]">
+              {currentUser.photoURL ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt={currentUser.displayName || 'User'}
+                  className="w-5 h-5 rounded-full object-cover border border-[#D0D4CA]"
+                />
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-[#2E7D32] text-white flex items-center justify-center font-bold text-[10px]">
+                  {(currentUser.displayName || currentUser.email || 'U')[0].toUpperCase()}
+                </div>
+              )}
+              <span className="font-medium max-w-[120px] truncate text-[11px]">
+                {currentUser.displayName || currentUser.email?.split('@')[0]}
+              </span>
+              <button
+                type="button"
+                onClick={() => logout()}
+                title="تسجيل الخروج"
+                className="text-[#888E95] hover:text-[#DC2626] transition-colors p-0.5 cursor-pointer ml-1"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAuthModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-[#F9FAF6] border border-[#D5D8CF] text-xs font-medium text-[#2E7D32] shadow-2xs transition-colors cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>تسجيل الدخول</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -272,6 +314,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Firebase Authentication Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+      />
     </div>
   );
 };

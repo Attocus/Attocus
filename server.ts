@@ -12,6 +12,28 @@ dotenv.config();
 dotenv.config({ path: path.resolve(__dirname, 'backend/.env') });
 
 import OpenAI from 'openai';
+import fs from 'fs';
+import { initializeApp as initAdminApp, cert, getApps as getAdminApps } from 'firebase-admin/app';
+import { getFirestore as getAdminFirestore, FieldValue } from 'firebase-admin/firestore';
+
+let adminDb: any = null;
+function getAdminDb(): any {
+  if (!adminDb) {
+    const keyPath = path.resolve(__dirname, 'backend/serviceAccountKey.json');
+    if (fs.existsSync(keyPath)) {
+      try {
+        const sa = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
+        const adminApp = getAdminApps().length > 0 ? getAdminApps()[0] : initAdminApp({
+          credential: cert(sa)
+        });
+        adminDb = getAdminFirestore(adminApp);
+      } catch (err) {
+        console.warn('[Firebase Admin] init error:', err);
+      }
+    }
+  }
+  return adminDb;
+}
 
 let aiClient: GoogleGenAI | null = null;
 function getAi(): GoogleGenAI | null {
@@ -68,7 +90,7 @@ async function generateJsonWithLLM<T = any>(prompt: string, systemPrompt?: strin
     try {
       const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: fullPrompt,
         config: { responseMimeType: 'application/json' }
       });
@@ -109,7 +131,7 @@ async function generateTextWithLLM(prompt: string, systemPrompt?: string): Promi
     try {
       const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: fullPrompt
       });
       if (response.text) return response.text;
@@ -223,6 +245,176 @@ async function startServer() {
     res.json({ intervention_type: 'none', alert_kind: 'none' });
   });
 
+  // ==============================================================
+  // Direct Cloud Firestore Admin APIs (Project attocus-1)
+  // Writes directly to root collections: files, sessions, summaries, quizzes, attention_logs, users
+  // ==============================================================
+
+  // 1. Record uploaded file into 'files' collection
+  app.post('/api/firestore/file', async (req, res) => {
+    try {
+      const { filename, userId, lectureId, totalPages } = req.body;
+      const db = getAdminDb();
+      if (!db) return res.status(503).json({ error: 'Firestore Admin not initialized' });
+
+      const docRef = await db.collection('files').add({
+        filename: filename || 'lecture.pdf',
+        user_id: userId || 'user_1',
+        lecture_id: lectureId || '',
+        total_pages: totalPages || 1,
+        uploaded_at: FieldValue.serverTimestamp()
+      });
+
+      console.log(`[Firestore] Registered uploaded file in 'files' collection:`, docRef.id);
+      res.json({ ok: true, fileId: docRef.id });
+    } catch (err: any) {
+      console.error('Firestore save file error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 2. Study Session Wrap-up -> writes to 'sessions', 'summaries', 'quizzes', and 'users'
+  app.post('/api/firestore/wrapup', async (req, res) => {
+    try {
+      const {
+        userId,
+        lectureId,
+        lectureTitle,
+        studentSummary,
+        coveredPoints,
+        missingGaps,
+        gapQuestions,
+        report,
+        sessionStats
+      } = req.body;
+
+      const db = getAdminDb();
+      if (!db) return res.status(503).json({ error: 'Firestore Admin not initialized' });
+
+      const uid = userId || 'dev_123';
+      const now = FieldValue.serverTimestamp();
+      const sessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+      // A. Write to 'sessions'
+      await db.collection('sessions').doc(sessionId).set({
+        session_id: sessionId,
+        user_id: uid,
+        file_id: lectureId || 'lecture_default',
+        lecture_title: lectureTitle || '',
+        status: 'completed',
+        focus_efficiency: report?.focusEfficiencyPercentage || 92,
+        study_time_minutes: report?.studyTimeMinutes || Math.max(1, Math.round((sessionStats?.totalSecondsFocused || 60) / 60)),
+        total_seconds_focused: sessionStats?.totalSecondsFocused || 60,
+        report: report || null,
+        started_at: now,
+        ended_at: now
+      });
+      console.log(`[Firestore] Saved session in 'sessions' collection: ${sessionId}`);
+
+      // B. Write to 'summaries'
+      let summaryDocId = null;
+      if (studentSummary) {
+        const sumRef = await db.collection('summaries').add({
+          session_id: sessionId,
+          user_id: uid,
+          student_text: studentSummary,
+          analysis_json: {
+            covered_points: coveredPoints || [],
+            missing_gaps: missingGaps || []
+          },
+          page_number: 1,
+          created_at: now
+        });
+        summaryDocId = sumRef.id;
+        console.log(`[Firestore] Saved summary in 'summaries' collection: ${summaryDocId}`);
+      }
+
+      // C. Write to 'quizzes'
+      let quizDocId = null;
+      if (gapQuestions && Array.isArray(gapQuestions) && gapQuestions.length > 0) {
+        const studentAnswers: Record<string, any> = {};
+        const questionsList: any[] = [];
+        let correctCount = 0;
+
+        gapQuestions.forEach((q: any, idx: number) => {
+          studentAnswers[`q_${idx + 1}`] = q.studentAnswer || '';
+          if (q.isCorrect) correctCount++;
+          questionsList.push({
+            question: q.question,
+            concept: q.concept,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+            explanation: q.explanation
+          });
+        });
+
+        const score = Math.round((correctCount / gapQuestions.length) * 100);
+
+        const qRef = await db.collection('quizzes').add({
+          session_id: sessionId,
+          user_id: uid,
+          score,
+          questions_json: questionsList,
+          student_answers_json: studentAnswers,
+          page_number: 1,
+          created_at: now
+        });
+        quizDocId = qRef.id;
+        console.log(`[Firestore] Saved quiz in 'quizzes' collection: ${quizDocId}`);
+      }
+
+      // D. Update 'users' collection with points
+      try {
+        const userRef = db.collection('users').doc('AoDqBT8Q4lWUwfwxIZUw');
+        await userRef.set({
+          name: 'بارقة',
+          device_id: 'dev_123',
+          focusPoints: FieldValue.increment(25),
+          todayMinutesStudied: FieldValue.increment(Math.max(1, Math.round((sessionStats?.totalSecondsFocused || 60) / 60))),
+          lastActiveAt: now
+        }, { merge: true });
+        console.log(`[Firestore] Updated user stats in 'users' collection`);
+      } catch (uErr) {
+        console.warn('User stats update warn:', uErr);
+      }
+
+      res.json({
+        ok: true,
+        sessionId,
+        summaryDocId,
+        quizDocId
+      });
+    } catch (err: any) {
+      console.error('Firestore wrapup route error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 3. Log camera / attention events directly to 'attention_logs'
+  app.post('/api/firestore/attention', async (req, res) => {
+    try {
+      const { studentId, focusScore, attentionStatus, faceDetected, phoneDetected, movementDetected } = req.body;
+      const db = getAdminDb();
+      if (!db) return res.status(503).json({ error: 'Firestore Admin not initialized' });
+
+      const docRef = await db.collection('attention_logs').add({
+        student_id: studentId || 'student_001',
+        focus_score: focusScore !== undefined ? focusScore : 85,
+        attention_status: attentionStatus !== undefined ? attentionStatus : true,
+        face_detected: faceDetected !== undefined ? faceDetected : true,
+        phone_detected: phoneDetected !== undefined ? phoneDetected : false,
+        movement_detected: movementDetected !== undefined ? movementDetected : false,
+        tab_active: true,
+        timestamp: FieldValue.serverTimestamp()
+      });
+
+      console.log(`[Firestore] Logged attention event in 'attention_logs': ${docRef.id}`);
+      res.json({ ok: true, id: docRef.id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
 
   // 1. Explain Agent (calls Python LearningCoachAgent first)
   app.post('/api/coach/explain', async (req, res) => {
@@ -256,55 +448,50 @@ async function startServer() {
         }
       } catch {}
 
-      const ai = getAi();
       const lectureContext = `Lecture: "${lectureTitle}"
-Current Slide (Page ${currentSlide.pageNumber}):
-Title: ${currentSlide.title}
-Subtitle: ${currentSlide.subtitle || ''}
+Current Slide (Page ${currentSlide?.pageNumber || 1}):
+Title: ${currentSlide?.title || ''}
+Subtitle: ${currentSlide?.subtitle || ''}
 Content:
-${(currentSlide.content || []).join('\n')}
+${(currentSlide?.content || []).join('\n')}
 Key Points:
-${(currentSlide.keyPoints || []).join('\n')}
+${(currentSlide?.keyPoints || []).join('\n')}
 
 Other Slides in this lecture:
 ${(allSlides || []).map((s: any) => `Page ${s.pageNumber}: ${s.title} (${s.topic})`).join('\n')}
 `;
 
-      if (ai) {
-        const prompt = `You are a calm, academic, highly supportive human tutor sitting right next to a university student.
+      const systemPrompt = `You are a calm, academic, highly supportive human tutor sitting right next to a university student.
 Rules:
 1. Explain warmly, clearly, and concisely in 2-3 brief paragraphs.
-2. Ground your answer FIRST in the provided lecture notes and cite "Slide ${currentSlide.pageNumber}".
+2. Ground your answer FIRST in the provided lecture notes and cite "Slide ${currentSlide?.pageNumber || 1}".
 3. If the answer is not found directly in the lecture, you may use external knowledge, but you MUST explicitly cite the external source (e.g., "[Source: Standard Distributed Systems Theory]").
 4. Maintain a supportive, encouraging, conversational teacher tone. Do not use robotic boilerplate.
+5. If the student asks in Arabic, respond in fluent, academic, warm Arabic. If in English, respond in English.`;
 
-Context:
+      const prompt = `Context:
 ${lectureContext}
 
 Student's question: "${question}"`;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt
+      const llmAnswer = await generateTextWithLLM(prompt, systemPrompt);
+      if (llmAnswer) {
+        return res.json({
+          answer: llmAnswer,
+          citedLecturePages: [currentSlide?.pageNumber || 1]
         });
-
-        res.json({
-          answer: response.text || 'I checked the slide material for you.',
-          citedLecturePages: [currentSlide.pageNumber]
-        });
-        return;
       }
 
-      // Fallback if no key
-      const answer = `Based on Slide ${currentSlide.pageNumber} ("${currentSlide.title}"), the core idea is: ${(currentSlide.keyPoints || [])[0] || currentSlide.content[0]}. 
+      // Fallback if no LLM response
+      const answer = `Based on Slide ${currentSlide?.pageNumber || 1} ("${currentSlide?.title || 'Current Slide'}"), the core idea is: ${(currentSlide?.keyPoints || [])[0] || (currentSlide?.content || [])[0] || 'stated in the slides'}. 
 
-To put it simply: ${(currentSlide.content || []).slice(0, 2).join(' ')}
+To put it simply: ${(currentSlide?.content || []).slice(0, 2).join(' ')}
 
-Does that clarify how it connects to ${currentSlide.topic}?`;
+Does that clarify how it connects to ${currentSlide?.topic || 'this topic'}?`;
 
       res.json({
         answer,
-        citedLecturePages: [currentSlide.pageNumber]
+        citedLecturePages: [currentSlide?.pageNumber || 1]
       });
     } catch (err: any) {
       console.error('Explain agent error:', err);
@@ -382,10 +569,8 @@ Does that clarify how it connects to ${currentSlide.topic}?`;
         console.warn('Python backend summary start failed, falling back:', err);
       }
 
-      const ai = getAi();
-      if (ai) {
-        const cleanTopic = slide?.topic || slide?.title || lectureTitle || 'this concept';
-        const prompt = `You are an attentive academic tutor initiating a conceptual comprehension check for a university student.
+      const cleanTopic = slide?.topic || slide?.title || lectureTitle || 'this concept';
+      const prompt = `You are an attentive academic tutor initiating a conceptual comprehension check for a university student.
 Lecture: "${lectureTitle || ''}"
 Topic: "${cleanTopic}"
 Slide Content:
@@ -396,21 +581,17 @@ CRITICAL RULES:
 - NEVER ask questions about slide numbers, file titles, presentation outlines, or placeholders (e.g. NEVER ask "What did you understand about Slide 1?").
 - Keep it under 25 words.`;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt
-        });
-
-        res.json({
-          question: response.text?.trim() || `In your own words, what did you understand about ${cleanTopic}?`,
+      const questionText = await generateTextWithLLM(prompt);
+      if (questionText) {
+        return res.json({
+          question: questionText.trim(),
           topic: cleanTopic
         });
-        return;
       }
 
       res.json({
-        question: `In your own words, what did you understand about ${slide.topic || slide.title}?`,
-        topic: slide.topic || slide.title
+        question: `In your own words, what did you understand about ${cleanTopic}?`,
+        topic: cleanTopic
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -498,16 +679,8 @@ Respond in valid JSON with schema:
   "isFinished": boolean
 }`;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json'
-          }
-        });
-
-        try {
-          const parsed = JSON.parse(response.text || '{}');
+        const parsed = await generateJsonWithLLM<any>(prompt);
+        if (parsed) {
           res.json({
             analysis: {
               covered: parsed.covered || ['Initial conceptual understanding'],
@@ -519,8 +692,6 @@ Respond in valid JSON with schema:
             isFinished: parsed.isFinished || (parsed.missing?.length === 0)
           });
           return;
-        } catch {
-          // fall through to deterministic response
         }
       }
 
@@ -655,14 +826,8 @@ Respond in JSON:
   "lectureTakeaways": ["Key takeaway 1", "Key takeaway 2"]
 }`;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: { responseMimeType: 'application/json' }
-        });
-
-        try {
-          const parsed = JSON.parse(response.text || '{}');
+        const parsed = await generateJsonWithLLM<any>(prompt);
+        if (parsed) {
           res.json({
             studentWordsSummary: parsed.studentWordsSummary || 'Here is what you articulated during our session.',
             corrections: parsed.corrections || [],
@@ -671,8 +836,6 @@ Respond in JSON:
             lectureTakeaways: parsed.lectureTakeaways || slide.keyPoints || []
           });
           return;
-        } catch {
-          // fallback
         }
       }
 
@@ -787,9 +950,7 @@ Respond in JSON:
         console.warn('Python quiz generation failed, falling back:', err);
       }
 
-      const ai = getAi();
-      if (ai) {
-        const prompt = `Create ONE clean, high-quality multiple choice question testing genuine conceptual understanding of:
+      const prompt = `Create ONE clean, high-quality multiple choice question testing genuine conceptual understanding of:
 Lecture: "${lectureTitle || ''}"
 Slide: "${slide?.title || ''}"
 Topic: "${slide?.topic || slide?.title || 'Key Concept'}"
@@ -807,19 +968,11 @@ Return JSON:
   "correctAnswer": "Exact matching option string",
   "explanation": "Friendly 1-2 sentence explanation why this is right."
 }`;
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: { responseMimeType: 'application/json' }
-        });
 
-        try {
-          const parsed = JSON.parse(response.text || '{}');
-          if (parsed.options && parsed.options.length >= 2) {
-            res.json(parsed);
-            return;
-          }
-        } catch {}
+      const parsed = await generateJsonWithLLM<any>(prompt);
+      if (parsed && parsed.options && parsed.options.length >= 2) {
+        res.json(parsed);
+        return;
       }
 
       // Safe Fallback
@@ -1057,25 +1210,7 @@ Respond strictly in valid JSON with this schema:
         return res.status(400).json({ error: 'Missing imageBase64' });
       }
 
-      const ai = getAi();
-      if (ai) {
-        // Strip data URI header
-        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  inlineData: {
-                    mimeType: 'image/jpeg',
-                    data: base64Data
-                  }
-                },
-                {
-                  text: `You are an attentive, calm, academic AI study coach monitoring a student's webcam while they study.
+      const visionPrompt = `You are an attentive, calm, academic AI study coach monitoring a student's webcam while they study.
 Your task is to detect the student's physical and focus state accurately.
 Evaluate specifically:
 1. "using_phone": Is the student holding, touching, or looking down at a mobile phone / smartphone / handheld device?
@@ -1090,26 +1225,67 @@ Return ONLY valid JSON with this exact schema:
   "confidence": number between 0.0 and 1.0,
   "reason": "Brief 1-sentence respectful description of what you observe",
   "coachMessage": "Kind, encouraging teacher prompt if state is not focused, or null if focused"
-}`
-                }
-              ]
-            }
-          ],
-          config: {
-            responseMimeType: 'application/json'
-          }
-        });
+}`;
 
+      // 1. Try OpenAI Vision (gpt-4o-mini)
+      const openai = getOpenAI();
+      if (openai) {
         try {
+          const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`;
+          const completion = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            response_format: { type: 'json_object' },
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: visionPrompt },
+                  { type: 'image_url', image_url: { url: imageUrl } }
+                ]
+              }
+            ]
+          });
+          const text = completion.choices[0]?.message?.content;
+          if (text) {
+            return res.json(JSON.parse(text));
+          }
+        } catch (err: any) {
+          console.warn('[OpenAI Vision error, trying Gemini]:', err.message);
+        }
+      }
+
+      // 2. Fallback to Gemini
+      const ai = getAi();
+      if (ai) {
+        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+        try {
+          const response = await ai.models.generateContent({
+            model: 'gemini-3.6-flash',
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: 'image/jpeg',
+                      data: base64Data
+                    }
+                  },
+                  {
+                    text: visionPrompt
+                  }
+                ]
+              }
+            ],
+            config: {
+              responseMimeType: 'application/json'
+            }
+          });
+
           const parsed = JSON.parse(response.text || '{}');
           return res.json(parsed);
         } catch {
-          return res.json({
-            state: 'focused',
-            confidence: 0.9,
-            reason: 'Normal reading posture observed.',
-            coachMessage: null
-          });
+          // fallback
         }
       }
 

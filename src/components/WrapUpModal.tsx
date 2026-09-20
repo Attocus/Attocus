@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Lecture, Slide, GapQuizQuestion, WrapUpReport, ConceptMastery } from '../types';
-import { CheckCircle, AlertCircle, ArrowRight, Sparkles, BookOpen, Clock, Award, RotateCcw, Brain, Check } from 'lucide-react';
+import { CheckCircle, AlertCircle, ArrowRight, Sparkles, BookOpen, Clock, Award, RotateCcw, Brain, Check, Cloud } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { saveSessionReportToFirestore } from '../services/firestoreService';
 
 interface WrapUpModalProps {
   isOpen: boolean;
@@ -19,6 +21,8 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
   lecture,
   sessionSeconds
 }) => {
+  const { currentUser } = useAuth();
+  const [isSavedToCloud, setIsSavedToCloud] = useState(false);
   const [step, setStep] = useState<WrapUpStep>('prompt_summary');
   const [studentSummary, setStudentSummary] = useState('');
   const [coveredPoints, setCoveredPoints] = useState<string[]>([]);
@@ -143,10 +147,24 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
       }
       setFinalReport(reportData);
       setStep('final_report');
+
+      saveSessionReportToFirestore(
+        currentUser?.uid || 'dev_123',
+        lecture.id,
+        lecture.title,
+        reportData,
+        { totalSecondsFocused: sessionSeconds },
+        {
+          studentSummary,
+          coveredPoints,
+          missingGaps,
+          gapQuestions: questions
+        }
+      ).then(() => setIsSavedToCloud(true)).catch((e) => console.warn(e));
     } catch (err) {
       console.error('Final report error:', err);
       // Fallback report
-      setFinalReport({
+      const fallbackReport: WrapUpReport = {
         lectureId: lecture.id,
         lectureTitle: lecture.title,
         studyTimeMinutes: Math.max(1, Math.round(sessionSeconds / 60)),
@@ -162,8 +180,23 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
         primaryRecommendation: 'Review the transition edge cases once more before your exam to lock in retention.',
         spacedRepetitionQueue: [],
         studentFinalSummary: studentSummary
-      });
+      };
+      setFinalReport(fallbackReport);
       setStep('final_report');
+
+      saveSessionReportToFirestore(
+        currentUser?.uid || 'dev_123',
+        lecture.id,
+        lecture.title,
+        fallbackReport,
+        { totalSecondsFocused: sessionSeconds },
+        {
+          studentSummary,
+          coveredPoints,
+          missingGaps,
+          gapQuestions: questions
+        }
+      ).then(() => setIsSavedToCloud(true)).catch((e) => console.warn(e));
     } finally {
       setIsSubmitting(false);
     }
@@ -397,6 +430,12 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
                 <p className="text-xs text-[#405445] leading-relaxed">
                   You studied for <span className="font-semibold">{finalReport.studyTimeMinutes} minutes</span> with <span className="font-semibold">{finalReport.focusEfficiencyPercentage}% focus efficiency</span>.
                 </p>
+                {isSavedToCloud && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white border border-[#C5DDC0] text-[#2E7D32] text-[10px] font-semibold w-fit mt-1 shadow-2xs">
+                    <Cloud className="w-3 h-3" />
+                    <span>تم حفظ الجلسة والتقرير في Cloud Firestore</span>
+                  </div>
+                )}
               </div>
             </div>
 

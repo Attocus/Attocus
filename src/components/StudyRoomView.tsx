@@ -41,12 +41,18 @@ import { PhoneAlertModal } from './PhoneAlertModal';
 import { SleepingAlertModal } from './SleepingAlertModal';
 import { AwayAlertModal } from './AwayAlertModal';
 import { UploadModal } from './UploadModal';
+import { useAuth } from '../contexts/AuthContext';
+import {
+  saveAnnotationsToFirestore,
+  getAnnotationsFromFirestore,
+  logAttentionEventToFirestore
+} from '../services/firestoreService';
 
 interface StudyRoomViewProps {
   lecture: Lecture;
   onReturnHome: () => void;
   onUpdateLecture: (updated: Lecture) => void;
-  onUploadLecture?: (newLecture: Lecture) => void;
+  onUploadLecture: (lecture: Lecture) => void;
   onAddFocusPoints: (points: number) => void;
 }
 
@@ -57,6 +63,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   onUploadLecture,
   onAddFocusPoints
 }) => {
+  const { currentUser } = useAuth();
   const [currentPage, setCurrentPage] = useState<number>(lecture.currentPage || 1);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [showToolLabel, setShowToolLabel] = useState<boolean>(true);
@@ -146,12 +153,32 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     }));
   }, [currentPage, lecture.baselineSecsPerPage, currentSlide.densityScore]);
 
-  // Persist annotations
+  // Load cloud annotations when user or lecture changes
+  useEffect(() => {
+    if (!currentUser) return;
+    const loadCloudAnnotations = async () => {
+      try {
+        const cloudAnnots = await getAnnotationsFromFirestore(currentUser.uid, lecture.id);
+        if (cloudAnnots && Object.keys(cloudAnnots).length > 0) {
+          setPageAnnotations(cloudAnnots);
+        }
+      } catch (err) {
+        console.warn('[Firestore] error loading cloud annotations:', err);
+      }
+    };
+    loadCloudAnnotations();
+  }, [currentUser, lecture.id]);
+
+  // Persist annotations locally and to Firestore
   useEffect(() => {
     try {
       localStorage.setItem(`annotations-${lecture.id}`, JSON.stringify(pageAnnotations));
     } catch {}
-  }, [pageAnnotations, lecture.id]);
+
+    if (currentUser && Object.keys(pageAnnotations).length > 0) {
+      saveAnnotationsToFirestore(currentUser.uid, lecture.id, pageAnnotations);
+    }
+  }, [pageAnnotations, lecture.id, currentUser]);
 
   // Record user engagement (scrolling, drawing, clicking) without restarting intervals
   const registerEngagement = useCallback(() => {
@@ -432,6 +459,14 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       attentionDrifted: true
     }));
     sendAttentionTelemetry({ state: 'using_phone', confidence: 0.95 });
+    if (currentUser) {
+      logAttentionEventToFirestore(currentUser.uid, {
+        lectureId: lecture.id,
+        eventType: 'phone_detected',
+        timestamp: Date.now(),
+        details: reason || 'Phone detected in hands.'
+      });
+    }
   };
 
   const handleTriggerSleepingDetected = (reason?: string) => {
@@ -445,6 +480,14 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       attentionDrifted: true
     }));
     sendAttentionTelemetry({ state: 'sleeping', confidence: 0.95 });
+    if (currentUser) {
+      logAttentionEventToFirestore(currentUser.uid, {
+        lectureId: lecture.id,
+        eventType: 'sleeping',
+        timestamp: Date.now(),
+        details: reason || 'Resting head on desk or eyes closed.'
+      });
+    }
   };
 
   const handleTriggerAwayDetected = (reason?: string) => {
@@ -458,6 +501,14 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       attentionDrifted: true
     }));
     sendAttentionTelemetry({ state: 'away', confidence: 0.95 });
+    if (currentUser) {
+      logAttentionEventToFirestore(currentUser.uid, {
+        lectureId: lecture.id,
+        eventType: 'away_from_desk',
+        timestamp: Date.now(),
+        details: reason || 'Stepped away from your study desk.'
+      });
+    }
   };
 
   const handleTriggerGazeDrift = () => {

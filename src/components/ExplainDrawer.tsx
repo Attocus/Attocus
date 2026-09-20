@@ -56,6 +56,11 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
         })
       });
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error ${response.status}`);
+      }
+
       const data = await response.json();
       setMessages(prev => [
         ...prev,
