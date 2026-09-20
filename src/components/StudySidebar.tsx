@@ -36,8 +36,8 @@ interface StudySidebarProps {
   onToggleCollapse?: () => void;
 }
 
-const ALERT_THRESHOLD_MS = 1500;
-const GRACE_PERIOD_MS = 1500;
+const ALERT_THRESHOLD_MS = 60000;
+const GRACE_PERIOD_MS = 60000;
 
 export const StudySidebar: React.FC<StudySidebarProps> = ({
   slides,

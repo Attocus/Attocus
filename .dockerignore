@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+backend/.venv
+backend/__pycache__
+backend/.pytest_cache
+backend/.deepeval
+.env*
+!.env.example
+backend/.env*
+!backend/.env.example
+*serviceAccount*.json
+serviceAccountKey.json
+backend/serviceAccountKey.json

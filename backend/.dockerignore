@@ -1,0 +1,11 @@
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.deepeval
+.env*
+!.env.example
+*serviceAccount*.json
+serviceAccountKey.json
