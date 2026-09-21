@@ -22,48 +22,79 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPoints, setCurrentPoints] = useState<AnnotationPoint[]>([]);
 
-  // Redraw whenever strokes change
+  // رسم الخطوط السابقة والخط النشط بدقة متناهية
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // ضبط الدقة لشاشات Retina
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+
     ctx.clearRect(0, 0, width, height);
 
-    strokes.forEach(stroke => {
-      if (stroke.points.length < 2) return;
+    // دالة مساعدة لرسم خطوط ناعمة
+    const renderSmoothStroke = (
+      points: AnnotationPoint[],
+      color: string,
+      lineWidth: number,
+      opacity: number,
+      isHighlighter: boolean
+    ) => {
+      if (points.length < 2) return;
+
+      ctx.save();
       ctx.beginPath();
-      ctx.strokeStyle = stroke.color;
-      ctx.lineWidth = stroke.width;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.globalAlpha = stroke.opacity;
+      ctx.globalAlpha = opacity;
 
-      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-      for (let i = 1; i < stroke.points.length; i++) {
-        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      // استخدام تأثير التظليل الطبيعي للهايلايتر
+      if (isHighlighter) {
+        ctx.globalCompositeOperation = 'multiply';
       }
+
+      ctx.moveTo(points[0].x, points[0].y);
+
+      // تنعيم المسار باستخدام Quadratic Curves
+      for (let i = 1; i < points.length - 1; i++) {
+        const midX = (points[i].x + points[i + 1].x) / 2;
+        const midY = (points[i].y + points[i + 1].y) / 2;
+        ctx.quadraticCurveTo(points[i].x, points[i].y, midX, midY);
+      }
+
+      ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
       ctx.stroke();
+      ctx.restore();
+    };
+
+    // 1. رسم الخطوط المحفوظة مسبقاً
+    strokes.forEach(stroke => {
+      renderSmoothStroke(
+        stroke.points,
+        stroke.color,
+        stroke.width,
+        stroke.opacity,
+        stroke.tool === 'highlighter'
+      );
     });
 
-    // Draw active stroke
+    // 2. رسم الخط الحالي أثناء التدوين
     if (isDrawing && currentPoints.length > 1) {
-      ctx.beginPath();
-      ctx.strokeStyle = activeColor;
-      ctx.lineWidth = activeTool === 'highlighter' ? 22 : 2.5;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.globalAlpha = activeTool === 'highlighter' ? 0.35 : 0.85;
-
-      ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
-      for (let i = 1; i < currentPoints.length; i++) {
-        ctx.lineTo(currentPoints[i].x, currentPoints[i].y);
-      }
-      ctx.stroke();
+      renderSmoothStroke(
+        currentPoints,
+        activeColor,
+        activeTool === 'highlighter' ? 22 : 2.5,
+        activeTool === 'highlighter' ? 0.35 : 0.85,
+        activeTool === 'highlighter'
+      );
     }
-
-    ctx.globalAlpha = 1.0;
   }, [strokes, currentPoints, isDrawing, width, height, activeColor, activeTool]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -106,15 +137,13 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
     <canvas
       ref={canvasRef}
       id="study-document-annotation-canvas"
-      width={width}
-      height={height}
-      className={`absolute inset-0 z-20 ${
-        activeTool === 'none'
+      style={{ width: `${width}px`, height: `${height}px` }}
+      className={`absolute inset-0 z-20 touch-none ${activeTool === 'none'
           ? 'pointer-events-none'
           : activeTool === 'highlighter'
-          ? 'cursor-crosshair'
-          : 'cursor-cell'
-      }`}
+            ? 'cursor-crosshair'
+            : 'cursor-cell'
+        }`}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

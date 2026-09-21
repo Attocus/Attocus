@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Slide } from '../types';
-import { CheckCircle2, HelpCircle, X, ArrowRight, Sparkles } from 'lucide-react';
+import { CheckCircle2, X, HelpCircle, Loader2, Sparkles } from 'lucide-react';
 
 interface QuickQuizModalProps {
   isOpen: boolean;
@@ -40,24 +40,24 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
         body: JSON.stringify({ slide, lectureTitle })
       });
       const data = await res.json();
-      setQuestion(data.question || `What is the key principle of ${slide.title}?`);
+      setQuestion(data.question || `ما هو المبدأ الأساسي في "${slide.title}"؟`);
       setOptions(data.options || []);
       setCorrectAnswer(data.correctAnswer || data.options?.[0] || '');
-      setExplanation(data.explanation || 'Verified from the lecture notes.');
+      setExplanation(data.explanation || 'تم التحقق من محتوى شريحة المحاضرة.');
     } catch {
       const cleanKeyPoints = (slide.keyPoints || []).filter(
         kp => !kp.toLowerCase().includes('visual and conceptual takeaways') && !kp.toLowerCase().includes('visual presentation')
       );
-      setQuestion(`Regarding ${slide.title}, which of the following is accurate?`);
+      setQuestion(`فيما يخص "${slide.title}"، أي من العبارات التالية تعتبر صحيحة؟`);
       const opts = [
-        cleanKeyPoints[0] || 'It preserves state machine consistency across all replicas.',
-        'It allows uncommitted writes to bypass majority quorum checks.',
-        'It requires physical clock synchronization across nodes.',
-        'It only operates when all cluster nodes are active.'
+        cleanKeyPoints[0] || 'يحافظ على اتساق وتزامن البيانات عبر جميع العقد والنُسخ.',
+        'يسمح بتجاوز عمليات التحقق من النصاب بالأغلبية.',
+        'يتطلب مزامنة ساعة مادية دقيقة بين جميع الخوادم.',
+        'يعمل فقط عندما تكون جميع خوادم المجموعة نشطة معاً.'
       ];
       setOptions(opts);
       setCorrectAnswer(opts[0]);
-      setExplanation('This maintains the core invariants established in this slide.');
+      setExplanation('هذا الخيار يمثل المفهوم الجوهري المثبت في هذه الشريحة.');
     } finally {
       setLoading(false);
     }
@@ -67,61 +67,70 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
 
   return (
     <div
+      dir="rtl"
       id="quick-quiz-modal-overlay"
-      className="fixed inset-0 z-50 bg-black/45 backdrop-blur-xs flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
     >
       <div
         id="quick-quiz-modal-card"
-        className="bg-[#FAFAF8] rounded-2xl border border-[#E0E2DC] shadow-xl w-full max-w-lg overflow-hidden text-[#202326] p-6 space-y-5"
+        className="bg-white rounded-3xl border border-slate-200/80 shadow-2xl w-full max-w-lg overflow-hidden text-slate-900 p-6 sm:p-7 space-y-5 relative animate-in zoom-in-95 duration-150"
       >
-        <div className="flex items-center justify-between pb-3 border-b border-[#E8EAE4]">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#2E7D32]" />
-            <h3 className="text-sm font-serif font-bold text-[#1A1D20]">
-              Quick Comprehension Check
-            </h3>
+        {/* رأس النافذة */}
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100/80">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-[#0F172A]">
+                اختبار استيعاب سريع
+              </h3>
+              <p className="text-[11px] text-slate-400">تثبيت المعلومة والتأكد من الفهم</p>
+            </div>
           </div>
           <button
             type="button"
             id="close-quick-quiz-btn"
             onClick={onClose}
-            className="w-7 h-7 rounded-lg hover:bg-[#EFF1EB] flex items-center justify-center text-[#6E747B]"
+            className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {loading ? (
-          <div className="py-8 text-center text-xs text-[#6F757C] italic">
-            Preparing your question...
+          <div className="py-12 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2.5">
+            <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+            <span>جاري إنشاء سؤال سريع من محتوى الشريحة...</span>
           </div>
         ) : (
           <>
             <div>
-              <div className="text-[11px] font-semibold text-[#2E7D32] uppercase tracking-wider mb-1">
-                Slide {slide.pageNumber} · {slide.topic}
+              <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1.5">
+                الشريحة {slide.pageNumber} · {slide.topic || 'المفاهيم الأساسية'}
               </div>
-              <p className="text-sm font-medium text-[#1A1D20] leading-snug">
+              <p className="text-sm font-bold text-[#0F172A] leading-relaxed">
                 {question}
               </p>
             </div>
 
-            <div className="space-y-2">
+            {/* قائمة الخيارات */}
+            <div className="space-y-2.5">
               {options.map((option, idx) => {
                 const isSelected = selectedOption === option;
                 const isCorrect = option === correctAnswer;
-                let style = 'bg-white border-[#DCDFD7] hover:border-[#B5BBAF] text-[#2A2E33]';
+                let style = 'bg-slate-50 border-slate-200/80 hover:border-slate-300 hover:bg-slate-100/60 text-slate-700';
 
                 if (submitted) {
                   if (isCorrect) {
-                    style = 'bg-[#EBF5EA] border-[#A3D99F] text-[#1E5224] font-medium';
+                    style = 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold';
                   } else if (isSelected && !isCorrect) {
-                    style = 'bg-[#FBEAEA] border-[#F1AEAE] text-[#8C1D1D]';
+                    style = 'bg-rose-50 border-rose-300 text-rose-700 font-medium';
                   } else {
-                    style = 'bg-[#F7F8F5] border-[#E2E4DE] text-[#868C93] opacity-60';
+                    style = 'bg-slate-50/50 border-slate-100 text-slate-400 opacity-50';
                   }
                 } else if (isSelected) {
-                  style = 'bg-[#F0F7EE] border-[#2E7D32] ring-1 ring-[#2E7D32] text-[#1E3A24]';
+                  style = 'bg-blue-50/60 border-blue-600 ring-1 ring-blue-600/30 text-blue-900 font-semibold';
                 }
 
                 return (
@@ -133,27 +142,32 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
                       if (!submitted) setSelectedOption(option);
                     }}
                     disabled={submitted}
-                    className={`w-full text-left p-3 rounded-xl border text-xs transition-all flex items-center justify-between ${style}`}
+                    className={`w-full text-right p-3.5 rounded-2xl border text-xs transition-all flex items-center justify-between gap-3 ${style}`}
                   >
-                    <span>{option}</span>
+                    <span className="leading-relaxed">{option}</span>
                     {submitted && isCorrect && (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#2E7D32] shrink-0" />
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     )}
                   </button>
                 );
               })}
             </div>
 
+            {/* ملاحظة المدرب بعد الإرسال */}
             {submitted && (
-              <div className="p-3.5 rounded-xl bg-[#F4F6F1] border border-[#DEE3DA] text-xs space-y-1">
-                <div className="font-semibold text-[#233125]">Coach Note</div>
-                <p className="text-[#515953] leading-relaxed">{explanation}</p>
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-xs space-y-1 animate-in fade-in duration-200">
+                <div className="font-bold text-[#0F172A] flex items-center gap-1.5">
+                  <HelpCircle className="w-3.5 h-3.5 text-blue-600" />
+                  <span>توضيح الإجابة</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed pt-0.5">{explanation}</p>
               </div>
             )}
 
+            {/* شريط الإجراءات السفلي */}
             <div className="flex items-center justify-between pt-2">
-              <span className="text-xs text-[#7B8188]">
-                {submitted ? 'Checked!' : 'Select the best option'}
+              <span className="text-xs text-slate-400">
+                {submitted ? 'تم التحقق!' : 'اختر الإجابة الأدق'}
               </span>
 
               {!submitted ? (
@@ -164,22 +178,21 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
                     if (selectedOption) setSubmitted(true);
                   }}
                   disabled={!selectedOption}
-                  className={`text-xs px-4 py-2 rounded-xl font-medium transition-all ${
-                    selectedOption
-                      ? 'bg-[#2E7D32] hover:bg-[#256629] text-white'
-                      : 'bg-[#E0E2DC] text-[#8C9298] cursor-not-allowed'
-                  }`}
+                  className={`text-xs px-5 py-2.5 rounded-xl font-bold transition-all shadow-xs active:scale-[0.98] ${selectedOption
+                      ? 'bg-[#0F172A] hover:bg-[#1E293B] text-white cursor-pointer'
+                      : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200/60'
+                    }`}
                 >
-                  Check
+                  تحقق من الإجابة
                 </button>
               ) : (
                 <button
                   type="button"
                   id="done-quick-quiz-btn"
                   onClick={onClose}
-                  className="text-xs px-4 py-2 rounded-xl bg-[#1E2225] hover:bg-[#34383D] text-white font-medium transition-colors"
+                  className="text-xs px-5 py-2.5 rounded-xl bg-[#0F172A] hover:bg-[#1E293B] text-white font-bold transition-all shadow-xs active:scale-[0.98]"
                 >
-                  Got It
+                  فهمت ذلك، متابعة
                 </button>
               )}
             </div>

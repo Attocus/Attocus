@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Lecture } from '../types';
 import { parseUploadedFile } from '../utils/fileUpload';
-import { Upload, FileText, X, Loader2 } from 'lucide-react';
+import { Upload, FileText, X, Loader2, Sparkles } from 'lucide-react';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -24,16 +24,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
   const handleFile = async (file: File) => {
     setIsProcessing(true);
-    setProgressStatus(`Analyzing and rendering "${file.name}"...`);
+    setProgressStatus(`جاري تحليل ومعالجة "${file.name}"...`);
 
     try {
       let parsedLecture = await parseUploadedFile(file, pct => {
-        setProgressStatus(`Processing pages & high-res slides (${pct}%)...`);
+        setProgressStatus(`جاري معالجة الصفحات والشرائح عالية الدقة (${pct}%)...`);
       });
 
       // Ingest PDF into Shared Firestore RAG & Enrich slides
       if (file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.pptx')) {
-        setProgressStatus(`Indexing in AI Knowledge Base...`);
+        setProgressStatus(`جاري الفهرسة في قاعدة المعرفة الذكية...`);
         try {
           const formData = new FormData();
           formData.append('file', file);
@@ -51,7 +51,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             // Always enrich slides with backend extracted text from Shared RAG
             if (ragData.pages && ragData.pages.length > 0) {
               console.log('[Upload] Enriching lecture from backend RAG pages:', ragData.pages.length);
-              
+
               const baseLength = Math.max(parsedLecture.slides.length, ragData.pages.length);
               const enrichedSlides = [];
 
@@ -93,11 +93,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 enrichedSlides.push({
                   id: existingSlide?.id || `slide-${idx + 1}`,
                   pageNumber: idx + 1,
-                  title: title || `Slide ${idx + 1}`,
+                  title: title || `شريحة ${idx + 1}`,
                   subtitle: existingSlide?.subtitle,
-                  content: content.length > 0 ? content : (backendText ? [backendText.slice(0, 300)] : [`Slide ${idx + 1}`]),
+                  content: content.length > 0 ? content : (backendText ? [backendText.slice(0, 300)] : [`شريحة ${idx + 1}`]),
                   keyPoints: keyPoints.length > 0 ? keyPoints : (content.slice(0, 3)),
-                  topic: title || `Slide ${idx + 1}`,
+                  topic: title || `شريحة ${idx + 1}`,
                   densityScore: existingSlide?.densityScore || 3,
                   pageImageUrl: existingSlide?.pageImageUrl,
                   rawText: backendText || (existingSlide as any)?.rawText || ''
@@ -123,7 +123,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     } catch (err: any) {
       console.error('File parsing error:', err);
       setIsProcessing(false);
-      alert('Could not parse this file. Please make sure it is a valid PDF or slide document.');
+      alert('تعذر استخراج ومعالجة هذا الملف. يرجى التأكد من اختيار ملف PDF صالح.');
     }
   };
 
@@ -136,25 +136,26 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
   return (
     <div
+      dir="rtl"
       id="upload-modal-overlay"
-      className="fixed inset-0 z-50 bg-black/45 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
     >
       <div
         id="upload-modal-card"
-        className="bg-[#FAFAF8] rounded-2xl border border-[#E0E2DC] shadow-xl w-full max-w-lg overflow-hidden text-[#202326] transition-all"
+        className="bg-white rounded-3xl border border-slate-200/80 shadow-2xl w-full max-w-lg overflow-hidden text-slate-900 transition-all animate-in zoom-in-95 duration-150"
       >
         {/* Header */}
-        <div className="p-5 border-b border-[#E8EAE4] bg-white flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#E8F0E6] text-[#2E7D32] flex items-center justify-center">
+        <div className="p-5 border-b border-slate-100 bg-white flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100/80 shadow-2xs">
               <Upload className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-serif font-bold text-[#1A1D20]">
-                Upload Lecture Material
+              <h3 className="text-sm font-bold text-[#0F172A] tracking-tight">
+                رفع مادة دراسية جديدة
               </h3>
-              <p className="text-[11px] text-[#697076]">
-                Upload your PDF lecture slides or course document
+              <p className="text-[11px] text-slate-400">
+                ارفع شرائح العرض (PDF) أو ملخصات المحاضرات للمذاكرة التفاعلية
               </p>
             </div>
           </div>
@@ -163,7 +164,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             type="button"
             id="close-upload-modal-btn"
             onClick={onClose}
-            className="w-7 h-7 rounded-lg hover:bg-[#EFF1EB] flex items-center justify-center text-[#6E747B]"
+            className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -172,10 +173,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         {/* Content */}
         <div className="p-6">
           {isProcessing ? (
-            <div className="py-12 text-center space-y-3">
-              <Loader2 className="w-8 h-8 text-[#2E7D32] animate-spin mx-auto" />
-              <div className="text-sm font-medium text-[#1E2225]">{progressStatus}</div>
-              <p className="text-xs text-[#6B7279]">Rendering ultra-crisp slides and extracting concepts...</p>
+            <div className="py-14 text-center space-y-3.5">
+              <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
+              <div className="text-sm font-bold text-[#0F172A]">{progressStatus}</div>
+              <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+                نقوم بتحويل الشرائح إلى دقة فائقة مع استخراج المفاهيم وتهيئتها للمساعد الذكي...
+              </p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -187,11 +190,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
-                  isDragging
-                    ? 'border-[#2E7D32] bg-[#F0F6EE]'
-                    : 'border-[#D5D8D0] bg-white hover:border-[#2E7D32]/60 hover:bg-[#F9FAF7]'
-                }`}
+                className={`border-2 border-dashed rounded-3xl p-9 text-center cursor-pointer transition-all duration-200 ${isDragging
+                    ? 'border-blue-600 bg-blue-50/50 scale-[1.01]'
+                    : 'border-slate-200 bg-slate-50/60 hover:border-blue-500/70 hover:bg-slate-50'
+                  }`}
               >
                 <input
                   ref={fileInputRef}
@@ -205,21 +207,27 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   id="modal-pdf-file-picker"
                 />
 
-                <div className="w-12 h-12 rounded-2xl bg-[#E8F0E6] text-[#2E7D32] flex items-center justify-center mx-auto mb-3">
-                  <FileText className="w-6 h-6" />
+                <div className="w-13 h-13 rounded-2xl bg-white border border-slate-200 shadow-2xs text-blue-600 flex items-center justify-center mx-auto mb-3.5">
+                  <FileText className="w-6 h-6 stroke-[1.8]" />
                 </div>
 
-                <h4 className="text-sm font-serif font-bold text-[#1C2023]">
-                  Select or drag your PDF here
+                <h4 className="text-sm font-bold text-[#0F172A]">
+                  اسحب وأفلت ملف PDF هنا، أو تصفح جهازك
                 </h4>
-                <p className="text-xs text-[#646A71] mt-1 max-w-xs mx-auto leading-relaxed">
-                  Supports multi-page university lecture slides, presentation PDFs, and course handouts.
+                <p className="text-xs text-slate-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
+                  يدعم ملفات السلايدات الجامعية، عروض PowerPoint بصيغة PDF، والمذكرات الدراسية.
                 </p>
 
-                <div className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2E7D32] text-white text-xs font-medium shadow-xs hover:bg-[#256629] transition-colors">
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Choose PDF File</span>
+                <div className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0F172A] hover:bg-[#1E293B] text-white text-xs font-semibold shadow-xs transition-all active:scale-95">
+                  <Upload className="w-3.5 h-3.5 text-blue-300" />
+                  <span>اختر ملف من جهازك</span>
                 </div>
+              </div>
+
+              {/* تلميح سفلي خفيف */}
+              <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400 pt-1">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <span>تتم معالجة المستندات تلقائياً لدعم الأسئلة والاختبارات الذكية</span>
               </div>
             </div>
           )}

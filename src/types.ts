@@ -26,6 +26,8 @@ export interface Lecture {
   currentPage: number;
   totalStudySeconds: number;
   focusPoints: number;
+  sharedByParent?: boolean; // true if this was sent by a parent
+  parentSenderName?: string;
 }
 
 export interface AnnotationPoint {
@@ -181,3 +183,74 @@ export const MARKER_COLOR_OPTIONS: AnnotationColorOption[] = [
   { id: 'red-marker', name: 'Needs Review', meaning: 'Needs Review', color: '#EF4444', dotColor: '#EF4444' },
 ];
 
+// ─── Parent Account System Types ──────────────────────────────────────────────
+
+export type AccountType = 'student' | 'parent';
+
+export interface ParentInvite {
+  id: string;
+  parentUid: string;
+  parentName: string;
+  parentEmail: string;
+  childEmail: string;
+  childUid?: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  sentAt: string;
+  respondedAt?: string;
+}
+
+export interface ChildPermissions {
+  viewAchievements: boolean;
+  sendSlides: boolean;
+  autoAlerts: boolean; // agent-driven notifications
+  studyLockSuggest: boolean; // can suggest focus mode
+}
+
+export interface LinkedChild {
+  childUid: string;
+  childName: string;
+  childEmail: string;
+  linkedAt: string;
+  permissions: ChildPermissions;
+  // Realtime data (fetched from child's Firestore doc)
+  currentStreak?: number;
+  focusPoints?: number;
+  lastStudiedAt?: string;
+  todayMinutes?: number;
+  activeLectures?: number;
+  selectedCharacter?: string;
+}
+
+export interface ParentAlertSettings {
+  sessionStartAlert: boolean;
+  streakLostAlert: boolean;
+  dailyReportTime: string; // HH:MM 24h
+  noStudyAlertTime: string; // HH:MM - if no session by this time
+  achievementAlert: boolean;
+  whatsappNumber: string;
+  whatsappEnabled: boolean;
+  webPushEnabled: boolean;
+}
+
+export interface StudyLockRequest {
+  id: string;
+  parentUid: string;
+  childUid: string;
+  active: boolean;
+  allowedApps: string[]; // app bundle IDs or names
+  message: string; // message to show the student
+  requestedAt: string;
+  acknowledgedAt?: string;
+}
+
+export interface SharedContent {
+  id: string;
+  parentUid: string;
+  parentName: string;
+  childUid: string;
+  type: 'pdf' | 'slides';
+  title: string;
+  fileUrl: string;
+  sentAt: string;
+  opened: boolean;
+}

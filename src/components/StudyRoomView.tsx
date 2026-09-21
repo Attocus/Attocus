@@ -20,10 +20,7 @@ import {
   RotateCcw,
   Sparkles,
   HelpCircle,
-  Brain,
   CheckCircle2,
-  X,
-  Maximize2,
   Upload
 } from 'lucide-react';
 import { SlideViewer } from './SlideViewer';
@@ -66,13 +63,12 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   const { currentUser } = useAuth();
   const [currentPage, setCurrentPage] = useState<number>(lecture.currentPage || 1);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
-  const [showToolLabel, setShowToolLabel] = useState<boolean>(true);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   // Sidebar collapse state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
 
-  // Annotation states: 3 Pens, 4 Markers, Undo
+  // Annotation states
   const [activeTool, setActiveTool] = useState<'pen' | 'highlighter' | 'none'>('pen');
   const [activeColor, setActiveColor] = useState<string>(PEN_COLOR_OPTIONS[0].color);
   const [pageAnnotations, setPageAnnotations] = useState<PageAnnotationsMap>(() => {
@@ -90,7 +86,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   const [explainDrawerOpen, setExplainDrawerOpen] = useState(false);
   const [quickQuizModalOpen, setQuickQuizModalOpen] = useState(false);
 
-  // Attention Tracking State (with phone, sleep, and gaze detection)
+  // Attention Tracking State
   const [attentionState, setAttentionState] = useState<AttentionTrackingState>({
     cameraActive: false,
     cameraConsentGiven: false,
@@ -133,11 +129,9 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
 
   const currentSlide: Slide = lecture.slides.find(s => s.pageNumber === currentPage) || lecture.slides[0];
 
-  // Calculate expected page time based on density score and student baseline
   useEffect(() => {
     const density = currentSlide.densityScore || 3;
     const base = lecture.baselineSecsPerPage || 90;
-    // Density 1: 0.7x base, Density 5: 1.5x base
     const multiplier = 0.5 + (density * 0.2);
     const expected = Math.round(base * multiplier);
 
@@ -153,7 +147,6 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     }));
   }, [currentPage, lecture.baselineSecsPerPage, currentSlide.densityScore]);
 
-  // Load cloud annotations when user or lecture changes
   useEffect(() => {
     if (!currentUser) return;
     const loadCloudAnnotations = async () => {
@@ -169,34 +162,29 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     loadCloudAnnotations();
   }, [currentUser, lecture.id]);
 
-  // Persist annotations locally and to Firestore
   useEffect(() => {
     try {
       localStorage.setItem(`annotations-${lecture.id}`, JSON.stringify(pageAnnotations));
-    } catch {}
+    } catch { }
 
     if (currentUser && Object.keys(pageAnnotations).length > 0) {
       saveAnnotationsToFirestore(currentUser.uid, lecture.id, pageAnnotations);
     }
   }, [pageAnnotations, lecture.id, currentUser]);
 
-  // Record user engagement (scrolling, drawing, clicking) without restarting intervals
   const registerEngagement = useCallback(() => {
     lastActivityTimestampRef.current = Date.now();
     setStuckState(prev => ({ ...prev, isActivelyEngaging: true }));
   }, []);
 
-  // Main 1-second interval loop for timers & stuck orchestrator
   useEffect(() => {
     const interval = setInterval(() => {
-      // If tab is hidden, pause timers
       if (document.hidden) return;
 
       setSessionSeconds(prev => prev + 1);
       setPageTimeSeconds(prev => {
         const nextTime = prev + 1;
-        
-        // Check stuck level transitions
+
         setStuckState(stuck => {
           const isSnoozed = (snoozedUntilRef.current[currentPage] || 0) > Date.now();
           if (isSnoozed || stuck.interventionActive) {
@@ -210,10 +198,8 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           let newLevel: 1 | 2 | 3 = 1;
           let shouldIntervene = false;
 
-          // Trigger intervention if student is on slide for expected duration or >= 45s without page turn
           if (overrunRatio >= 1.0 || nextTime >= 50) {
             newLevel = isEngaging ? 2 : 3;
-            // Intervene after expected duration or when reading pace stalls
             if (nextTime >= stuck.expectedSeconds || timeSinceActivity > 15) {
               shouldIntervene = true;
             }
@@ -231,7 +217,6 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         return nextTime;
       });
 
-      // Camera attention drift simulation/tracking
       setAttentionState(att => {
         if (!att.cameraActive) return att;
         if (att.attentionDrifted) {
@@ -260,21 +245,17 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     return () => clearInterval(interval);
   }, [currentPage]);
 
-  // Attention Tracking Case A: Tab Switching & Orchestrator Integration
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.hidden) {
-        // Tab hidden / switched away
         tabHiddenTimestampRef.current = Date.now();
         tabSwitchesCountRef.current += 1;
       } else {
-        // Returned to tab
         const awayMs = tabHiddenTimestampRef.current ? (Date.now() - tabHiddenTimestampRef.current) : 0;
         const awaySeconds = awayMs / 1000;
         totalAwaySecondsRef.current += awaySeconds;
         tabHiddenTimestampRef.current = null;
 
-        // Default instant feedback
         let coachMsg = "أهلاً بعودتك! 👋 لنكمل التركيز معاً";
         setAttentionState(prev => ({
           ...prev,
@@ -285,7 +266,6 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           }
         }));
 
-        // Send telemetry to Python Orchestrator
         try {
           const res = await fetch('/api/orchestrator/telemetry', {
             method: 'POST',
@@ -320,11 +300,8 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               }));
             }
           }
-        } catch (e) {
-          // Keep default toast
-        }
+        } catch (e) { }
 
-        // Auto dismiss toast after 5 seconds
         setTimeout(() => {
           setAttentionState(prev => ({
             ...prev,
@@ -338,10 +315,8 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [currentPage, currentSlide, lecture.id, pageTimeSeconds, stuckState.expectedSeconds]);
 
-  // Camera Management
   const handleToggleCamera = async () => {
     if (attentionState.cameraActive) {
-      // Turn off
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
         setCameraStream(null);
@@ -354,10 +329,9 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         gentleToneModalOpen: false
       }));
     } else {
-      // Turn on
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error('Camera access is not supported on this browser or secure context');
+          throw new Error('Camera access is not supported on this browser');
         }
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
@@ -375,17 +349,8 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           attentionDrifted: false
         }));
       } catch (err: any) {
-        console.warn('Camera access not granted or unavailable:', err);
-        const isBlocked = err?.name === 'NotAllowedError' || err?.message?.toLowerCase().includes('permission') || err?.message?.toLowerCase().includes('denied');
-        if (isBlocked) {
-          alert('Camera permission was blocked by your browser or iframe. To enable live attention tracking, click the camera icon in your browser address bar to allow permissions, or open the app in a new tab.');
-        } else {
-          alert(`Camera could not be started: ${err?.message || 'No video device found'}`);
-        }
-        setAttentionState(prev => ({
-          ...prev,
-          cameraActive: false
-        }));
+        alert('يرجى التحقق من أذونات الكاميرا في المتصفح.');
+        setAttentionState(prev => ({ ...prev, cameraActive: false }));
       }
     }
   };
@@ -399,20 +364,9 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     handleToggleCamera();
   };
 
-  const handleTriggerTestDrift = () => {
-    setAttentionState(prev => ({
-      ...prev,
-      attentionDrifted: !prev.attentionDrifted,
-      driftSeconds: !prev.attentionDrifted ? 1 : 0,
-      visualPulseActive: false,
-      gentleToneModalOpen: false,
-      detectedState: !prev.attentionDrifted ? 'distracted' : 'focused'
-    }));
-  };
-
   const sendAttentionTelemetry = async (cvPayload?: { state: string; confidence: number }) => {
     try {
-      const res = await fetch('/api/orchestrator/telemetry', {
+      await fetch('/api/orchestrator/telemetry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -430,30 +384,14 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           language: 'ar'
         })
       });
-
-      if (res.ok) {
-        const decision = await res.json();
-        if (decision.message) {
-          setAttentionState(prev => ({
-            ...prev,
-            tabSwitchToast: {
-              show: true,
-              timestamp: Date.now(),
-              message: decision.message
-            }
-          }));
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to send attention telemetry to Orchestrator:', e);
-    }
+    } catch (e) { }
   };
 
   const handleTriggerPhoneDetected = (reason?: string) => {
     setAttentionState(prev => ({
       ...prev,
       detectedState: 'using_phone',
-      detectionReason: reason || 'Phone detected in hands.',
+      detectionReason: reason || 'تم رصد استخدام الهاتف أثناء المذاكرة.',
       phoneAlertOpen: true,
       sleepingAlertOpen: false,
       attentionDrifted: true
@@ -473,7 +411,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     setAttentionState(prev => ({
       ...prev,
       detectedState: 'sleeping',
-      detectionReason: reason || 'Resting head on desk or eyes closed.',
+      detectionReason: reason || 'تم رصد إغلاق العينين أو انحناء الرأس.',
       sleepingAlertOpen: true,
       phoneAlertOpen: false,
       awayAlertOpen: false,
@@ -494,7 +432,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     setAttentionState(prev => ({
       ...prev,
       detectedState: 'away',
-      detectionReason: reason || 'Stepped away from your study desk.',
+      detectionReason: reason || 'تم رصد مغادرة مكان المذاكرة.',
       awayAlertOpen: true,
       phoneAlertOpen: false,
       sleepingAlertOpen: false,
@@ -568,7 +506,6 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     }
   };
 
-  // Annotation Stroke Handlers
   const handleAddStroke = (stroke: AnnotationStroke) => {
     registerEngagement();
     setPageAnnotations(prev => {
@@ -593,16 +530,12 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     });
   };
 
-  // Stuck Intervention Actions
   const handleDeclineStillReading = () => {
-    // Snooze automated coach intervention for 45s so student can keep reading calmly
     snoozedUntilRef.current[currentPage] = Date.now() + 45_000;
     setStuckState(prev => ({
       ...prev,
       interventionActive: false
     }));
-
-    // Quietly raise expected baseline by 15 seconds
     onUpdateLecture({
       ...lecture,
       baselineSecsPerPage: Math.min(240, (lecture.baselineSecsPerPage || 90) + 15)
@@ -626,33 +559,22 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   };
 
   const handlePrevPage = () => {
-    if (currentPage > 1) {
-      handleSelectPage(currentPage - 1);
-    }
+    if (currentPage > 1) handleSelectPage(currentPage - 1);
   };
 
   const handleNextPage = () => {
-    if (currentPage < lecture.totalPages) {
-      handleSelectPage(currentPage + 1);
-    }
+    if (currentPage < lecture.totalPages) handleSelectPage(currentPage + 1);
   };
 
-  // Keyboard Arrow Navigation between slides
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-        return;
-      }
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
 
       if (e.key === 'ArrowRight' || e.key === 'PageDown') {
-        if (currentPage < lecture.totalPages) {
-          handleSelectPage(currentPage + 1);
-        }
+        if (currentPage < lecture.totalPages) handleSelectPage(currentPage + 1);
       } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
-        if (currentPage > 1) {
-          handleSelectPage(currentPage - 1);
-        }
+        if (currentPage > 1) handleSelectPage(currentPage - 1);
       }
     };
 
@@ -662,57 +584,61 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
 
   return (
     <div
-      className="h-screen w-screen bg-[#F4F5F1] text-[#202326] flex flex-col overflow-hidden selection:bg-[#E8F0E6]"
+      dir="rtl"
+      className="h-screen w-screen bg-[#F8FAFC] text-slate-900 flex flex-col overflow-hidden selection:bg-[#0F172A] selection:text-white"
       onMouseMove={registerEngagement}
       onKeyDown={registerEngagement}
     >
-      {/* 1. TOP HEADER TOOLBAR */}
-      <header className="h-14 bg-white border-b border-[#E2E5DC] px-4 flex items-center justify-between shrink-0 select-none z-30 shadow-2xs">
-        {/* Left: Back + Document Title */}
-        <div className="flex items-center gap-3 min-w-0">
+      {/* ─── 1. TOP HEADER TOOLBAR (APPLE MINIMALIST) ─────────────── */}
+      <header className="h-16 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-6 flex items-center justify-between shrink-0 select-none z-30">
+
+        {/* Right: Return + Document Title */}
+        <div className="flex items-center gap-4 min-w-0">
           <button
             type="button"
             id="study-room-back-btn"
             onClick={onReturnHome}
-            className="w-8 h-8 rounded-lg hover:bg-[#F2F4F0] flex items-center justify-center text-[#585E64] transition-colors"
-            title="Return to Home"
+            className="w-9 h-9 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-600 transition-colors border border-transparent hover:border-slate-200"
+            title="العودة للرئيسية"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronRight className="w-5 h-5" />
           </button>
 
-          <div className="min-w-0 pr-2">
-            <div className="flex items-center gap-2">
-              <h1 className="text-xs sm:text-sm font-serif font-bold text-[#191C1E] truncate max-w-[180px] sm:max-w-xs">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-sm font-bold text-[#0F172A] truncate max-w-[220px] sm:max-w-xs">
                 {lecture.title}
               </h1>
               <button
                 type="button"
                 id="study-room-upload-btn"
                 onClick={() => setUploadModalOpen(true)}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-[#2E7D32] bg-[#E8F0E6] hover:bg-[#DCE8D8] transition-colors shrink-0 cursor-pointer"
-                title="Upload or switch lecture slides"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-blue-600 bg-blue-50/80 hover:bg-blue-100 transition-colors shrink-0 border border-blue-100"
+                title="استبدال أو رفع ملف جديد"
               >
                 <Upload className="w-3 h-3" />
-                <span className="hidden sm:inline">Upload File</span>
+                <span className="hidden sm:inline">رفع ملف</span>
               </button>
             </div>
-            <p className="text-[10px] text-[#71777E] truncate">
-              {lecture.subject} · {currentSlide.topic}
+            <p className="text-[11px] text-slate-400 truncate mt-0.5">
+              {lecture.subject || 'عام'} · {currentSlide.topic || `شريحة ${currentPage}`}
             </p>
           </div>
         </div>
 
-        {/* Center: Pomodoro Timer + Annotation Toolbar + Page Nav */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Per-File Pomodoro Timer */}
+        {/* Center: Clean White Pomodoro Capsule + Annotation Toolbar + Zoom */}
+        <div className="flex items-center gap-3">
+
+          {/* مؤقت بومودورو الأبيض النظيف مباشرة بدون تغليف أسود */}
           <PomodoroTimer
             lectureId={lecture.id}
             onPomodoroComplete={() => onAddFocusPoints(10)}
+            onAddFocusPoints={onAddFocusPoints}
           />
 
-          {/* Annotation Tools: 4 Pens, 4 Markers, Undo */}
-          <div className="flex items-center bg-[#F4F6F2] p-1 rounded-xl border border-[#DCE0D6] gap-1">
-            {/* Pen Tool Toggle */}
+          {/* شريط أدوات الرسم والتحديد */}
+          <div className="flex items-center bg-slate-100/80 p-1 rounded-2xl border border-slate-200/60 gap-1">
+            {/* أداة القلم */}
             <button
               type="button"
               id="annotation-tool-pen-btn"
@@ -720,18 +646,16 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                 setActiveTool('pen');
                 setActiveColor(PEN_COLOR_OPTIONS[0].color);
               }}
-              className={`px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
-                activeTool === 'pen'
-                  ? 'bg-white text-[#1D2023] shadow-xs'
-                  : 'text-[#61686F] hover:text-[#222629]'
-              }`}
-              title="Pen (4 colors: Key Pen = Key Highlight, Red = Needs Review, Green = Understood, Blue = Exam Revision)"
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${activeTool === 'pen'
+                  ? 'bg-white text-[#0F172A] shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900'
+                }`}
             >
-              <Edit2 className="w-3.5 h-3.5 text-[#2E7D32]" />
-              <span className="hidden sm:inline">Pen</span>
+              <Edit2 className="w-3.5 h-3.5 text-blue-600" />
+              <span className="hidden sm:inline">قلم</span>
             </button>
 
-            {/* Marker / Highlighter Tool Toggle */}
+            {/* أداة التظليل */}
             <button
               type="button"
               id="annotation-tool-highlighter-btn"
@@ -739,161 +663,119 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                 setActiveTool('highlighter');
                 setActiveColor(MARKER_COLOR_OPTIONS[0].color);
               }}
-              className={`px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
-                activeTool === 'highlighter'
-                  ? 'bg-white text-[#1D2023] shadow-xs'
-                  : 'text-[#61686F] hover:text-[#222629]'
-              }`}
-              title="Marker (4 colors: Yellow = Key Highlight, Green = Understood, Blue = Exam Revision, Red = Needs Review)"
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${activeTool === 'highlighter'
+                  ? 'bg-white text-[#0F172A] shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900'
+                }`}
             >
-              <Highlighter className="w-3.5 h-3.5 text-[#B8860B]" />
-              <span className="hidden sm:inline">Marker</span>
+              <Highlighter className="w-3.5 h-3.5 text-amber-500" />
+              <span className="hidden sm:inline">تظليل</span>
             </button>
 
-            {/* 4 Pens Palette (Key Pen: Key Highlight, Red: Needs Review, Green: Understood, Blue: Exam Revision) */}
+            {/* ألوان القلم */}
             {activeTool === 'pen' && (
-              <div className="flex items-center gap-1.5 px-1.5 border-l border-[#DFE3D8] ml-1">
+              <div className="flex items-center gap-1.5 px-2 border-r border-slate-200 mr-1">
                 {PEN_COLOR_OPTIONS.map(opt => (
                   <button
                     key={opt.id}
                     type="button"
                     onClick={() => setActiveColor(opt.color)}
-                    className={`w-4 h-4 rounded-full transition-all relative flex items-center justify-center ${
-                      activeColor === opt.color ? 'scale-125 ring-2 ring-black/40 shadow-xs' : 'opacity-70 hover:opacity-100'
-                    }`}
+                    className={`w-4 h-4 rounded-full transition-all relative flex items-center justify-center ${activeColor === opt.color ? 'scale-125 ring-2 ring-slate-900/30' : 'opacity-60 hover:opacity-100'
+                      }`}
                     style={{ backgroundColor: opt.color }}
-                    title={`${opt.name}: ${opt.meaning}`}
+                    title={`${opt.name}`}
                   />
                 ))}
               </div>
             )}
 
-            {/* 4 Markers Palette (Yellow: Key Highlight, Green: Understood, Blue: Exam Revision, Red: Needs Review) */}
+            {/* ألوان التظليل */}
             {activeTool === 'highlighter' && (
-              <div className="flex items-center gap-1.5 px-1.5 border-l border-[#DFE3D8] ml-1">
+              <div className="flex items-center gap-1.5 px-2 border-r border-slate-200 mr-1">
                 {MARKER_COLOR_OPTIONS.map(opt => (
                   <button
                     key={opt.id}
                     type="button"
                     onClick={() => setActiveColor(opt.color)}
-                    className={`w-4 h-4 rounded-full transition-all relative flex items-center justify-center ${
-                      activeColor === opt.color ? 'scale-125 ring-2 ring-black/40 shadow-xs' : 'opacity-70 hover:opacity-100'
-                    }`}
+                    className={`w-4 h-4 rounded-full transition-all relative flex items-center justify-center ${activeColor === opt.color ? 'scale-125 ring-2 ring-slate-900/30' : 'opacity-60 hover:opacity-100'
+                      }`}
                     style={{ backgroundColor: opt.dotColor }}
-                    title={`${opt.name}: ${opt.meaning}`}
+                    title={`${opt.name}`}
                   />
                 ))}
               </div>
             )}
 
-            {/* Active tool label rectangle with hide/show toggle button */}
-            {showToolLabel && (
-              <span
-                id="active-tool-rectangle-label"
-                onClick={() => setShowToolLabel(false)}
-                className="hidden xl:inline-flex items-center gap-1 text-[10px] text-[#4A5056] font-medium bg-[#E9EBE5] hover:bg-[#DFE2D9] px-2 py-0.5 rounded ml-0.5 cursor-pointer select-none transition-colors border border-transparent hover:border-[#CED3C7]"
-                title="Click to hide this label"
-              >
-                <span>
-                  {activeTool === 'pen'
-                    ? (PEN_COLOR_OPTIONS.find(p => p.color === activeColor)?.name || 'Key Pen')
-                    : (MARKER_COLOR_OPTIONS.find(m => m.color === activeColor)?.name || 'Marker')}
-                </span>
-                <X className="w-2.5 h-2.5 opacity-60 hover:opacity-100" />
-              </span>
-            )}
-
-            {!showToolLabel && (
-              <button
-                type="button"
-                id="toggle-show-tool-label-btn"
-                onClick={() => setShowToolLabel(true)}
-                className="hidden xl:inline-flex items-center text-[10px] text-[#6B7279] hover:text-[#2E7D32] bg-[#E9EBE5]/60 hover:bg-[#E9EBE5] px-1.5 py-0.5 rounded ml-0.5 cursor-pointer transition-colors"
-                title="Show tool label"
-              >
-                Label
-              </button>
-            )}
-
+            {/* زر التراجع */}
             <button
               type="button"
               id="annotation-tool-undo-btn"
               onClick={handleUndoAnnotation}
-              className="p-1 rounded-lg hover:bg-white text-[#656C74] hover:text-[#202326] transition-colors ml-0.5 cursor-pointer"
-              title="Undo last stroke"
+              className="p-1.5 rounded-xl hover:bg-white text-slate-500 hover:text-slate-900 transition-colors mr-0.5"
+              title="تراجع"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* Zoom Controls */}
-          <div className="hidden lg:flex items-center gap-1 bg-[#F4F6F2] p-1 rounded-xl border border-[#DCE0D6] text-xs">
+          {/* أدوات التكبير والتصغير */}
+          <div className="hidden lg:flex items-center gap-1 bg-slate-100/80 p-1 rounded-2xl border border-slate-200/60 text-xs">
             <button
               type="button"
-              id="zoom-out-btn"
               onClick={() => setZoomLevel(prev => Math.max(75, prev - 15))}
-              className="p-1 rounded-md hover:bg-white text-[#52575C]"
-              title="Zoom out"
+              className="p-1.5 rounded-xl hover:bg-white text-slate-500 hover:text-slate-900"
+              title="تصغير"
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
-            <span className="px-1 font-mono text-[11px] text-[#697076]">{zoomLevel}%</span>
+            <span className="px-1.5 font-mono text-[11px] font-semibold text-slate-600">{zoomLevel}%</span>
             <button
               type="button"
-              id="zoom-in-btn"
               onClick={() => setZoomLevel(prev => Math.min(140, prev + 15))}
-              className="p-1 rounded-md hover:bg-white text-[#52575C]"
-              title="Zoom in"
+              className="p-1.5 rounded-xl hover:bg-white text-slate-500 hover:text-slate-900"
+              title="تكبير"
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        {/* Right: Ask Coach + Need Help + Natural Finish Studying Button */}
-        <div className="flex items-center gap-2">
-          {/* Quick Need Help Trigger */}
+        {/* Left: Ask Coach + Need Help + Finish Studying Button */}
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
-            id="study-room-need-help-header-btn"
             onClick={handleOpenHelpIntervention}
-            className={`text-xs px-2.5 py-1.5 rounded-xl border transition-colors flex items-center gap-1.5 shadow-2xs ${
-              stuckState.level >= 2
-                ? 'bg-[#FFF8E1] border-[#FFE082] text-[#B45309] font-semibold animate-pulse'
-                : 'bg-white hover:bg-[#F2F4F0] border-[#D8DBD2] text-[#4A5056] font-medium'
-            }`}
-            title="Need help with this slide? Open coach support"
+            className={`text-xs px-3 py-2 rounded-xl border transition-all flex items-center gap-1.5 ${stuckState.level >= 2
+                ? 'bg-amber-50 border-amber-200 text-amber-800 font-bold animate-pulse'
+                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-600 font-semibold'
+              }`}
           >
-            <HelpCircle className="w-3.5 h-3.5 text-[#E65100]" />
-            <span>Need Help?</span>
+            <HelpCircle className="w-3.5 h-3.5 text-amber-600" />
+            <span>طلب مساعدة</span>
           </button>
 
           <button
             type="button"
-            id="study-room-ask-coach-btn"
             onClick={() => setExplainDrawerOpen(true)}
-            className="text-xs px-3 py-1.5 rounded-xl border border-[#D8DBD2] bg-white hover:bg-[#F2F4F0] text-[#3D4247] font-medium flex items-center gap-1.5 transition-colors shadow-2xs"
+            className="text-xs px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold flex items-center gap-1.5 transition-colors"
           >
-            <Sparkles className="w-3.5 h-3.5 text-[#2E7D32]" />
-            <span>Ask Coach</span>
+            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+            <span>اسأل المساعد</span>
           </button>
 
-          {/* Important Requirement: Natural "Finish Studying" Button */}
           <button
             type="button"
-            id="natural-finish-studying-btn"
             onClick={() => setWrapUpModalOpen(true)}
-            className="text-xs px-3.5 py-1.5 rounded-xl bg-[#2E7D32] hover:bg-[#256629] text-white font-medium flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+            className="text-xs px-4 py-2 rounded-xl bg-[#0F172A] hover:bg-[#1E293B] text-white font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
           >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Finish Studying</span>
+            <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
+            <span>إنهاء الجلسة</span>
           </button>
         </div>
       </header>
 
-      {/* 2. MAIN BODY: SIDEBAR + DOCUMENT VIEWER CANVAS */}
+      {/* ─── 2. MAIN BODY (SIDEBAR + SLIDE SHEET) ──────────────────── */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Updated Study Room Sidebar (Live camera + Slide contents + Phone/Sleep detection) */}
         <StudySidebar
           slides={lecture.slides}
           currentPage={currentPage}
@@ -914,7 +796,6 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           onTriggerGazeDrift={handleTriggerGazeDrift}
           onTriggerFocused={handleTriggerFocused}
           onAnalyzeFrameSnapshot={handleAnalyzeFrameSnapshot}
-
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
         />
@@ -922,35 +803,31 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         {/* Central Document Canvas Area */}
         <main
           ref={documentContainerRef}
-          className={`flex-1 overflow-auto p-4 sm:p-8 flex justify-center items-start transition-all relative ${
-            attentionState.visualPulseActive ? 'ring-4 ring-amber-400/40' : ''
-          }`}
+          className={`flex-1 overflow-auto p-6 sm:p-10 flex justify-center items-start transition-all relative ${attentionState.visualPulseActive ? 'ring-4 ring-amber-400/40' : ''
+            }`}
         >
-          {/* Quick Floating Edge Navigation: Previous Slide */}
+          {/* Previous Slide Floating Button */}
           <button
             type="button"
-            id="floating-edge-prev-slide-btn"
             onClick={handlePrevPage}
             disabled={currentPage <= 1}
-            className="sticky left-0 top-1/2 -translate-y-1/2 z-20 mr-2 sm:mr-4 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white border border-[#D5DCD0] shadow-md flex items-center justify-center text-[#4A5157] disabled:opacity-15 disabled:pointer-events-none transition-all hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-xs shrink-0"
-            title="Previous slide (or press ← Arrow key)"
+            className="sticky right-0 top-1/2 -translate-y-1/2 z-20 ml-4 w-11 h-11 rounded-full bg-white/95 hover:bg-white border border-slate-200 shadow-md flex items-center justify-center text-slate-700 disabled:opacity-20 disabled:pointer-events-none transition-all hover:scale-105 active:scale-95"
+            title="الشريحة السابقة"
           >
-            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 text-[#2E7D32]" />
+            <ChevronRight className="w-5 h-5 text-slate-800" />
           </button>
 
-          {/* Document Sheet */}
+          {/* Document Sheet Container */}
           <div
             id="study-document-page-sheet"
-            className="relative bg-white rounded-2xl border border-[#DFE2D9] shadow-md overflow-hidden transition-transform duration-200 shrink-0"
+            className="relative bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.04)] overflow-hidden transition-transform duration-200 shrink-0"
             style={{
               width: `${(zoomLevel / 100) * 880}px`,
               minHeight: `${(zoomLevel / 100) * 620}px`
             }}
           >
-            {/* Slide Content Layer */}
             <SlideViewer slide={currentSlide} totalSlides={lecture.totalPages} />
 
-            {/* Real Annotation Overlay Canvas Layer */}
             <AnnotationCanvas
               activeTool={activeTool}
               activeColor={activeColor}
@@ -961,33 +838,28 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
             />
           </div>
 
-          {/* Quick Floating Edge Navigation: Next Slide */}
+          {/* Next Slide Floating Button */}
           <button
             type="button"
-            id="floating-edge-next-slide-btn"
             onClick={handleNextPage}
             disabled={currentPage >= lecture.totalPages}
-            className="sticky right-0 top-1/2 -translate-y-1/2 z-20 ml-2 sm:ml-4 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white border border-[#D5DCD0] shadow-md flex items-center justify-center text-[#4A5157] disabled:opacity-15 disabled:pointer-events-none transition-all hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-xs shrink-0"
-            title="Next slide (or press → Arrow key)"
+            className="sticky left-0 top-1/2 -translate-y-1/2 z-20 mr-4 w-11 h-11 rounded-full bg-white/95 hover:bg-white border border-slate-200 shadow-md flex items-center justify-center text-slate-700 disabled:opacity-20 disabled:pointer-events-none transition-all hover:scale-105 active:scale-95"
+            title="الشريحة التالية"
           >
-            <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-[#2E7D32]" />
+            <ChevronLeft className="w-5 h-5 text-slate-800" />
           </button>
         </main>
       </div>
 
-      {/* 3. FLOATING OVERLAYS & TOASTS */}
-
-      {/* Attention Tracking Toast A: Tab switching return notification */}
+      {/* ─── 3. TOASTS & INTERVENTIONS ─────────────────────────────── */}
       {attentionState.tabSwitchToast && (
         <div
-          id="tab-return-encouragement-toast"
-          className="fixed top-18 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-white/95 border border-[#D5DCD0] shadow-md text-xs font-medium text-[#2E7D32] flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200"
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-full bg-white/95 border border-slate-200 shadow-xl text-xs font-semibold text-[#0F172A] flex items-center gap-2 animate-in fade-in slide-in-from-top-2"
         >
-          <span>{attentionState.tabSwitchToast.message || "Welcome back 👋 Let's get focused again"}</span>
+          <span>{attentionState.tabSwitchToast.message}</span>
         </div>
       )}
 
-      {/* Stuck Detection Intervention Card */}
       <StuckInterventionCard
         isOpen={stuckState.interventionActive}
         specialistOffered={stuckState.specialistOffered}
@@ -1006,18 +878,16 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         onDeclineStillReading={handleDeclineStillReading}
       />
 
-      {/* Floating Quick Help Trigger: always accessible so student can summon the coach at any moment */}
+      {/* Floating Action Help Trigger */}
       {!stuckState.interventionActive && (
         <button
           type="button"
-          id="quick-stuck-help-floating-btn"
           onClick={handleOpenHelpIntervention}
-          className="fixed bottom-6 right-6 z-30 flex items-center gap-2 px-3.5 py-2.5 bg-white/95 hover:bg-[#F4F6F1] border border-[#CCD2C5] text-[#2E7D32] text-xs font-semibold rounded-2xl shadow-md transition-all hover:scale-105 backdrop-blur-xs cursor-pointer group"
-          title="Click anytime you want help on this slide"
+          className="fixed bottom-6 left-6 z-30 flex items-center gap-2.5 px-4 py-3 bg-[#0F172A] hover:bg-[#1E293B] text-white text-xs font-semibold rounded-2xl shadow-xl transition-all hover:scale-105"
         >
-          <span className="w-2 h-2 rounded-full bg-[#2E7D32] animate-pulse" />
-          <HelpCircle className="w-4 h-4 text-[#2E7D32]" />
-          <span>Need help on this slide?</span>
+          <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+          <HelpCircle className="w-4 h-4 text-blue-300" />
+          <span>تحتاج مساعدة في هذه الشريحة؟</span>
         </button>
       )}
 
@@ -1083,7 +953,6 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         }}
       />
 
-      {/* Phone Spotted Modal */}
       <PhoneAlertModal
         isOpen={attentionState.phoneAlertOpen}
         coachMessage={attentionState.detectionReason}
@@ -1106,7 +975,6 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         }}
       />
 
-      {/* Sleeping / Eyes Closed Modal */}
       <SleepingAlertModal
         isOpen={attentionState.sleepingAlertOpen}
         coachMessage={attentionState.detectionReason}
@@ -1129,7 +997,6 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         }}
       />
 
-      {/* Stepped Away / Empty Desk Modal */}
       <AwayAlertModal
         isOpen={attentionState.awayAlertOpen}
         coachMessage={attentionState.detectionReason}
@@ -1152,7 +1019,6 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         }}
       />
 
-      {/* Upload Modal to easily switch or import slides directly in the room */}
       <UploadModal
         isOpen={uploadModalOpen}
         onClose={() => setUploadModalOpen(false)}
