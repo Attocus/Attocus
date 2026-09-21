@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Slide, UnderstandingTurn, CompiledSummary } from '../types';
 import { Brain, Sparkles, ArrowLeft, CheckCheck, X, AlertCircle, CheckCircle2, FastForward, Edit3, HelpCircle, Loader2 } from 'lucide-react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface UnderstandingModalProps {
   isOpen: boolean;
@@ -159,30 +160,32 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
     }
   };
 
+  const { isAr, dir } = useLanguage();
+
   if (!isOpen) return null;
 
   return (
     <div
-      dir="rtl"
+      dir={dir}
       id="understanding-modal-overlay"
-      className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 bg-slate-900/40 dark:bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
     >
       <div
         id="understanding-modal-card"
-        className="bg-white rounded-3xl border border-slate-200/80 shadow-2xl w-full max-w-2xl overflow-hidden text-slate-900 transition-all flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-150"
+        className="bg-white dark:bg-[#111827] rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-2xl w-full max-w-2xl overflow-hidden text-slate-900 dark:text-slate-100 transition-all flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-150"
       >
         {/* Header */}
-        <div className="p-5 border-b border-slate-100 bg-white flex items-center justify-between">
+        <div className="p-5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-[#111827] flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100/80 shadow-2xs">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-100/80 dark:border-blue-900/50 shadow-2xs">
               <Brain className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">
-                حوار التحقق والاستيعاب
+              <h2 className="text-sm font-bold text-[#0F172A] dark:text-white tracking-tight">
+                {isAr ? 'حوار التحقق والاستيعاب' : 'Comprehension & Verification Dialogue'}
               </h2>
-              <p className="text-[11px] text-slate-400">
-                الشريحة {slide.pageNumber}: {slide.topic || 'المفاهيم الجوهرية'}
+              <p className="text-[11px] text-slate-400 dark:text-slate-400">
+                {isAr ? `الشريحة ${slide.pageNumber}: ${slide.topic || 'المفاهيم الجوهرية'}` : `Slide ${slide.pageNumber}: ${slide.topic || 'Core Concepts'}`}
               </p>
             </div>
           </div>
@@ -193,18 +196,18 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
                 type="button"
                 id="skip-to-summarize-btn"
                 onClick={handleSkipToSummary}
-                className="text-[11px] px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 font-semibold flex items-center gap-1.5 transition-all"
-                title="إنهاء الحوار وتوليد التلخيص فوراً بناءً على إجاباتك الحالية"
+                className="text-[11px] px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold flex items-center gap-1.5 transition-all"
+                title={isAr ? 'إنهاء الحوار وتوليد التلخيص فوراً بناءً على إجاباتك الحالية' : 'End dialogue and generate summary immediately based on current answers'}
               >
-                <FastForward className="w-3.5 h-3.5 text-blue-600" />
-                <span>تخطي والتلخيص فوراً</span>
+                <FastForward className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span>{isAr ? 'تخطي والتلخيص فوراً' : 'Skip & Summarize Now'}</span>
               </button>
             )}
             <button
               type="button"
               id="close-understanding-modal-btn"
               onClick={onClose}
-              className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
+              className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -216,19 +219,19 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
           {/* History */}
           {history.map((turn, idx) => (
             <div key={idx} className="space-y-2">
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 text-xs text-slate-800 flex items-start gap-2.5">
-                <span className="font-bold text-blue-600 shrink-0">المساعد:</span>
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 flex items-start gap-2.5">
+                <span className="font-bold text-blue-600 dark:text-blue-400 shrink-0">{isAr ? 'المساعد:' : 'Assistant:'}</span>
                 <span className="leading-relaxed">{turn.question}</span>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-[#0F172A] text-white text-xs flex items-start gap-2.5 mr-4 shadow-xs">
-                <span className="font-bold text-blue-300 shrink-0">أنت:</span>
+              <div className="p-3.5 rounded-2xl bg-[#0F172A] dark:bg-blue-600 text-white text-xs flex items-start gap-2.5 mr-4 shadow-xs">
+                <span className="font-bold text-blue-300 dark:text-blue-100 shrink-0">{isAr ? 'أنت:' : 'You:'}</span>
                 <span className="leading-relaxed">{turn.studentAnswer}</span>
               </div>
 
               {turn.analysis?.feedback && turn.analysis.feedback !== currentQuestion && turn.analysis.feedback !== turn.question && (
-                <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/60 text-[11px] text-amber-900 mr-4 flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <div className="p-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-900/50 text-[11px] text-amber-900 dark:text-amber-200 mr-4 flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                   <span className="leading-relaxed">{turn.analysis.feedback}</span>
                 </div>
               )}
@@ -238,11 +241,11 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
           {/* Active Question */}
           {!isFinished && (
             <div className="space-y-4 pt-2">
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 shadow-2xs">
-                <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1">
-                  سؤال المتابعة الذكي
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 shadow-2xs">
+                <div className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">
+                  {isAr ? 'سؤال المتابعة الذكي' : 'Smart Follow-up Question'}
                 </div>
-                <p className="text-sm font-bold text-[#0F172A] leading-relaxed">{currentQuestion}</p>
+                <p className="text-sm font-bold text-[#0F172A] dark:text-white leading-relaxed">{currentQuestion}</p>
               </div>
 
               <div className="space-y-2.5">
@@ -251,8 +254,8 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
                   rows={3}
                   value={studentInput}
                   onChange={e => setStudentInput(e.target.value)}
-                  placeholder="اشرح بكلماتك وأسلوبك الخاص ما فهمته..."
-                  className="w-full p-3.5 rounded-2xl bg-white border border-slate-200 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 text-xs text-slate-900 outline-hidden leading-relaxed resize-none transition-all shadow-2xs"
+                  placeholder={isAr ? 'اشرح بكلماتك وأسلوبك الخاص ما فهمته...' : 'Explain what you understood in your own words...'}
+                  className="w-full p-3.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-600/10 text-xs text-slate-900 dark:text-slate-100 outline-hidden leading-relaxed resize-none transition-all shadow-2xs"
                 />
 
                 <div className="flex items-center justify-between pt-1">
@@ -261,10 +264,10 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
                     id="idont-know-anything-btn"
                     onClick={() => handleSendAnswer('', true)}
                     disabled={isLoading}
-                    className="text-xs px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 font-semibold flex items-center gap-1.5 transition-all"
+                    className="text-xs px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold flex items-center gap-1.5 transition-all"
                   >
                     <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
-                    <span>لا أعلم شيئاً عن هذا المفهوم</span>
+                    <span>{isAr ? 'لا أعلم شيئاً عن هذا المفهوم' : "I don't know yet"}</span>
                   </button>
 
                   <button
@@ -272,20 +275,21 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
                     id="submit-understanding-answer-btn"
                     onClick={() => handleSendAnswer(studentInput)}
                     disabled={!studentInput.trim() || isLoading}
-                    className={`text-xs px-5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all shadow-xs active:scale-[0.98] ${studentInput.trim() && !isLoading
-                        ? 'bg-[#0F172A] hover:bg-[#1E293B] text-white cursor-pointer'
-                        : 'bg-slate-100 text-slate-400 border border-slate-200/60 cursor-not-allowed'
-                      }`}
+                    className={`text-xs px-5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all shadow-xs active:scale-[0.98] ${
+                      studentInput.trim() && !isLoading
+                        ? 'bg-[#0F172A] dark:bg-blue-600 hover:bg-[#1E293B] dark:hover:bg-blue-700 text-white cursor-pointer'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/60 dark:border-slate-700 cursor-not-allowed'
+                    }`}
                   >
                     {isLoading ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-300" />
-                        <span>جاري التحليل...</span>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-300 dark:text-white" />
+                        <span>{isAr ? 'جاري التحليل...' : 'Analyzing...'}</span>
                       </>
                     ) : (
                       <>
-                        <span>إرسال الإجابة</span>
-                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>{isAr ? 'إرسال الإجابة' : 'Submit Answer'}</span>
+                        <ArrowLeft className={`w-3.5 h-3.5 ${isAr ? '' : 'rotate-180'}`} />
                       </>
                     )}
                   </button>
@@ -297,26 +301,28 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
           {/* Compiled Summary */}
           {isFinished && compiledSummary && (
             <div className="space-y-4 pt-2">
-              <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-1">
+              <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 space-y-1">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
-                      ملخص بأسلوبك وكلماتك الخاصة
+                    <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-xs font-bold text-[#0F172A] dark:text-white uppercase tracking-wider">
+                      {isAr ? 'ملخص بأسلوبك وكلماتك الخاصة' : 'Summary in Your Own Words'}
                     </span>
                   </div>
                   <button
                     type="button"
                     id="toggle-edit-summary-btn"
                     onClick={() => setIsEditingSummary(!isEditingSummary)}
-                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-bold transition-colors"
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1 font-bold transition-colors"
                   >
                     <Edit3 className="w-3 h-3" />
-                    <span>{isEditingSummary ? 'حفظ التعديل' : 'تعديل الصياغة'}</span>
+                    <span>{isEditingSummary ? (isAr ? 'حفظ التعديل' : 'Save Edit') : (isAr ? 'تعديل الصياغة' : 'Edit Text')}</span>
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-500">
-                  تمت صياغة هذا الملخص من إجاباتك السقراطية لترتيب الفهم في فقرات مترابطة.
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {isAr
+                    ? 'تمت صياغة هذا الملخص من إجاباتك السقراطية لترتيب الفهم في فقرات مترابطة.'
+                    : 'This summary was synthesized from your Socratic answers to organize understanding.'}
                 </p>
               </div>
 
@@ -326,11 +332,11 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
                   rows={6}
                   value={editableSummaryText}
                   onChange={e => setEditableSummaryText(e.target.value)}
-                  placeholder="حرر فقرات الملخص هنا..."
-                  className="w-full p-4 rounded-2xl bg-white border border-blue-600 text-xs sm:text-sm text-slate-900 outline-hidden leading-relaxed resize-none shadow-2xs"
+                  placeholder={isAr ? 'حرر فقرات الملخص هنا...' : 'Edit summary paragraphs here...'}
+                  className="w-full p-4 rounded-2xl bg-white dark:bg-slate-800 border border-blue-600 text-xs sm:text-sm text-slate-900 dark:text-slate-100 outline-hidden leading-relaxed resize-none shadow-2xs"
                 />
               ) : (
-                <div className="p-5 rounded-2xl bg-white border border-slate-200/80 text-xs sm:text-sm leading-relaxed text-slate-800 shadow-2xs space-y-3">
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 text-xs sm:text-sm leading-relaxed text-slate-800 dark:text-slate-200 shadow-2xs space-y-3">
                   {editableSummaryText
                     .split(/(?:Corrections|التصحيحات|Your Strengths|نقاط القوة):/i)[0]
                     .split(/\n\s*\n/)
@@ -347,15 +353,15 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
               {/* Corrections */}
               {((compiledSummary.corrections && compiledSummary.corrections.length > 0) || (compiledSummary.inlineCorrections && compiledSummary.inlineCorrections.length > 0)) && (
                 <div className="space-y-2.5 pt-1">
-                  <div className="flex items-center gap-2 text-xs font-bold text-amber-700 uppercase tracking-wider">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                    <span>التصحيحات والاستدراكات المعرفية</span>
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                    <span>{isAr ? 'التصحيحات والاستدراكات المعرفية' : 'Knowledge Corrections & Clarifications'}</span>
                   </div>
 
                   {compiledSummary.corrections && compiledSummary.corrections.length > 0 && (
-                    <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/70 shadow-2xs space-y-2 text-xs">
+                    <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-900/50 shadow-2xs space-y-2 text-xs">
                       {compiledSummary.corrections.map((point, idx) => (
-                        <div key={idx} className="flex items-start gap-2.5 text-amber-900">
+                        <div key={idx} className="flex items-start gap-2.5 text-amber-900 dark:text-amber-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0" />
                           <span className="leading-relaxed font-semibold">
                             {point.replace(/^[-*•\d.]+\s*/, '')}
@@ -370,14 +376,14 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
                       {compiledSummary.inlineCorrections.map((corr, idx) => (
                         <div
                           key={idx}
-                          className="p-3 rounded-xl bg-white border border-slate-200 text-xs space-y-1"
+                          className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs space-y-1"
                         >
                           <div className="flex items-center gap-2">
-                            <span className="line-through text-rose-600">{corr.original}</span>
+                            <span className="line-through text-rose-600 dark:text-rose-400">{corr.original}</span>
                             <ArrowLeft className="w-3 h-3 text-slate-400" />
-                            <span className="font-bold text-emerald-600">{corr.correction}</span>
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400">{corr.correction}</span>
                           </div>
-                          <p className="text-[11px] text-slate-500">{corr.explanation}</p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">{corr.explanation}</p>
                         </div>
                       ))}
                     </div>
@@ -388,13 +394,13 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
               {/* Strengths */}
               {compiledSummary.strengths && compiledSummary.strengths.length > 0 && (
                 <div className="space-y-2.5 pt-1">
-                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 uppercase tracking-wider">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>نقاط القوة والاستيعاب لديك</span>
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>{isAr ? 'نقاط القوة والاستيعاب لديك' : 'Your Strengths & Understanding'}</span>
                   </div>
-                  <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200/70 shadow-2xs space-y-2 text-xs">
+                  <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-900/50 shadow-2xs space-y-2 text-xs">
                     {compiledSummary.strengths.map((point, idx) => (
-                      <div key={idx} className="flex items-start gap-2.5 text-emerald-900">
+                      <div key={idx} className="flex items-start gap-2.5 text-emerald-900 dark:text-emerald-200">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
                         <span className="leading-relaxed font-semibold">
                           {point.replace(/^[-*•\d.]+\s*/, '')}
@@ -408,14 +414,14 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
               {/* Key Lecture Takeaways */}
               {compiledSummary.lectureTakeaways && compiledSummary.lectureTakeaways.length > 0 && (
                 <div className="space-y-2.5 pt-1">
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-                    <span>المحاور الأساسية للشريحة</span>
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span>{isAr ? 'المحاور الأساسية للشريحة' : 'Key Lecture Takeaways'}</span>
                   </div>
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 shadow-2xs space-y-2 text-xs">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 shadow-2xs space-y-2 text-xs">
                     {compiledSummary.lectureTakeaways.map((takeaway, idx) => (
-                      <div key={idx} className="flex items-start gap-2.5 text-slate-700">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 mt-1.5 shrink-0" />
+                      <div key={idx} className="flex items-start gap-2.5 text-slate-700 dark:text-slate-300">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400 mt-1.5 shrink-0" />
                         <span className="leading-relaxed">{takeaway.replace(/^[-*•\d.]+\s*/, '')}</span>
                       </div>
                     ))}
@@ -428,18 +434,18 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
 
         {/* Footer */}
         {isFinished && (
-          <div className="p-4 border-t border-slate-100 bg-white flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-medium">
-              تم حفظ التلخيص ضمن جلسة المذاكرة الحالية
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-[#111827] flex items-center justify-between">
+            <span className="text-xs text-slate-400 dark:text-slate-400 font-medium">
+              {isAr ? 'تم حفظ التلخيص ضمن جلسة المذاكرة الحالية' : 'Summary saved to current study session'}
             </span>
             <button
               type="button"
               id="save-understanding-and-close-btn"
               onClick={onClose}
-              className="text-xs px-5 py-2.5 rounded-xl bg-[#0F172A] hover:bg-[#1E293B] text-white font-bold flex items-center gap-2 transition-all shadow-xs active:scale-[0.98]"
+              className="text-xs px-5 py-2.5 rounded-xl bg-[#0F172A] dark:bg-blue-600 hover:bg-[#1E293B] dark:hover:bg-blue-700 text-white font-bold flex items-center gap-2 transition-all shadow-xs active:scale-[0.98]"
             >
-              <CheckCheck className="w-4 h-4 text-blue-400" />
-              <span>حفظ ومتابعة المذاكرة</span>
+              <CheckCheck className="w-4 h-4 text-blue-400 dark:text-white" />
+              <span>{isAr ? 'حفظ ومتابعة المذاكرة' : 'Save & Continue'}</span>
             </button>
           </div>
         )}

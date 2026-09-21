@@ -6,6 +6,7 @@ import {
   Eye,
   ShieldCheck,
   ChevronLeft,
+  ChevronRight,
   AlertCircle,
   Smartphone,
   Moon,
@@ -14,6 +15,7 @@ import {
   PanelRightOpen,
   UserX
 } from 'lucide-react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface StudySidebarProps {
   slides: Slide[];
@@ -63,6 +65,7 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
   isCollapsed = false,
   onToggleCollapse
 }) => {
+  const { isAr, t } = useLanguage();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const [autoScanEnabled] = useState(true);
@@ -391,31 +394,31 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
   };
 
   return (
-    <aside className="w-84 h-full border-l border-slate-200/80 bg-[#FCFCFD] flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all duration-300">
+    <aside className="w-84 h-full border-l border-slate-200/80 dark:border-slate-800 bg-[#FCFCFD] dark:bg-slate-900 flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all duration-300">
 
       {/* 1. رأس الشريط */}
-      <div className="p-3.5 border-b border-slate-200/70 bg-white flex items-center justify-between">
+      <div className="p-3.5 border-b border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-blue-600" />
-          <span className="text-xs font-bold text-[#0F172A] tracking-wider uppercase">
-            مساحة العمل والتركيز
+          <span className="text-xs font-bold text-[#0F172A] dark:text-white tracking-wider uppercase">
+            {isAr ? "مساحة العمل والتركيز" : "Focus & Workspace"}
           </span>
         </div>
         {onToggleCollapse && (
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors flex items-center gap-1 text-xs"
-            title="إخفاء الشريط"
+            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex items-center gap-1 text-xs"
+            title={isAr ? "إخفاء الشريط" : "Collapse Sidebar"}
           >
             <PanelRightClose className="w-4 h-4" />
-            <span className="text-[11px] font-medium">طي</span>
+            <span className="text-[11px] font-medium">{isAr ? "طي" : "Collapse"}</span>
           </button>
         )}
       </div>
 
       {/* 2. قسم الكاميرا ومراقبة التركيز */}
-      <div className="p-4 border-b border-slate-200/70 bg-white space-y-3">
+      <div className="p-4 border-b border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span
@@ -429,21 +432,21 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                         ? 'bg-orange-500'
                         : cameraActive && detectedState === 'focused'
                           ? 'bg-emerald-500 animate-pulse'
-                          : 'bg-slate-300'
+                          : 'bg-slate-300 dark:bg-slate-600'
                 }`}
             />
-            <span className="text-xs font-bold text-slate-800">
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
               {cameraActive
                 ? (detectedState === 'using_phone' || isPhoneVisible)
-                  ? 'رصد هاتف في اليد 📱'
+                  ? (isAr ? 'رصد هاتف في اليد 📱' : 'Phone Detected 📱')
                   : (detectedState === 'sleeping' || isSleepyVisible)
-                    ? 'رصد إغلاق العينين 💤'
+                    ? (isAr ? 'رصد إغلاق العينين 💤' : 'Eyes Closed 💤')
                     : (detectedState === 'away' || isAwayVisible)
-                      ? 'مغادرة المقعد 🚶‍♂️'
+                      ? (isAr ? 'مغادرة المقعد 🚶‍♂️' : 'Away from Seat 🚶‍♂️')
                       : detectedState === 'distracted' || attentionDrifted
-                        ? 'تشتت الانتباه'
-                        : 'مراقب التركيز: نشط'
-                : 'مراقب التركيز: متوقف'}
+                        ? (isAr ? 'تشتت الانتباه' : 'Distracted')
+                        : (isAr ? 'مراقب التركيز: نشط' : 'Focus Monitor: Active')
+                : (isAr ? 'مراقب التركيز: متوقف' : 'Focus Monitor: Off')}
             </span>
           </div>
 
@@ -559,12 +562,12 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
 
       {/* 3. فهرس الشرائح والموضوعات */}
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="p-3.5 border-b border-slate-200/70 bg-white flex items-center justify-between">
-          <span className="text-xs font-bold text-slate-800 tracking-wide">
-            فهرس الشرائح
+        <div className="p-3.5 border-b border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
+          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 tracking-wide">
+            {isAr ? "فهرس الشرائح" : "Slides Index"}
           </span>
-          <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
-            {slides.length} شريحة
+          <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+            {slides.length} {isAr ? "شريحة" : "slides"}
           </span>
         </div>
 
@@ -577,32 +580,32 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                 id={`sidebar-slide-link-${slide.pageNumber}`}
                 type="button"
                 onClick={() => onSelectPage(slide.pageNumber)}
-                className={`w-full text-right p-3 rounded-2xl transition-all flex items-start gap-3 border ${isCurrent
-                    ? 'bg-white border-blue-600/70 shadow-xs ring-1 ring-blue-600/20'
-                    : 'bg-transparent hover:bg-white border-transparent hover:border-slate-200/80 text-slate-700'
+                className={`w-full ${isAr ? 'text-right' : 'text-left'} p-3 rounded-2xl transition-all flex items-start gap-3 border ${isCurrent
+                    ? 'bg-white dark:bg-slate-800 border-blue-600/70 shadow-xs ring-1 ring-blue-600/20'
+                    : 'bg-transparent hover:bg-white dark:hover:bg-slate-800/60 border-transparent hover:border-slate-200/80 dark:hover:border-slate-700 text-slate-700 dark:text-slate-300'
                   }`}
               >
                 <div
                   className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-mono font-bold shrink-0 mt-0.5 ${isCurrent
-                      ? 'bg-[#0F172A] text-white'
-                      : 'bg-slate-100 text-slate-500'
+                      ? 'bg-[#0F172A] dark:bg-blue-600 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                     }`}
                 >
                   {slide.pageNumber}
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <div className={`text-xs font-bold truncate leading-snug ${isCurrent ? 'text-blue-600' : 'text-slate-800'}`}>
+                  <div className={`text-xs font-bold truncate leading-snug ${isCurrent ? 'text-blue-600 dark:text-blue-400' : 'text-slate-800 dark:text-slate-200'}`}>
                     {slide.title}
                   </div>
                   <div className="text-[11px] text-slate-400 truncate mt-0.5 flex items-center gap-1.5">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-300" />
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
                     <span>{slide.topic}</span>
                   </div>
                 </div>
 
                 {isCurrent && (
-                  <ChevronLeft className="w-4 h-4 text-blue-600 shrink-0 mt-1" />
+                  isAr ? <ChevronLeft className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-1" /> : <ChevronRight className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-1" />
                 )}
               </button>
             );
@@ -611,10 +614,10 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
       </div>
 
       {/* 4. تذييل الخصوصية */}
-      <div className="p-3 border-t border-slate-200/70 bg-white text-[11px] text-slate-400 flex items-center gap-2">
+      <div className="p-3 border-t border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 text-[11px] text-slate-400 flex items-center gap-2">
         <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
         <span className="leading-tight">
-          جلسة مذاكرة خاصة · لا يتم حفظ أو تسجيل الفيديو إطلاقاً
+          {isAr ? "جلسة مذاكرة خاصة · لا يتم حفظ أو تسجيل الفيديو إطلاقاً" : "Private study session · No video is ever recorded or stored"}
         </span>
       </div>
     </aside>

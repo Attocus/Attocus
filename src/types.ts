@@ -45,6 +45,9 @@ export interface AnnotationStroke {
   text?: string;
   textX?: number;
   textY?: number;
+  boxWidth?: number;
+  boxHeight?: number;
+  fontSize?: number;
 }
 
 export type PageAnnotationsMap = Record<number, AnnotationStroke[]>;
@@ -168,22 +171,24 @@ export interface AnnotationColorOption {
   id: string;
   name: string;
   meaning: string;
+  nameEn?: string;
+  meaningEn?: string;
   color: string;
   dotColor: string;
 }
 
 export const PEN_COLOR_OPTIONS: AnnotationColorOption[] = [
-  { id: 'black', name: 'كتابة حرة', meaning: 'كتابة وتدوين حر', color: '#1a1a1a', dotColor: '#1a1a1a' },
-  { id: 'red', name: 'يحتاج مراجعة', meaning: 'يحتاج مراجعة وسؤال', color: '#EF4444', dotColor: '#EF4444' },
-  { id: 'blue', name: 'مهم للاختبار', meaning: 'مهم للاختبار والمراجعة', color: '#3B82F6', dotColor: '#3B82F6' },
-  { id: 'green', name: 'مفهوم ومتقن', meaning: 'مفهوم ومتقن تماماً', color: '#10B981', dotColor: '#10B981' },
+  { id: 'black', name: 'كتابة حرة', meaning: 'كتابة وتدوين حر', nameEn: 'Free Writing', meaningEn: 'Free notes and writing', color: '#1a1a1a', dotColor: '#1a1a1a' },
+  { id: 'red', name: 'يحتاج مراجعة', meaning: 'يحتاج مراجعة وسؤال', nameEn: 'Needs Review', meaningEn: 'Needs review and questions', color: '#EF4444', dotColor: '#EF4444' },
+  { id: 'blue', name: 'مهم للاختبار', meaning: 'مهم للاختبار والمراجعة', nameEn: 'Exam Important', meaningEn: 'Important for exams', color: '#3B82F6', dotColor: '#3B82F6' },
+  { id: 'green', name: 'مفهوم ومتقن', meaning: 'مفهوم ومتقن تماماً', nameEn: 'Understood', meaningEn: 'Mastered and understood', color: '#10B981', dotColor: '#10B981' },
 ];
 
 export const MARKER_COLOR_OPTIONS: AnnotationColorOption[] = [
-  { id: 'yellow-marker', name: 'مفهوم رئيسي', meaning: 'مفهوم رئيسي وفكرة جوهرية', color: '#FACC15', dotColor: '#FACC15' },
-  { id: 'red-marker', name: 'غير مفهوم', meaning: 'غير مفهوم - يحتاج مراجعة', color: '#EF4444', dotColor: '#EF4444' },
-  { id: 'blue-marker', name: 'مراجعة', meaning: 'مهم للاختبار والمراجعة', color: '#3B82F6', dotColor: '#3B82F6' },
-  { id: 'green-marker', name: 'مفهوم', meaning: 'مفهوم ومتقن تماماً', color: '#10B981', dotColor: '#10B981' },
+  { id: 'yellow-marker', name: 'مفهوم رئيسي', meaning: 'مفهوم رئيسي وفكرة جوهرية', nameEn: 'Key Concept', meaningEn: 'Core idea & key concept', color: '#FACC15', dotColor: '#FACC15' },
+  { id: 'red-marker', name: 'غير مفهوم', meaning: 'غير مفهوم - يحتاج مراجعة', nameEn: 'Unclear', meaningEn: 'Not understood - review needed', color: '#EF4444', dotColor: '#EF4444' },
+  { id: 'blue-marker', name: 'مراجعة', meaning: 'مهم للاختبار والمراجعة', nameEn: 'Revision', meaningEn: 'Important revision point', color: '#3B82F6', dotColor: '#3B82F6' },
+  { id: 'green-marker', name: 'مفهوم', meaning: 'مفهوم ومتقن تماماً', nameEn: 'Understood', meaningEn: 'Clear and mastered', color: '#10B981', dotColor: '#10B981' },
 ];
 
 // ─── Parent Account System Types ──────────────────────────────────────────────

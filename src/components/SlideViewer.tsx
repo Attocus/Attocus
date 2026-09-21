@@ -1,6 +1,7 @@
 import React from 'react';
 import { Slide } from '../types';
-import { BookOpen, Layers, Network, Table as TableIcon, GitBranch, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { BookOpen, Layers, Network, Table as TableIcon, GitBranch, ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface SlideViewerProps {
   slide: Slide;
@@ -10,12 +11,13 @@ interface SlideViewerProps {
 
 export const SlideViewer: React.FC<SlideViewerProps> = ({ slide, totalSlides, isDarkMode }) => {
   const dm = isDarkMode;
+  const { isAr, dir, t } = useLanguage();
 
   return (
     <div
-      dir="rtl"
+      dir={dir}
       className={`w-full h-full flex flex-col justify-between p-6 sm:p-8 select-text font-sans antialiased transition-colors duration-300 ${
-        dm ? 'bg-[#1a2236] text-slate-100' : 'bg-white text-slate-900'
+        dm ? 'bg-[#141b2d] text-slate-100' : 'bg-white text-slate-900'
       }`}
     >
       {/* ─── رأس الشريحة ─── */}
@@ -23,19 +25,21 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({ slide, totalSlides, is
         <div className={`flex items-center justify-between pb-3 border-b mb-4 ${dm ? 'border-slate-700/60' : 'border-slate-100'}`}>
           <div className="flex items-center gap-2.5">
             <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg tracking-wide ${dm ? 'bg-slate-700 text-slate-200' : 'bg-slate-100 text-slate-700'}`}>
-              {slide.topic || 'عام'}
+              {slide.topic || (isAr ? 'عام' : 'General')}
             </span>
             {slide.externalCitations && slide.externalCitations.length > 0 && (
               <span className={`text-[11px] ${dm ? 'text-slate-400' : 'text-slate-400'}`}>
-                مرجع: {slide.externalCitations[0]}
+                {t('workspace.citation', 'مرجع:')} {slide.externalCitations[0]}
               </span>
             )}
           </div>
 
           <div className={`flex items-center gap-2 text-xs font-medium ${dm ? 'text-slate-400' : 'text-slate-400'}`}>
-            <span>صفحة {slide.pageNumber} من {totalSlides}</span>
+            <span>{isAr ? `صفحة ${slide.pageNumber} من ${totalSlides}` : `Page ${slide.pageNumber} of ${totalSlides}`}</span>
             <span className={`inline-block w-1 h-1 rounded-full ${dm ? 'bg-slate-600' : 'bg-slate-300'}`} />
-            <span className={`font-semibold ${dm ? 'text-slate-300' : 'text-slate-500'}`}>كثافة المحتوى {slide.densityScore}/5</span>
+            <span className={`font-semibold ${dm ? 'text-slate-300' : 'text-slate-500'}`}>
+              {t('workspace.contentDensity', 'كثافة المحتوى')} {slide.densityScore}/5
+            </span>
           </div>
         </div>
 
@@ -79,7 +83,7 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({ slide, totalSlides, is
               {slide.diagramType === 'table' && <TableIcon className="w-4 h-4 text-purple-400" />}
               {slide.diagramType === 'cycle' && <Layers className="w-4 h-4 text-amber-400" />}
               {slide.diagramType === 'equation' && <BookOpen className="w-4 h-4 text-blue-400" />}
-              <span>النموذج التحليلي: {slide.diagramType}</span>
+              <span>{t('workspace.analyticalModel', 'النموذج التحليلي:')} {slide.diagramType}</span>
             </div>
 
             {slide.diagramType === 'flowchart' && slide.diagramData?.steps && (
@@ -192,13 +196,13 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({ slide, totalSlides, is
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-200' : 'text-[#0F172A]'}`}>
             <CheckCircle2 className="w-4 h-4 text-blue-400" />
-            <span>النقاط الجوهرية للشريحة</span>
+            <span>{isAr ? 'النقاط الجوهرية للشريحة' : 'Slide Key Takeaways'}</span>
             <span className={`text-[10px] font-medium normal-case hidden sm:inline px-2.5 py-0.5 rounded-full border ${dm ? 'text-slate-400 bg-slate-800 border-slate-700' : 'text-slate-500 bg-slate-100 border-slate-200/60'}`}>
-              ملخصة تلقائياً عبر المساعد الذكي
+              {isAr ? 'ملخصة تلقائياً عبر المساعد الذكي' : 'Auto-summarized by AI'}
             </span>
           </div>
           <span className={`text-[11px] ${dm ? 'text-slate-500' : 'text-slate-400'}`}>
-            مفاهيم أساسية للاختبار والمراجعة
+            {isAr ? 'مفاهيم أساسية للاختبار والمراجعة' : 'Core concepts for exam review'}
           </span>
         </div>
 

@@ -114,7 +114,7 @@ class SharedRAGService:
             for pat in patterns:
                 matches = glob.glob(os.path.join(s_dir, pat))
                 for m in matches:
-                    if os.path.isfile(m) and not m.endswith("package.json") and not m.endswith("tsconfig.json"):
+                    if os.path.isfile(m) and os.path.basename(m) not in ("firebase.json", "package.json", "tsconfig.json", "metadata.json"):
                         return m
         return None
 

@@ -5,6 +5,7 @@ import { HomeView } from './components/HomeView';
 import { StudyRoomView } from './components/StudyRoomView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import {
   saveLectureToFirestore,
   getLecturesFromFirestore,
@@ -203,8 +204,10 @@ function AppContent() {
     setTotalFocusPoints(prev => prev + points);
   };
 
+  const { dir } = useLanguage();
+
   return (
-    <div className="w-full h-full min-h-screen bg-[#FAFAF8] dark:bg-[#121417] font-sans antialiased text-[#1E2124] dark:text-[#F3F4F6] transition-colors duration-200">
+    <div dir={dir} className="w-full h-full min-h-screen bg-[#FAFAF8] dark:bg-[#121417] font-sans antialiased text-[#1E2124] dark:text-[#F3F4F6] transition-colors duration-200">
       {currentScreen === 'home' ? (
         <HomeView
           lectures={lectures}
@@ -231,9 +234,11 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }
