@@ -18,6 +18,10 @@ import {
   Edit2,
   Highlighter,
   RotateCcw,
+  RotateCw,
+  Trash2,
+  Maximize2,
+  Minimize2,
   Sparkles,
   HelpCircle,
   CheckCircle2,
@@ -84,6 +88,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   // Annotation states
   const [activeTool, setActiveTool] = useState<'pen' | 'highlighter' | 'eraser' | 'text' | 'none'>('pen');
   const [activeColor, setActiveColor] = useState<string>(PEN_COLOR_OPTIONS[0].color);
+  const [strokeThickness, setStrokeThickness] = useState<number>(3);
   const [pageAnnotations, setPageAnnotations] = useState<PageAnnotationsMap>(() => {
     try {
       const saved = localStorage.getItem(`annotations-${lecture.id}`);
@@ -92,6 +97,62 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       return {};
     }
   });
+  const [redoStack, setRedoStack] = useState<Record<number, AnnotationStroke[]>>({});
+
+  // Full Screen State & Dynamic Fit-to-Screen Scale (Notability style)
+  const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
+
+  const calculateFullScreenScale = useCallback(() => {
+    if (typeof window === 'undefined') return 1;
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+
+    // Available viewport area with balanced margins:
+    // padX: 48px on desktop (24px left/right), 16px on small screens
+    // padY: 76px on desktop (clearance for floating toolbar at top + breathing room at bottom), 60px on small screens
+    const padX = screenW < 640 ? 16 : 48;
+    const padY = screenW < 640 ? 60 : 76;
+
+    const availW = Math.max(300, screenW - padX);
+    const availH = Math.max(200, screenH - padY);
+
+    // Fit to screen preserving the native slide aspect ratio (880 x 620)
+    const fitScale = Math.min(availW / 880, availH / 620);
+
+    // Cap at 1.85 so fonts stay comfortable on 4K/ultra-wide screens, minimum 0.35
+    return Math.min(1.85, Math.max(0.35, fitScale));
+  }, []);
+
+  const [fullScreenScale, setFullScreenScale] = useState<number>(calculateFullScreenScale);
+
+  useEffect(() => {
+    const updateScale = () => {
+      setFullScreenScale(calculateFullScreenScale());
+    };
+    window.addEventListener('resize', updateScale);
+    if (isFullScreen) {
+      updateScale();
+      // Lock background page scroll strictly when in full screen
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      window.removeEventListener('resize', updateScale);
+      document.body.style.overflow = '';
+    };
+  }, [calculateFullScreenScale, isFullScreen]);
+
+  // Escape key to exit full screen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullScreen) {
+        setIsFullScreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullScreen]);
 
   // Modals & Panels
   const [wrapUpModalOpen, setWrapUpModalOpen] = useState(false);
@@ -528,6 +589,11 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         [currentPage]: [...existing, stroke]
       };
     });
+    // Clear redo history when a new stroke is added
+    setRedoStack(prev => ({
+      ...prev,
+      [currentPage]: []
+    }));
     onAddFocusPoints(2);
   };
 
@@ -536,6 +602,11 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     setPageAnnotations(prev => {
       const existing = prev[currentPage] || [];
       if (existing.length === 0) return prev;
+      const lastStroke = existing[existing.length - 1];
+      setRedoStack(rPrev => ({
+        ...rPrev,
+        [currentPage]: [...(rPrev[currentPage] || []), lastStroke]
+      }));
       return {
         ...prev,
         [currentPage]: existing.slice(0, existing.length - 1)
@@ -543,10 +614,50 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     });
   };
 
+  const handleRedoAnnotation = () => {
+    registerEngagement();
+    setRedoStack(rPrev => {
+      const existingRedo = rPrev[currentPage] || [];
+      if (existingRedo.length === 0) return rPrev;
+      const strokeToRestore = existingRedo[existingRedo.length - 1];
+      setPageAnnotations(prev => ({
+        ...prev,
+        [currentPage]: [...(prev[currentPage] || []), strokeToRestore]
+      }));
+      return {
+        ...rPrev,
+        [currentPage]: existingRedo.slice(0, existingRedo.length - 1)
+      };
+    });
+  };
+
+  const handleClearAllAnnotations = () => {
+    const existing = pageAnnotations[currentPage] || [];
+    if (existing.length === 0) return;
+    if (window.confirm(t('workspace.clearConfirm', 'هل أنت متأكد من مسح جميع رسومات هذه الشريحة؟'))) {
+      registerEngagement();
+      setPageAnnotations(prev => ({
+        ...prev,
+        [currentPage]: []
+      }));
+      setRedoStack(rPrev => ({
+        ...rPrev,
+        [currentPage]: []
+      }));
+    }
+  };
+
   const handleEraseStroke = (strokeId: string) => {
     registerEngagement();
     setPageAnnotations(prev => {
       const existing = prev[currentPage] || [];
+      const erased = existing.find(s => s.id === strokeId);
+      if (erased) {
+        setRedoStack(rPrev => ({
+          ...rPrev,
+          [currentPage]: [...(rPrev[currentPage] || []), erased]
+        }));
+      }
       return {
         ...prev,
         [currentPage]: existing.filter(s => s.id !== strokeId)
@@ -787,6 +898,23 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
+
+            {/* زر ملء الشاشة للسلايد */}
+            <div className={`w-px h-4 mx-0.5 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`} />
+            <button
+              type="button"
+              id="header-fullscreen-slide-btn"
+              onClick={() => setIsFullScreen(true)}
+              className={`p-1.5 px-2.5 rounded-xl transition-all flex items-center gap-1.5 font-semibold text-xs ${
+                isDarkMode
+                  ? 'hover:bg-slate-700 text-slate-300 hover:text-white'
+                  : 'hover:bg-white text-slate-600 hover:text-slate-900'
+              }`}
+              title={t('workspace.fullScreen', 'ملء الشاشة')}
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-blue-500" />
+              <span className="hidden sm:inline">{t('workspace.fullScreen', 'ملء الشاشة')}</span>
+            </button>
           </div>
         </div>
 
@@ -865,11 +993,27 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               minHeight: `${(zoomLevel / 100) * 620}px`
             }}
           >
+            {/* Quick Full Screen Button on Slide */}
+            <button
+              type="button"
+              id="quick-fullscreen-slide-btn"
+              onClick={() => setIsFullScreen(true)}
+              className={`absolute top-3.5 ${isAr ? 'left-3.5' : 'right-3.5'} z-30 p-2 rounded-xl border opacity-60 hover:opacity-100 hover:scale-105 transition-all ${
+                isDarkMode
+                  ? 'bg-slate-800/90 border-slate-700 text-slate-200 hover:text-white'
+                  : 'bg-white/90 border-slate-200 text-slate-700 hover:text-slate-950 shadow-xs'
+              }`}
+              title={t('workspace.fullScreen', 'ملء الشاشة')}
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-blue-500" />
+            </button>
+
             <SlideViewer slide={currentSlide} totalSlides={lecture.totalPages} isDarkMode={isDarkMode} />
 
             <AnnotationCanvas
               activeTool={activeTool}
               activeColor={activeColor}
+              strokeWidth={strokeThickness}
               isDarkMode={isDarkMode}
               strokes={pageAnnotations[currentPage] || []}
               onAddStroke={handleAddStroke}
@@ -877,6 +1021,8 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               onEraseStroke={handleEraseStroke}
               width={(zoomLevel / 100) * 880}
               height={(zoomLevel / 100) * 620}
+              baseWidth={880}
+              baseHeight={620}
             />
           </div>
 
@@ -1077,6 +1223,288 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           setCurrentPage(1);
         }}
       />
+
+      {/* ─── 4. FULL SCREEN SLIDE OVERLAY & FLOATING PEN TOOLBAR (NOTABILITY STYLE) ──── */}
+      {isFullScreen && (
+        <div
+          id="fullscreen-slide-overlay"
+          dir={dir}
+          className={`fixed inset-0 z-50 flex flex-col items-center justify-center select-none overflow-hidden animate-in fade-in duration-200 ${
+            isDarkMode ? 'bg-[#070a10]' : 'bg-[#1a202c]'
+          }`}
+          style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}
+        >
+          {/* Floating Notability-style Pill Toolbar */}
+          <div
+            id="fullscreen-pen-toolbar"
+            className="absolute top-2.5 sm:top-3.5 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 backdrop-blur-2xl border border-slate-700/80 shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-2xl p-1.5 px-3 flex items-center gap-1 sm:gap-1.5 text-white max-w-[98vw] overflow-x-auto scrollbar-none animate-in slide-in-from-top-3 duration-150"
+          >
+            {/* التنقل بين السلايدات */}
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                id="fullscreen-prev-slide-btn"
+                onClick={handlePrevPage}
+                disabled={currentPage <= 1}
+                className="p-1 sm:px-2 rounded-xl border border-slate-700/80 hover:bg-slate-800 disabled:opacity-25 disabled:pointer-events-none transition-all flex items-center gap-1 text-xs font-semibold"
+                title={t('workspace.previousSlide', 'الشريحة السابقة')}
+              >
+                {isAr ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+                <span className="hidden md:inline">{t('workspace.previousSlide', 'السابق')}</span>
+              </button>
+
+              <span className="text-xs font-semibold px-2 text-slate-300 whitespace-nowrap">
+                {isAr ? `شريحة ${currentPage} من ${lecture.totalPages}` : `Slide ${currentPage} of ${lecture.totalPages}`}
+              </span>
+
+              <button
+                type="button"
+                id="fullscreen-next-slide-btn"
+                onClick={handleNextPage}
+                disabled={currentPage >= lecture.totalPages}
+                className="p-1 sm:px-2 rounded-xl border border-slate-700/80 hover:bg-slate-800 disabled:opacity-25 disabled:pointer-events-none transition-all flex items-center gap-1 text-xs font-semibold"
+                title={t('workspace.nextSlide', 'الشريحة التالية')}
+              >
+                <span className="hidden md:inline">{t('workspace.nextSlide', 'التالي')}</span>
+                {isAr ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+
+            <div className="w-px h-5 bg-slate-700/80 mx-0.5 shrink-0" />
+
+            {/* أدوات الرسم: قلم، تظليل، ممحاة، نص */}
+            <div className="flex items-center gap-1 shrink-0">
+              {/* قلم */}
+              <button
+                type="button"
+                id="fullscreen-tool-pen-btn"
+                onClick={() => { setActiveTool('pen'); setActiveColor(PEN_COLOR_OPTIONS[0].color); }}
+                className={`p-1.5 px-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold ${
+                  activeTool === 'pen'
+                    ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-400/40'
+                    : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                }`}
+                title={t('workspace.pen', 'قلم')}
+              >
+                <Edit2 className="w-3.5 h-3.5 text-blue-300" />
+                <span className="hidden lg:inline">{t('workspace.pen', 'قلم')}</span>
+              </button>
+
+              {/* تظليل */}
+              <button
+                type="button"
+                id="fullscreen-tool-highlighter-btn"
+                onClick={() => { setActiveTool('highlighter'); setActiveColor(MARKER_COLOR_OPTIONS[0].color); }}
+                className={`p-1.5 px-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold ${
+                  activeTool === 'highlighter'
+                    ? 'bg-amber-500 text-white shadow-xs ring-2 ring-amber-300/40'
+                    : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                }`}
+                title={t('workspace.highlighter', 'تظليل')}
+              >
+                <Highlighter className="w-3.5 h-3.5 text-amber-200" />
+                <span className="hidden lg:inline">{t('workspace.highlighter', 'تظليل')}</span>
+              </button>
+
+              {/* ممحاة */}
+              <button
+                type="button"
+                id="fullscreen-tool-eraser-btn"
+                onClick={() => setActiveTool('eraser')}
+                className={`p-1.5 px-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold ${
+                  activeTool === 'eraser'
+                    ? 'bg-rose-600 text-white shadow-xs ring-2 ring-rose-400/40'
+                    : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                }`}
+                title={t('workspace.eraser', 'ممحاة')}
+              >
+                <Eraser className="w-3.5 h-3.5 text-rose-300" />
+                <span className="hidden lg:inline">{t('workspace.eraser', 'ممحاة')}</span>
+              </button>
+
+              {/* نص */}
+              <button
+                type="button"
+                id="fullscreen-tool-text-btn"
+                onClick={() => { setActiveTool('text'); setActiveColor(PEN_COLOR_OPTIONS[0].color); }}
+                className={`p-1.5 px-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold ${
+                  activeTool === 'text'
+                    ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-400/40'
+                    : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                }`}
+                title={t('workspace.text', 'نص')}
+              >
+                <Type className="w-3.5 h-3.5 text-purple-300" />
+                <span className="hidden lg:inline">{t('workspace.text', 'نص')}</span>
+              </button>
+            </div>
+
+            {/* لوحة الألوان */}
+            {(activeTool === 'pen' || activeTool === 'text' || activeTool === 'none') && (
+              <>
+                <div className="w-px h-5 bg-slate-700/80 mx-0.5 shrink-0" />
+                <div className="flex items-center gap-1.5 px-1 shrink-0">
+                  {PEN_COLOR_OPTIONS.map(opt => (
+                    <div key={opt.id} className="relative group flex flex-col items-center">
+                      <button
+                        type="button"
+                        onClick={() => setActiveColor(opt.color)}
+                        className={`w-4 h-4 rounded-full transition-all ${
+                          activeColor === opt.color ? 'scale-125 ring-2 ring-offset-1 ring-white' : 'opacity-75 hover:opacity-100 hover:scale-110'
+                        }`}
+                        style={{ backgroundColor: opt.color }}
+                        title={isAr ? `${opt.name} - ${opt.meaning}` : `${opt.nameEn || opt.name} - ${opt.meaningEn || opt.meaning}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {activeTool === 'highlighter' && (
+              <>
+                <div className="w-px h-5 bg-slate-700/80 mx-0.5 shrink-0" />
+                <div className="flex items-center gap-1.5 px-1 shrink-0">
+                  {MARKER_COLOR_OPTIONS.map(opt => (
+                    <div key={opt.id} className="relative group flex flex-col items-center">
+                      <button
+                        type="button"
+                        onClick={() => setActiveColor(opt.color)}
+                        className={`w-4 h-4 rounded-full transition-all ${
+                          activeColor === opt.color ? 'scale-125 ring-2 ring-offset-1 ring-white' : 'opacity-75 hover:opacity-100 hover:scale-110'
+                        }`}
+                        style={{ backgroundColor: opt.dotColor }}
+                        title={isAr ? `${opt.name} - ${opt.meaning}` : `${opt.nameEn || opt.name} - ${opt.meaningEn || opt.meaning}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* التحكم بسُمك القلم */}
+            <div className="w-px h-5 bg-slate-700/80 mx-0.5 shrink-0" />
+            <div className="flex items-center gap-1 bg-slate-800/90 p-0.5 rounded-xl border border-slate-700/80 shrink-0">
+              {[
+                { size: 2, label: '2px', titleAr: 'رقيق (2px)', titleEn: 'Thin (2px)', dotClass: 'w-1.5 h-1.5' },
+                { size: 4, label: '4px', titleAr: 'متوسط (4px)', titleEn: 'Medium (4px)', dotClass: 'w-2.5 h-2.5' },
+                { size: 7, label: '7px', titleAr: 'عريض (7px)', titleEn: 'Thick (7px)', dotClass: 'w-3.5 h-3.5' }
+              ].map(item => (
+                <button
+                  key={item.size}
+                  type="button"
+                  onClick={() => setStrokeThickness(item.size)}
+                  className={`px-1.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                    strokeThickness === item.size
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
+                  }`}
+                  title={isAr ? item.titleAr : item.titleEn}
+                >
+                  <span className={`rounded-full bg-current ${item.dotClass}`} />
+                  <span className="hidden sm:inline">{item.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* تراجع، إعادة، مسح الكل */}
+            <div className="w-px h-5 bg-slate-700/80 mx-0.5 shrink-0" />
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                id="fullscreen-undo-btn"
+                onClick={handleUndoAnnotation}
+                disabled={(pageAnnotations[currentPage] || []).length === 0}
+                className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white disabled:opacity-25 disabled:pointer-events-none transition-colors"
+                title={t('workspace.undo', 'تراجع')}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                id="fullscreen-redo-btn"
+                onClick={handleRedoAnnotation}
+                disabled={(redoStack[currentPage] || []).length === 0}
+                className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white disabled:opacity-25 disabled:pointer-events-none transition-colors"
+                title={t('workspace.redo', 'إعادة')}
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                id="fullscreen-clear-btn"
+                onClick={handleClearAllAnnotations}
+                disabled={(pageAnnotations[currentPage] || []).length === 0}
+                className="p-1.5 rounded-xl hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 disabled:opacity-25 disabled:pointer-events-none transition-colors"
+                title={t('workspace.clearAll', 'مسح الكل')}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* زر الخروج من ملء الشاشة */}
+            <div className="w-px h-5 bg-slate-700/80 mx-0.5 shrink-0" />
+            <button
+              type="button"
+              id="exit-fullscreen-btn"
+              onClick={() => setIsFullScreen(false)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-600/90 hover:bg-rose-600 text-white text-xs font-bold transition-all shadow-xs active:scale-95 shrink-0"
+              title={t('workspace.exitFullScreen', 'خروج من ملء الشاشة')}
+            >
+              <Minimize2 className="w-3.5 h-3.5" />
+              <span>{t('workspace.exitFullScreen', 'خروج')}</span>
+              <kbd className="hidden sm:inline text-[10px] px-1 py-0.2 rounded bg-rose-800 text-rose-100 font-mono">Esc</kbd>
+            </button>
+          </div>
+
+          {/* حاوية السلايد المحسوبة بنظام Fit-to-Screen الذكي (مستوحى من Notability) */}
+          <div
+            id="fullscreen-document-sheet"
+            className={`relative rounded-2xl sm:rounded-3xl border shadow-2xl overflow-hidden transition-all duration-150 shrink-0 mt-12 sm:mt-14 ${
+              isDarkMode ? 'border-slate-800/80 bg-[#141b2d]' : 'border-slate-300/80 bg-white'
+            }`}
+            style={{
+              width: `${Math.round(880 * fullScreenScale)}px`,
+              height: `${Math.round(620 * fullScreenScale)}px`
+            }}
+          >
+            <div
+              style={{
+                width: '880px',
+                height: '620px',
+                transform: `scale(${fullScreenScale})`,
+                transformOrigin: 'top left',
+                position: 'absolute',
+                top: 0,
+                left: 0
+              }}
+            >
+              <SlideViewer
+                slide={currentSlide}
+                totalSlides={lecture.totalPages}
+                isDarkMode={isDarkMode}
+              />
+
+              <AnnotationCanvas
+                activeTool={activeTool}
+                activeColor={activeColor}
+                strokeWidth={strokeThickness}
+                isDarkMode={isDarkMode}
+                strokes={pageAnnotations[currentPage] || []}
+                onAddStroke={handleAddStroke}
+                onUpdateStroke={handleUpdateStroke}
+                onEraseStroke={handleEraseStroke}
+                width={880}
+                height={620}
+                baseWidth={880}
+                baseHeight={620}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

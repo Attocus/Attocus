@@ -7,28 +7,40 @@ interface AnnotationCanvasProps {
   activeTool: 'pen' | 'highlighter' | 'eraser' | 'text' | 'none';
   activeColor: string;
   isDarkMode?: boolean;
+  strokeWidth?: number;
   strokes: AnnotationStroke[];
   onAddStroke: (stroke: AnnotationStroke) => void;
   onUpdateStroke?: (stroke: AnnotationStroke) => void;
   onEraseStroke?: (strokeId: string) => void;
   width: number;
   height: number;
+  baseWidth?: number;
+  baseHeight?: number;
 }
 
 export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   activeTool,
   activeColor,
   isDarkMode = false,
+  strokeWidth,
   strokes,
   onAddStroke,
   onUpdateStroke,
   onEraseStroke,
   width,
-  height
+  height,
+  baseWidth,
+  baseHeight
 }) => {
   const { isAr, t } = useLanguage();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // Coordinate scaling relative to base dimensions
+  const baseW = baseWidth || width;
+  const baseH = baseHeight || height;
+  const scaleX = width / baseW;
+  const scaleY = height / baseH;
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
@@ -65,6 +77,9 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
     canvas.height = height * dpr;
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
+
+    ctx.save();
+    ctx.scale(scaleX, scaleY);
 
     const renderSmoothStroke = (
       points: AnnotationPoint[],
@@ -106,10 +121,11 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
 
     // Draw active drawing line
     if (isDrawing && currentPoints.length > 1 && (activeTool === 'pen' || activeTool === 'highlighter')) {
+      const liveWidth = activeTool === 'highlighter' ? (strokeWidth ? Math.max(16, strokeWidth * 5) : 22) : (strokeWidth || 3);
       renderSmoothStroke(
         currentPoints,
         activeColor,
-        activeTool === 'highlighter' ? 22 : 2.5,
+        liveWidth,
         activeTool === 'highlighter' ? 0.35 : 0.85,
         activeTool === 'highlighter'
       );
@@ -127,9 +143,11 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       ctx.stroke();
       ctx.restore();
     }
-  }, [drawingStrokes, currentPoints, isDrawing, width, height, activeColor, activeTool, isDarkMode]);
 
-  // Hit test for eraser
+    ctx.restore();
+  }, [drawingStrokes, currentPoints, isDrawing, width, height, activeColor, activeTool, isDarkMode, strokeWidth, scaleX, scaleY]);
+
+  // Hit test for eraser (in base coordinates)
   const hitTestEraser = (x: number, y: number) => {
     const ERASER_RADIUS = 20;
     // Check text strokes first
@@ -153,16 +171,18 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
     if (activeTool === 'none') return;
 
     const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    if (!rect || rect.width === 0 || rect.height === 0) return;
+    const dynScaleX = rect.width / baseW;
+    const dynScaleY = rect.height / baseH;
+    const x = (e.clientX - rect.left) / dynScaleX;
+    const y = (e.clientY - rect.top) / dynScaleY;
 
     if (activeTool === 'text') {
-      // Create a brand new interactive text box at click position
+      // Create a brand new interactive text box at click position (in base coordinates)
       const boxW = 200;
       const boxH = 64;
-      const clampedX = Math.max(10, Math.min(x - 20, width - boxW - 10));
-      const clampedY = Math.max(10, Math.min(y - 15, height - boxH - 10));
+      const clampedX = Math.max(10, Math.min(x - 20, baseW - boxW - 10));
+      const clampedY = Math.max(10, Math.min(y - 15, baseH - boxH - 10));
 
       const newStroke: AnnotationStroke = {
         id: `text-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
@@ -198,9 +218,11 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing || activeTool === 'none') return;
     const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    if (!rect || rect.width === 0 || rect.height === 0) return;
+    const dynScaleX = rect.width / baseW;
+    const dynScaleY = rect.height / baseH;
+    const x = (e.clientX - rect.left) / dynScaleX;
+    const y = (e.clientY - rect.top) / dynScaleY;
 
     if (activeTool === 'eraser') {
       const hit = hitTestEraser(x, y);
@@ -213,11 +235,15 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   const handlePointerUp = () => {
     if (!isDrawing) return;
     if ((activeTool === 'pen' || activeTool === 'highlighter') && currentPoints.length > 1) {
+      const finalWidth = activeTool === 'highlighter'
+        ? (strokeWidth ? Math.max(16, strokeWidth * 5) : 22)
+        : (strokeWidth || 3);
+
       const newStroke: AnnotationStroke = {
         id: `stroke-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
         tool: activeTool,
         color: activeColor,
-        width: activeTool === 'highlighter' ? 22 : 2.5,
+        width: finalWidth,
         opacity: activeTool === 'highlighter' ? 0.35 : 0.85,
         points: currentPoints
       };
@@ -259,18 +285,22 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   // Global window listeners for drag & resize
   useEffect(() => {
     const handleWindowPointerMove = (e: PointerEvent) => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      const dynScaleX = rect && rect.width > 0 ? rect.width / baseW : scaleX;
+      const dynScaleY = rect && rect.height > 0 ? rect.height / baseH : scaleY;
+
       if (draggingTextId) {
         const stroke = textStrokes.find(s => s.id === draggingTextId);
         if (!stroke) return;
-        const deltaX = e.clientX - dragStartPosRef.current.mouseX;
-        const deltaY = e.clientY - dragStartPosRef.current.mouseY;
+        const deltaX = (e.clientX - dragStartPosRef.current.mouseX) / dynScaleX;
+        const deltaY = (e.clientY - dragStartPosRef.current.mouseY) / dynScaleY;
 
         const currentW = stroke.boxWidth ?? dragStartPosRef.current.initialW;
         const currentH = stroke.boxHeight ?? dragStartPosRef.current.initialH;
 
-        // Keep strictly within workspace bounds
-        const newX = Math.max(0, Math.min(dragStartPosRef.current.initialX + deltaX, width - currentW));
-        const newY = Math.max(0, Math.min(dragStartPosRef.current.initialY + deltaY, height - currentH));
+        // Keep strictly within workspace bounds in base units
+        const newX = Math.max(0, Math.min(dragStartPosRef.current.initialX + deltaX, baseW - currentW));
+        const newY = Math.max(0, Math.min(dragStartPosRef.current.initialY + deltaY, baseH - currentH));
 
         if (onUpdateStroke) {
           onUpdateStroke({
@@ -283,15 +313,15 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       } else if (resizingTextId) {
         const stroke = textStrokes.find(s => s.id === resizingTextId);
         if (!stroke) return;
-        const deltaX = e.clientX - dragStartPosRef.current.mouseX;
-        const deltaY = e.clientY - dragStartPosRef.current.mouseY;
+        const deltaX = (e.clientX - dragStartPosRef.current.mouseX) / dynScaleX;
+        const deltaY = (e.clientY - dragStartPosRef.current.mouseY) / dynScaleY;
 
         const curX = stroke.textX ?? 0;
         const curY = stroke.textY ?? 0;
 
-        // Resizing dimensions (minimum 120x40, max within sheet)
-        const newW = Math.max(120, Math.min(dragStartPosRef.current.initialW + deltaX, width - curX));
-        const newH = Math.max(40, Math.min(dragStartPosRef.current.initialH + deltaY, height - curY));
+        // Resizing dimensions in base units
+        const newW = Math.max(120, Math.min(dragStartPosRef.current.initialW + deltaX, baseW - curX));
+        const newH = Math.max(40, Math.min(dragStartPosRef.current.initialH + deltaY, baseH - curY));
 
         if (onUpdateStroke) {
           onUpdateStroke({
@@ -316,7 +346,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       window.removeEventListener('pointermove', handleWindowPointerMove);
       window.removeEventListener('pointerup', handleWindowPointerUp);
     };
-  }, [draggingTextId, resizingTextId, textStrokes, width, height, onUpdateStroke]);
+  }, [draggingTextId, resizingTextId, textStrokes, baseW, baseH, scaleX, scaleY, onUpdateStroke]);
 
   // Adjust font size
   const handleScaleFont = (stroke: AnnotationStroke, delta: number) => {
@@ -385,11 +415,11 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       {/* 2. Interactive Text Elements Layer */}
       {textStrokes.map(stroke => {
         const isSelected = selectedTextId === stroke.id;
-        const boxX = stroke.textX ?? 20;
-        const boxY = stroke.textY ?? 20;
-        const boxW = stroke.boxWidth ?? 200;
-        const boxH = stroke.boxHeight ?? 60;
-        const fontSize = stroke.fontSize ?? 15;
+        const boxX = (stroke.textX ?? 20) * scaleX;
+        const boxY = (stroke.textY ?? 20) * scaleY;
+        const boxW = (stroke.boxWidth ?? 200) * scaleX;
+        const boxH = (stroke.boxHeight ?? 60) * scaleY;
+        const fontSize = (stroke.fontSize ?? 15) * Math.min(scaleX, scaleY);
         const textColor = stroke.color || (isDarkMode ? '#F8FAFC' : '#0F172A');
 
         return (
