@@ -353,11 +353,11 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
 
   if (isCollapsed) {
     return (
-      <aside className="w-12 h-full border-r border-[#E6E8E2] bg-[#FDFDFC] flex flex-col items-center py-3 select-none shrink-0 transition-all duration-300">
+      <aside className="w-12 h-full border-r border-[#E6E8E2] dark:border-[#2E3339] bg-[#FDFDFC] dark:bg-[#16181B] flex flex-col items-center py-3 select-none shrink-0 transition-all duration-300">
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="p-2 rounded-lg hover:bg-[#F2F4F0] text-[#555A60] transition-colors mb-4"
+          className="p-2 rounded-lg hover:bg-[#F2F4F0] dark:hover:bg-[#252930] text-[#555A60] dark:text-[#9AA0A6] transition-colors mb-4"
           title="Expand Sidebar"
         >
           <PanelLeftOpen className="w-5 h-5" />
@@ -372,8 +372,8 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                 type="button"
                 onClick={() => onSelectPage(slide.pageNumber)}
                 className={`w-8 h-8 rounded-md flex items-center justify-center text-xs font-mono transition-all ${isCurrent
-                  ? 'bg-[#2E7D32] text-white font-bold'
-                  : 'bg-[#E5E7E2] text-[#555A60] hover:bg-[#DCDED8]'
+                  ? 'bg-[#2E7D32] dark:bg-[#1B5E20] text-white font-bold'
+                  : 'bg-[#E5E7E2] dark:bg-[#252930] text-[#555A60] dark:text-[#CBD5E1] hover:bg-[#DCDED8] dark:hover:bg-[#31363F]'
                   }`}
                 title={`Slide ${slide.pageNumber}: ${slide.title}`}
               >
@@ -387,16 +387,16 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
   }
 
   return (
-    <aside className="w-80 h-full border-r border-[#E6E8E2] bg-[#FDFDFC] flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all duration-300">
-      <div className="p-3 border-b border-[#E8EAE4] bg-[#F7F8F5] flex items-center justify-between">
-        <span className="text-xs font-bold text-[#3D4247] uppercase tracking-wider">
+    <aside className="w-80 h-full border-r border-[#E6E8E2] dark:border-[#2E3339] bg-[#FDFDFC] dark:bg-[#16181B] flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all duration-300">
+      <div className="p-3 border-b border-[#E8EAE4] dark:border-[#2E3339] bg-[#F7F8F5] dark:bg-[#1A1D22] flex items-center justify-between">
+        <span className="text-xs font-bold text-[#3D4247] dark:text-[#E2E4E8] uppercase tracking-wider">
           Study Workspace
         </span>
         {onToggleCollapse && (
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="p-1.5 rounded-md hover:bg-[#EAECE6] text-[#555A60] transition-colors flex items-center gap-1 text-xs"
+            className="p-1.5 rounded-md hover:bg-[#EAECE6] dark:hover:bg-[#252930] text-[#555A60] dark:text-[#9AA0A6] transition-colors flex items-center gap-1 text-xs"
             title="Collapse Sidebar"
           >
             <PanelLeftClose className="w-4 h-4" />
@@ -405,7 +405,7 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
         )}
       </div>
 
-      <div className="p-4 border-b border-[#E8EAE4] bg-white">
+      <div className="p-4 border-b border-[#E8EAE4] dark:border-[#2E3339] bg-white dark:bg-[#1A1D22]">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <span
@@ -422,7 +422,7 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                         : 'bg-[#9E9E9E]'
                 }`}
             />
-            <span className="text-xs font-semibold text-[#303336] tracking-tight">
+            <span className="text-xs font-semibold text-[#303336] dark:text-[#E2E4E8] tracking-tight">
               {cameraActive
                 ? (detectedState === 'using_phone' || isPhoneVisible)
                   ? 'Phone Detected 📱'
@@ -447,17 +447,17 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                 onToggleCamera();
               }
             }}
-            className="text-xs px-2.5 py-1 rounded-md border border-[#D9DCD4] hover:bg-[#F4F5F1] text-[#4A4E53] font-medium transition-colors flex items-center gap-1.5"
+            className="text-xs px-2.5 py-1 rounded-md border border-[#D9DCD4] dark:border-[#2E3339] hover:bg-[#F4F5F1] dark:hover:bg-[#252930] text-[#4A4E53] dark:text-[#CBD5E1] font-medium transition-colors flex items-center gap-1.5"
             title={cameraActive ? 'Switch off camera monitoring' : 'Enable attention monitoring'}
           >
             {cameraActive ? (
               <>
-                <VideoOff className="w-3 h-3 text-[#B71C1C]" />
+                <VideoOff className="w-3 h-3 text-[#B71C1C] dark:text-[#F87171]" />
                 <span>Turn Off</span>
               </>
             ) : (
               <>
-                <Video className="w-3 h-3 text-[#2E7D32]" />
+                <Video className="w-3 h-3 text-[#2E7D32] dark:text-[#4ADE80]" />
                 <span>Enable</span>
               </>
             )}
@@ -518,10 +518,10 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-[#D5D8D0] p-4 bg-[#F9FAF7] text-center">
-            <VideoOff className="w-5 h-5 text-[#8D9299] mx-auto mb-1.5" />
-            <p className="text-xs text-[#52575D] font-medium">Camera tracking paused</p>
-            <p className="text-[11px] text-[#7A8086] mt-0.5 leading-snug">
+          <div className="rounded-xl border border-dashed border-[#D5D8D0] dark:border-[#2E3339] p-4 bg-[#F9FAF7] dark:bg-[#121417] text-center">
+            <VideoOff className="w-5 h-5 text-[#8D9299] dark:text-[#9AA0A6] mx-auto mb-1.5" />
+            <p className="text-xs text-[#52575D] dark:text-[#E2E4E8] font-medium">Camera tracking paused</p>
+            <p className="text-[11px] text-[#7A8086] dark:text-[#9AA0A6] mt-0.5 leading-snug">
               Monitors attention, phone distraction, and fatigue.
             </p>
             <button
@@ -534,7 +534,7 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                   onToggleCamera();
                 }
               }}
-              className="mt-2.5 text-xs px-3 py-1.5 rounded-md bg-[#25282A] text-white hover:bg-[#383C40] transition-colors font-medium inline-flex items-center gap-1"
+              className="mt-2.5 text-xs px-3 py-1.5 rounded-md bg-[#25282A] dark:bg-[#1B5E20] text-white hover:bg-[#383C40] dark:hover:bg-[#2E7D32] transition-colors font-medium inline-flex items-center gap-1"
             >
               <Video className="w-3 h-3" />
               <span>Start Attention Monitor</span>
@@ -543,22 +543,22 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
         )}
 
         {cameraActive && (
-          <div className="mt-2.5 pt-2 border-t border-[#ECEEE8] flex items-center justify-between text-[11px] text-[#6D7278]">
+          <div className="mt-2.5 pt-2 border-t border-[#ECEEE8] dark:border-[#2E3339] flex items-center justify-between text-[11px] text-[#6D7278] dark:text-[#9AA0A6]">
             <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#2E7D32]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[#2E7D32] dark:bg-[#4ADE80]" />
               <span>Camera monitoring active</span>
             </span>
-            <span className="text-[10px] text-[#8C9298]">On-device</span>
+            <span className="text-[10px] text-[#8C9298] dark:text-[#6B7280]">On-device</span>
           </div>
         )}
       </div>
 
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="p-3 border-b border-[#E8EAE4] bg-[#F7F8F5] flex items-center justify-between">
-          <span className="text-xs font-semibold text-[#454A50] tracking-wide uppercase">
+        <div className="p-3 border-b border-[#E8EAE4] dark:border-[#2E3339] bg-[#F7F8F5] dark:bg-[#1A1D22] flex items-center justify-between">
+          <span className="text-xs font-semibold text-[#454A50] dark:text-[#E2E4E8] tracking-wide uppercase">
             Contents & Topics
           </span>
-          <span className="text-xs text-[#7B8188]">
+          <span className="text-xs text-[#7B8188] dark:text-[#9AA0A6]">
             {slides.length} slides
           </span>
         </div>
@@ -573,14 +573,14 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                 type="button"
                 onClick={() => onSelectPage(slide.pageNumber)}
                 className={`w-full text-left p-2.5 rounded-lg transition-all flex items-start gap-2.5 ${isCurrent
-                  ? 'bg-[#EDF2EC] border border-[#CDE0CC] text-[#1E3A24]'
-                  : 'hover:bg-[#F2F4F0] border border-transparent text-[#383D42]'
+                  ? 'bg-[#EDF2EC] dark:bg-[#1E3A24] border border-[#CDE0CC] dark:border-[#2E7D32] text-[#1E3A24] dark:text-[#86EFAC]'
+                  : 'hover:bg-[#F2F4F0] dark:hover:bg-[#22262C] border border-transparent text-[#383D42] dark:text-[#CBD5E1]'
                   }`}
               >
                 <div
                   className={`w-5 h-5 rounded-md flex items-center justify-center text-xs font-mono shrink-0 mt-0.5 ${isCurrent
-                    ? 'bg-[#2E7D32] text-white font-bold'
-                    : 'bg-[#E5E7E2] text-[#555A60]'
+                    ? 'bg-[#2E7D32] dark:bg-[#1B5E20] text-white font-bold'
+                    : 'bg-[#E5E7E2] dark:bg-[#252930] text-[#555A60] dark:text-[#CBD5E1]'
                     }`}
                 >
                   {slide.pageNumber}
@@ -590,14 +590,14 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                   <div className="text-xs font-medium truncate leading-snug">
                     {slide.title}
                   </div>
-                  <div className="text-[11px] text-[#697076] truncate mt-0.5 flex items-center gap-1.5">
+                  <div className="text-[11px] text-[#697076] dark:text-[#9AA0A6] truncate mt-0.5 flex items-center gap-1.5">
                     <span className="inline-block w-1 h-1 rounded-full bg-[#A8ADB2]" />
                     <span>{slide.topic}</span>
                   </div>
                 </div>
 
                 {isCurrent && (
-                  <ChevronRight className="w-3.5 h-3.5 text-[#2E7D32] shrink-0 mt-1" />
+                  <ChevronRight className="w-3.5 h-3.5 text-[#2E7D32] dark:text-[#4ADE80] shrink-0 mt-1" />
                 )}
               </button>
             );
@@ -605,8 +605,8 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
         </div>
       </div>
 
-      <div className="p-3 border-t border-[#E8EAE4] bg-[#F7F8F5] text-[11px] text-[#71777E] flex items-center gap-2">
-        <ShieldCheck className="w-3.5 h-3.5 text-[#546E7A] shrink-0" />
+      <div className="p-3 border-t border-[#E8EAE4] dark:border-[#2E3339] bg-[#F7F8F5] dark:bg-[#1A1D22] text-[11px] text-[#71777E] dark:text-[#9AA0A6] flex items-center gap-2">
+        <ShieldCheck className="w-3.5 h-3.5 text-[#546E7A] dark:text-[#94A3B8] shrink-0" />
         <span className="leading-tight">
           Private study room · Annotations & video never stored
         </span>

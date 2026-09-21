@@ -128,7 +128,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
   return (
     <div
       id="pomodoro-timer-bar"
-      className="flex items-center gap-2 bg-[#F5F7F3] px-2.5 py-1 rounded-xl border border-[#DCE0D6] select-none text-xs font-mono"
+      className="flex items-center gap-2 bg-[#F5F7F3] dark:bg-[#22262C] px-2.5 py-1 rounded-xl border border-[#DCE0D6] dark:border-[#2E3339] select-none text-xs font-mono"
     >
       {/* Mode Indicator Button */}
       <button
@@ -137,7 +137,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
         onClick={() => switchMode(mode === 'focus' ? 'short_break' : 'focus')}
         className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors flex items-center gap-1 ${
           mode === 'focus'
-            ? 'bg-[#2E7D32] text-white'
+            ? 'bg-[#2E7D32] dark:bg-[#1B5E20] text-white'
             : 'bg-[#B45309] text-white'
         }`}
         title="Click to toggle between Focus & Break"
@@ -156,17 +156,17 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
       </button>
 
       {/* Countdown Timer */}
-      <span className="font-bold text-[#1C2023] tracking-wider px-1 text-xs sm:text-sm">
+      <span className="font-bold text-[#1C2023] dark:text-[#F1F3F5] tracking-wider px-1 text-xs sm:text-sm">
         {formattedTime}
       </span>
 
       {/* Controls */}
-      <div className="flex items-center gap-0.5 border-l border-[#D6DAD0] pl-1.5">
+      <div className="flex items-center gap-0.5 border-l border-[#D6DAD0] dark:border-[#2E3339] pl-1.5">
         <button
           type="button"
           id="pomodoro-play-pause-btn"
           onClick={toggleRun}
-          className="w-6 h-6 rounded-md hover:bg-white flex items-center justify-center text-[#2E7D32] transition-colors"
+          className="w-6 h-6 rounded-md hover:bg-white dark:hover:bg-[#1A1D22] flex items-center justify-center text-[#2E7D32] dark:text-[#4ADE80] transition-colors"
           title={isRunning ? 'Pause Pomodoro' : 'Start Pomodoro'}
         >
           {isRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-current" />}
@@ -176,7 +176,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
           type="button"
           id="pomodoro-reset-btn"
           onClick={resetTimer}
-          className="w-6 h-6 rounded-md hover:bg-white flex items-center justify-center text-[#6B7279] transition-colors"
+          className="w-6 h-6 rounded-md hover:bg-white dark:hover:bg-[#1A1D22] flex items-center justify-center text-[#6B7279] dark:text-[#9AA0A6] transition-colors"
           title="Reset timer"
         >
           <RotateCcw className="w-2.5 h-2.5" />
@@ -186,7 +186,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
       {/* Cycle Count */}
       {completedCycles > 0 && (
         <span
-          className="hidden sm:inline-flex text-[10px] text-[#555C62] bg-[#EAECE6] px-1.5 py-0.5 rounded-md font-sans font-medium ml-0.5"
+          className="hidden sm:inline-flex text-[10px] text-[#555C62] dark:text-[#CBD5E1] bg-[#EAECE6] dark:bg-[#1A1D22] px-1.5 py-0.5 rounded-md font-sans font-medium ml-0.5"
           title={`${completedCycles} Pomodoros completed for this file`}
         >
           🍅 {completedCycles}
@@ -195,3 +195,4 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
     </div>
   );
 };
+

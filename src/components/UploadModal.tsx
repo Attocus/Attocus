@@ -137,23 +137,23 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   return (
     <div
       id="upload-modal-overlay"
-      className="fixed inset-0 z-50 bg-black/45 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 bg-black/50 dark:bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
     >
       <div
         id="upload-modal-card"
-        className="bg-[#FAFAF8] rounded-2xl border border-[#E0E2DC] shadow-xl w-full max-w-lg overflow-hidden text-[#202326] transition-all"
+        className="bg-[#FAFAF8] dark:bg-[#1A1D22] rounded-2xl border border-[#E0E2DC] dark:border-[#2E3339] shadow-xl w-full max-w-lg overflow-hidden text-[#202326] dark:text-[#F1F3F5] transition-all"
       >
         {/* Header */}
-        <div className="p-5 border-b border-[#E8EAE4] bg-white flex items-center justify-between">
+        <div className="p-5 border-b border-[#E8EAE4] dark:border-[#2E3339] bg-white dark:bg-[#16181B] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#E8F0E6] text-[#2E7D32] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-[#E8F0E6] dark:bg-[#1E3A24] text-[#2E7D32] dark:text-[#4ADE80] flex items-center justify-center">
               <Upload className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-serif font-bold text-[#1A1D20]">
+              <h3 className="text-sm font-serif font-bold text-[#1A1D20] dark:text-[#F1F3F5]">
                 Upload Lecture Material
               </h3>
-              <p className="text-[11px] text-[#697076]">
+              <p className="text-[11px] text-[#697076] dark:text-[#9AA0A6]">
                 Upload your PDF lecture slides or course document
               </p>
             </div>
@@ -163,7 +163,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             type="button"
             id="close-upload-modal-btn"
             onClick={onClose}
-            className="w-7 h-7 rounded-lg hover:bg-[#EFF1EB] flex items-center justify-center text-[#6E747B]"
+            className="w-7 h-7 rounded-lg hover:bg-[#EFF1EB] dark:hover:bg-[#252930] flex items-center justify-center text-[#6E747B] dark:text-[#9AA0A6]"
           >
             <X className="w-4 h-4" />
           </button>
@@ -173,9 +173,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         <div className="p-6">
           {isProcessing ? (
             <div className="py-12 text-center space-y-3">
-              <Loader2 className="w-8 h-8 text-[#2E7D32] animate-spin mx-auto" />
-              <div className="text-sm font-medium text-[#1E2225]">{progressStatus}</div>
-              <p className="text-xs text-[#6B7279]">Rendering ultra-crisp slides and extracting concepts...</p>
+              <Loader2 className="w-8 h-8 text-[#2E7D32] dark:text-[#4ADE80] animate-spin mx-auto" />
+              <div className="text-sm font-medium text-[#1E2225] dark:text-[#F1F3F5]">{progressStatus}</div>
+              <p className="text-xs text-[#6B7279] dark:text-[#9AA0A6]">Rendering ultra-crisp slides and extracting concepts...</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -189,8 +189,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 onClick={() => fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
                   isDragging
-                    ? 'border-[#2E7D32] bg-[#F0F6EE]'
-                    : 'border-[#D5D8D0] bg-white hover:border-[#2E7D32]/60 hover:bg-[#F9FAF7]'
+                    ? 'border-[#2E7D32] dark:border-[#4ADE80] bg-[#F0F6EE] dark:bg-[#1E3A24]/40'
+                    : 'border-[#D5D8D0] dark:border-[#2E3339] bg-white dark:bg-[#16181B] hover:border-[#2E7D32]/60 dark:hover:border-[#4ADE80]/60 hover:bg-[#F9FAF7] dark:hover:bg-[#20242B]'
                 }`}
               >
                 <input
@@ -205,18 +205,18 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   id="modal-pdf-file-picker"
                 />
 
-                <div className="w-12 h-12 rounded-2xl bg-[#E8F0E6] text-[#2E7D32] flex items-center justify-center mx-auto mb-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#E8F0E6] dark:bg-[#1E3A24] text-[#2E7D32] dark:text-[#4ADE80] flex items-center justify-center mx-auto mb-3">
                   <FileText className="w-6 h-6" />
                 </div>
 
-                <h4 className="text-sm font-serif font-bold text-[#1C2023]">
+                <h4 className="text-sm font-serif font-bold text-[#1C2023] dark:text-[#F1F3F5]">
                   Select or drag your PDF here
                 </h4>
-                <p className="text-xs text-[#646A71] mt-1 max-w-xs mx-auto leading-relaxed">
+                <p className="text-xs text-[#646A71] dark:text-[#9AA0A6] mt-1 max-w-xs mx-auto leading-relaxed">
                   Supports multi-page university lecture slides, presentation PDFs, and course handouts.
                 </p>
 
-                <div className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2E7D32] text-white text-xs font-medium shadow-xs hover:bg-[#256629] transition-colors">
+                <div className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2E7D32] dark:bg-[#1B5E20] text-white text-xs font-medium shadow-xs hover:bg-[#256629] dark:hover:bg-[#2E7D32] transition-colors">
                   <Upload className="w-3.5 h-3.5" />
                   <span>Choose PDF File</span>
                 </div>
@@ -228,3 +228,4 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     </div>
   );
 };
+

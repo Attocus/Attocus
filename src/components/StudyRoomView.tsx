@@ -17,6 +17,7 @@ import {
   ZoomOut,
   Edit2,
   Highlighter,
+  Eraser,
   RotateCcw,
   Sparkles,
   HelpCircle,
@@ -41,6 +42,7 @@ import { PhoneAlertModal } from './PhoneAlertModal';
 import { SleepingAlertModal } from './SleepingAlertModal';
 import { AwayAlertModal } from './AwayAlertModal';
 import { UploadModal } from './UploadModal';
+import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from '../contexts/AuthContext';
 import {
   saveAnnotationsToFirestore,
@@ -72,8 +74,8 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   // Sidebar collapse state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
 
-  // Annotation states: 3 Pens, 4 Markers, Undo
-  const [activeTool, setActiveTool] = useState<'pen' | 'highlighter' | 'none'>('pen');
+  // Annotation states: 3 Pens, 4 Markers, Eraser, Undo
+  const [activeTool, setActiveTool] = useState<'pen' | 'highlighter' | 'eraser' | 'none'>('pen');
   const [activeColor, setActiveColor] = useState<string>(PEN_COLOR_OPTIONS[0].color);
   const [pageAnnotations, setPageAnnotations] = useState<PageAnnotationsMap>(() => {
     try {
@@ -593,6 +595,14 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     });
   };
 
+  const handleEraseStrokes = (updatedStrokes: AnnotationStroke[]) => {
+    registerEngagement();
+    setPageAnnotations(prev => ({
+      ...prev,
+      [currentPage]: updatedStrokes
+    }));
+  };
+
   // Stuck Intervention Actions
   const handleDeclineStillReading = () => {
     // Snooze automated coach intervention for 45s so student can keep reading calmly
@@ -662,19 +672,19 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
 
   return (
     <div
-      className="h-screen w-screen bg-[#F4F5F1] text-[#202326] flex flex-col overflow-hidden selection:bg-[#E8F0E6]"
+      className="h-screen w-screen bg-[#F4F5F1] dark:bg-[#121417] text-[#202326] dark:text-[#F3F4F6] flex flex-col overflow-hidden selection:bg-[#E8F0E6] dark:selection:bg-[#1E3A2F] transition-colors duration-200"
       onMouseMove={registerEngagement}
       onKeyDown={registerEngagement}
     >
       {/* 1. TOP HEADER TOOLBAR */}
-      <header className="h-14 bg-white border-b border-[#E2E5DC] px-4 flex items-center justify-between shrink-0 select-none z-30 shadow-2xs">
+      <header className="h-14 bg-white dark:bg-[#1A1D22] border-b border-[#E2E5DC] dark:border-[#2E3339] px-4 flex items-center justify-between shrink-0 select-none z-30 shadow-2xs transition-colors duration-200">
         {/* Left: Back + Document Title */}
         <div className="flex items-center gap-3 min-w-0">
           <button
             type="button"
             id="study-room-back-btn"
             onClick={onReturnHome}
-            className="w-8 h-8 rounded-lg hover:bg-[#F2F4F0] flex items-center justify-center text-[#585E64] transition-colors"
+            className="w-8 h-8 rounded-lg hover:bg-[#F2F4F0] dark:hover:bg-[#252930] flex items-center justify-center text-[#585E64] dark:text-[#9AA0A6] transition-colors"
             title="Return to Home"
           >
             <ChevronLeft className="w-5 h-5" />
@@ -682,21 +692,21 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
 
           <div className="min-w-0 pr-2">
             <div className="flex items-center gap-2">
-              <h1 className="text-xs sm:text-sm font-serif font-bold text-[#191C1E] truncate max-w-[180px] sm:max-w-xs">
+              <h1 className="text-xs sm:text-sm font-serif font-bold text-[#191C1E] dark:text-[#F1F3F5] truncate max-w-[180px] sm:max-w-xs">
                 {lecture.title}
               </h1>
               <button
                 type="button"
                 id="study-room-upload-btn"
                 onClick={() => setUploadModalOpen(true)}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-[#2E7D32] bg-[#E8F0E6] hover:bg-[#DCE8D8] transition-colors shrink-0 cursor-pointer"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-[#2E7D32] dark:text-[#4ADE80] bg-[#E8F0E6] dark:bg-[#1E3A24] hover:bg-[#DCE8D8] dark:hover:bg-[#274A30] transition-colors shrink-0 cursor-pointer"
                 title="Upload or switch lecture slides"
               >
                 <Upload className="w-3 h-3" />
                 <span className="hidden sm:inline">Upload File</span>
               </button>
             </div>
-            <p className="text-[10px] text-[#71777E] truncate">
+            <p className="text-[10px] text-[#71777E] dark:text-[#9AA0A6] truncate">
               {lecture.subject} · {currentSlide.topic}
             </p>
           </div>
@@ -711,7 +721,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           />
 
           {/* Annotation Tools: 4 Pens, 4 Markers, Undo */}
-          <div className="flex items-center bg-[#F4F6F2] p-1 rounded-xl border border-[#DCE0D6] gap-1">
+          <div className="flex items-center bg-[#F4F6F2] dark:bg-[#22262C] p-1 rounded-xl border border-[#DCE0D6] dark:border-[#2E3339] gap-1">
             {/* Pen Tool Toggle */}
             <button
               type="button"
@@ -722,12 +732,12 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               }}
               className={`px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
                 activeTool === 'pen'
-                  ? 'bg-white text-[#1D2023] shadow-xs'
-                  : 'text-[#61686F] hover:text-[#222629]'
+                  ? 'bg-white dark:bg-[#1A1D22] text-[#1D2023] dark:text-[#F1F3F5] shadow-xs'
+                  : 'text-[#61686F] dark:text-[#9AA0A6] hover:text-[#222629] dark:hover:text-[#F1F3F5]'
               }`}
               title="Pen (4 colors: Key Pen = Key Highlight, Red = Needs Review, Green = Understood, Blue = Exam Revision)"
             >
-              <Edit2 className="w-3.5 h-3.5 text-[#2E7D32]" />
+              <Edit2 className="w-3.5 h-3.5 text-[#2E7D32] dark:text-[#4ADE80]" />
               <span className="hidden sm:inline">Pen</span>
             </button>
 
@@ -741,14 +751,43 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               }}
               className={`px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
                 activeTool === 'highlighter'
-                  ? 'bg-white text-[#1D2023] shadow-xs'
-                  : 'text-[#61686F] hover:text-[#222629]'
+                  ? 'bg-white dark:bg-[#1A1D22] text-[#1D2023] dark:text-[#F1F3F5] shadow-xs'
+                  : 'text-[#61686F] dark:text-[#9AA0A6] hover:text-[#222629] dark:hover:text-[#F1F3F5]'
               }`}
               title="Marker (4 colors: Yellow = Key Highlight, Green = Understood, Blue = Exam Revision, Red = Needs Review)"
             >
-              <Highlighter className="w-3.5 h-3.5 text-[#B8860B]" />
+              <Highlighter className="w-3.5 h-3.5 text-[#B8860B] dark:text-[#FBBF24]" />
               <span className="hidden sm:inline">Marker</span>
             </button>
+
+            {/* Eraser Tool Toggle (مساحة) */}
+            <button
+              type="button"
+              id="annotation-tool-eraser-btn"
+              onClick={() => setActiveTool('eraser')}
+              className={`px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
+                activeTool === 'eraser'
+                  ? 'bg-white dark:bg-[#1A1D22] text-[#1D2023] dark:text-[#F1F3F5] shadow-xs'
+                  : 'text-[#61686F] dark:text-[#9AA0A6] hover:text-[#222629] dark:hover:text-[#F1F3F5]'
+              }`}
+              title="Eraser (مساحة: click or drag across annotations to erase)"
+            >
+              <Eraser className="w-3.5 h-3.5 text-[#E11D48] dark:text-[#FB7185]" />
+              <span className="hidden sm:inline">Eraser</span>
+            </button>
+
+            {/* Clear All option when Eraser is active */}
+            {activeTool === 'eraser' && (pageAnnotations[currentPage] || []).length > 0 && (
+              <button
+                type="button"
+                id="annotation-tool-clear-all-btn"
+                onClick={() => handleEraseStrokes([])}
+                className="px-1.5 py-0.5 text-[10px] text-[#DC2626] dark:text-[#F87171] hover:bg-[#FEE2E2]/60 dark:hover:bg-[#EF4444]/20 rounded font-medium transition-colors cursor-pointer"
+                title="مسح كل الرسومات في هذه الصفحة (Clear all annotations on this slide)"
+              >
+                Clear All
+              </button>
+            )}
 
             {/* 4 Pens Palette (Key Pen: Key Highlight, Red: Needs Review, Green: Understood, Blue: Exam Revision) */}
             {activeTool === 'pen' && (
@@ -797,7 +836,9 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                 <span>
                   {activeTool === 'pen'
                     ? (PEN_COLOR_OPTIONS.find(p => p.color === activeColor)?.name || 'Key Pen')
-                    : (MARKER_COLOR_OPTIONS.find(m => m.color === activeColor)?.name || 'Marker')}
+                    : activeTool === 'highlighter'
+                    ? (MARKER_COLOR_OPTIONS.find(m => m.color === activeColor)?.name || 'Marker')
+                    : 'Eraser (مساحة)'}
                 </span>
                 <X className="w-2.5 h-2.5 opacity-60 hover:opacity-100" />
               </span>
@@ -819,7 +860,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               type="button"
               id="annotation-tool-undo-btn"
               onClick={handleUndoAnnotation}
-              className="p-1 rounded-lg hover:bg-white text-[#656C74] hover:text-[#202326] transition-colors ml-0.5 cursor-pointer"
+              className="p-1 rounded-lg hover:bg-white dark:hover:bg-[#1A1D22] text-[#656C74] dark:text-[#9AA0A6] hover:text-[#202326] dark:hover:text-[#F1F3F5] transition-colors ml-0.5 cursor-pointer"
               title="Undo last stroke"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -827,22 +868,22 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           </div>
 
           {/* Zoom Controls */}
-          <div className="hidden lg:flex items-center gap-1 bg-[#F4F6F2] p-1 rounded-xl border border-[#DCE0D6] text-xs">
+          <div className="hidden lg:flex items-center gap-1 bg-[#F4F6F2] dark:bg-[#22262C] p-1 rounded-xl border border-[#DCE0D6] dark:border-[#2E3339] text-xs">
             <button
               type="button"
               id="zoom-out-btn"
               onClick={() => setZoomLevel(prev => Math.max(75, prev - 15))}
-              className="p-1 rounded-md hover:bg-white text-[#52575C]"
+              className="p-1 rounded-md hover:bg-white dark:hover:bg-[#1A1D22] text-[#52575C] dark:text-[#9AA0A6]"
               title="Zoom out"
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
-            <span className="px-1 font-mono text-[11px] text-[#697076]">{zoomLevel}%</span>
+            <span className="px-1 font-mono text-[11px] text-[#697076] dark:text-[#9AA0A6]">{zoomLevel}%</span>
             <button
               type="button"
               id="zoom-in-btn"
               onClick={() => setZoomLevel(prev => Math.min(140, prev + 15))}
-              className="p-1 rounded-md hover:bg-white text-[#52575C]"
+              className="p-1 rounded-md hover:bg-white dark:hover:bg-[#1A1D22] text-[#52575C] dark:text-[#9AA0A6]"
               title="Zoom in"
             >
               <ZoomIn className="w-3.5 h-3.5" />
@@ -850,7 +891,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           </div>
         </div>
 
-        {/* Right: Ask Coach + Need Help + Natural Finish Studying Button */}
+        {/* Right: Ask Coach + Need Help + Theme Toggle + Natural Finish Studying Button */}
         <div className="flex items-center gap-2">
           {/* Quick Need Help Trigger */}
           <button
@@ -859,12 +900,12 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
             onClick={handleOpenHelpIntervention}
             className={`text-xs px-2.5 py-1.5 rounded-xl border transition-colors flex items-center gap-1.5 shadow-2xs ${
               stuckState.level >= 2
-                ? 'bg-[#FFF8E1] border-[#FFE082] text-[#B45309] font-semibold animate-pulse'
-                : 'bg-white hover:bg-[#F2F4F0] border-[#D8DBD2] text-[#4A5056] font-medium'
+                ? 'bg-[#FFF8E1] dark:bg-[#78350F]/40 border-[#FFE082] dark:border-[#B45309] text-[#B45309] dark:text-[#FBBF24] font-semibold animate-pulse'
+                : 'bg-white dark:bg-[#1A1D22] hover:bg-[#F2F4F0] dark:hover:bg-[#252930] border-[#D8DBD2] dark:border-[#2E3339] text-[#4A5056] dark:text-[#CBD5E1] font-medium'
             }`}
             title="Need help with this slide? Open coach support"
           >
-            <HelpCircle className="w-3.5 h-3.5 text-[#E65100]" />
+            <HelpCircle className="w-3.5 h-3.5 text-[#E65100] dark:text-[#FB923C]" />
             <span>Need Help?</span>
           </button>
 
@@ -872,18 +913,20 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
             type="button"
             id="study-room-ask-coach-btn"
             onClick={() => setExplainDrawerOpen(true)}
-            className="text-xs px-3 py-1.5 rounded-xl border border-[#D8DBD2] bg-white hover:bg-[#F2F4F0] text-[#3D4247] font-medium flex items-center gap-1.5 transition-colors shadow-2xs"
+            className="text-xs px-3 py-1.5 rounded-xl border border-[#D8DBD2] dark:border-[#2E3339] bg-white dark:bg-[#1A1D22] hover:bg-[#F2F4F0] dark:hover:bg-[#252930] text-[#3D4247] dark:text-[#E2E4E8] font-medium flex items-center gap-1.5 transition-colors shadow-2xs"
           >
-            <Sparkles className="w-3.5 h-3.5 text-[#2E7D32]" />
+            <Sparkles className="w-3.5 h-3.5 text-[#2E7D32] dark:text-[#4ADE80]" />
             <span>Ask Coach</span>
           </button>
+
+          <ThemeToggle id="study-room-theme-toggle-btn" />
 
           {/* Important Requirement: Natural "Finish Studying" Button */}
           <button
             type="button"
             id="natural-finish-studying-btn"
             onClick={() => setWrapUpModalOpen(true)}
-            className="text-xs px-3.5 py-1.5 rounded-xl bg-[#2E7D32] hover:bg-[#256629] text-white font-medium flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+            className="text-xs px-3.5 py-1.5 rounded-xl bg-[#2E7D32] hover:bg-[#256629] dark:bg-[#1B5E20] dark:hover:bg-[#2E7D32] text-white font-medium flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Finish Studying</span>
@@ -956,6 +999,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               activeColor={activeColor}
               strokes={pageAnnotations[currentPage] || []}
               onAddStroke={handleAddStroke}
+              onEraseStrokes={handleEraseStrokes}
               width={(zoomLevel / 100) * 880}
               height={(zoomLevel / 100) * 620}
             />

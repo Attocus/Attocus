@@ -205,30 +205,30 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
   return (
     <div
       id="wrapup-session-modal-overlay"
-      className="fixed inset-0 z-50 bg-black/45 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/50 dark:bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
     >
       <div
         id="wrapup-session-card"
-        className="bg-[#FAFAF8] rounded-2xl border border-[#E0E2DC] shadow-xl w-full max-w-2xl overflow-hidden text-[#202326] transition-all"
+        className="bg-[#FAFAF8] dark:bg-[#1A1D22] rounded-2xl border border-[#E0E2DC] dark:border-[#2E3339] shadow-xl w-full max-w-2xl overflow-hidden text-[#202326] dark:text-[#F1F3F5] transition-all"
       >
         {/* Header with gentle teacher tone */}
-        <div className="p-6 border-b border-[#E8EAE4] bg-white flex items-center justify-between">
+        <div className="p-6 border-b border-[#E8EAE4] dark:border-[#2E3339] bg-white dark:bg-[#16181B] flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#E8F0E6] flex items-center justify-center text-[#2E7D32]">
+            <div className="w-9 h-9 rounded-xl bg-[#E8F0E6] dark:bg-[#1E3A24] flex items-center justify-center text-[#2E7D32] dark:text-[#4ADE80]">
               <Brain className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-serif font-bold text-[#191B1D]">
+              <h2 className="text-lg font-serif font-bold text-[#191B1D] dark:text-[#F1F3F5]">
                 Study Wrap-up Session
               </h2>
-              <p className="text-xs text-[#6B7177]">
+              <p className="text-xs text-[#6B7177] dark:text-[#9AA0A6]">
                 Teacher-led synthesis for "{lecture.title}"
               </p>
             </div>
           </div>
 
-          <div className="text-xs font-mono text-[#747B82] bg-[#F3F4F0] px-3 py-1 rounded-full flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-[#555C63]" />
+          <div className="text-xs font-mono text-[#747B82] dark:text-[#9AA0A6] bg-[#F3F4F0] dark:bg-[#252930] px-3 py-1 rounded-full flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-[#555C63] dark:text-[#9AA0A6]" />
             <span>{Math.max(1, Math.round(sessionSeconds / 60))} mins focused</span>
           </div>
         </div>
@@ -236,14 +236,14 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
         {/* STEP 1: Prompt student for summary in their own words */}
         {step === 'prompt_summary' && (
           <div className="p-6 sm:p-8 space-y-6">
-            <div className="p-4 rounded-xl bg-[#F4F6F1] border border-[#E0E5DC]">
+            <div className="p-4 rounded-xl bg-[#F4F6F1] dark:bg-[#1E2228] border border-[#E0E5DC] dark:border-[#2E3339]">
               <div className="flex items-start gap-3">
                 <span className="text-xl">👩‍🏫</span>
                 <div>
-                  <h3 className="text-sm font-semibold text-[#253828]">
+                  <h3 className="text-sm font-semibold text-[#253828] dark:text-[#86EFAC]">
                     Explain what you learned in your own words
                   </h3>
-                  <p className="text-xs text-[#526355] mt-1 leading-relaxed">
+                  <p className="text-xs text-[#526355] dark:text-[#CBD5E1] mt-1 leading-relaxed">
                     Don't worry about textbook phrasing or being perfect. A great teacher wants to see how you understand the mechanisms yourself.
                   </p>
                 </div>
@@ -251,7 +251,7 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="student-wrapup-summary-input" className="text-xs font-semibold text-[#454A50] uppercase tracking-wide">
+              <label htmlFor="student-wrapup-summary-input" className="text-xs font-semibold text-[#454A50] dark:text-[#CBD5E1] uppercase tracking-wide">
                 Your Synthesis
               </label>
               <textarea
@@ -260,7 +260,7 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
                 value={studentSummary}
                 onChange={e => setStudentSummary(e.target.value)}
                 placeholder="e.g. In this session, I learned that nodes agree on logs using terms and election timeouts. A leader is only elected if a majority agrees, which prevents split votes..."
-                className="w-full p-4 rounded-xl bg-white border border-[#D5D8D0] focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/20 text-sm text-[#1F2327] outline-hidden leading-relaxed resize-none transition-all shadow-2xs"
+                className="w-full p-4 rounded-xl bg-white dark:bg-[#22262C] border border-[#D5D8D0] dark:border-[#2E3339] focus:border-[#2E7D32] dark:focus:border-[#4ADE80] focus:ring-2 focus:ring-[#2E7D32]/20 text-sm text-[#1F2327] dark:text-[#F1F3F5] outline-hidden leading-relaxed resize-none transition-all shadow-2xs"
               />
             </div>
 
@@ -509,12 +509,12 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
             )}
 
             {/* Action buttons */}
-            <div className="pt-3 border-t border-[#E8EAE4] flex items-center justify-between">
+            <div className="pt-3 border-t border-[#E8EAE4] dark:border-[#2E3339] flex items-center justify-between">
               <button
                 type="button"
                 id="review-document-again-btn"
                 onClick={onClose}
-                className="text-xs px-4 py-2 rounded-lg border border-[#D0D4CC] text-[#555A60] hover:bg-[#F2F4F0] font-medium transition-colors"
+                className="text-xs px-4 py-2 rounded-lg border border-[#D0D4CC] dark:border-[#2E3339] text-[#555A60] dark:text-[#CBD5E1] hover:bg-[#F2F4F0] dark:hover:bg-[#252930] font-medium transition-colors"
               >
                 Back to Document
               </button>
@@ -523,7 +523,7 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
                 type="button"
                 id="wrapup-return-home-btn"
                 onClick={onReturnHome}
-                className="text-xs px-5 py-2.5 rounded-xl bg-[#2E7D32] hover:bg-[#256629] text-white font-medium transition-colors shadow-xs"
+                className="text-xs px-5 py-2.5 rounded-xl bg-[#2E7D32] hover:bg-[#256629] dark:bg-[#1B5E20] dark:hover:bg-[#2E7D32] text-white font-medium transition-colors shadow-xs"
               >
                 Done · Return Home
               </button>

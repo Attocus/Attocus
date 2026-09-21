@@ -4,6 +4,7 @@ import { SAMPLE_LECTURES } from './data/sampleLectures';
 import { HomeView } from './components/HomeView';
 import { StudyRoomView } from './components/StudyRoomView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import {
   saveLectureToFirestore,
   getLecturesFromFirestore,
@@ -203,7 +204,7 @@ function AppContent() {
   };
 
   return (
-    <div className="w-full h-full min-h-screen bg-[#FAFAF8] font-sans antialiased text-[#1E2124]">
+    <div className="w-full h-full min-h-screen bg-[#FAFAF8] dark:bg-[#121417] font-sans antialiased text-[#1E2124] dark:text-[#F3F4F6] transition-colors duration-200">
       {currentScreen === 'home' ? (
         <HomeView
           lectures={lectures}
@@ -229,8 +230,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

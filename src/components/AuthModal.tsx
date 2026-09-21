@@ -77,25 +77,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-white rounded-3xl border border-[#DFE2D9] shadow-2xl p-6 sm:p-8 relative space-y-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="w-full max-w-md bg-white dark:bg-[#1A1D22] rounded-3xl border border-[#DFE2D9] dark:border-[#2E3339] shadow-2xl p-6 sm:p-8 relative space-y-6 text-[#181A1C] dark:text-[#F1F3F5]">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 w-8 h-8 rounded-full bg-[#F4F5F0] hover:bg-[#EAECE4] text-[#60656A] flex items-center justify-center transition-colors cursor-pointer"
+          className="absolute top-5 right-5 w-8 h-8 rounded-full bg-[#F4F5F0] dark:bg-[#252930] hover:bg-[#EAECE4] dark:hover:bg-[#31363F] text-[#60656A] dark:text-[#9AA0A6] flex items-center justify-center transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
 
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-[#2E7D32] text-white flex items-center justify-center font-serif font-bold text-xl mx-auto shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-[#2E7D32] dark:bg-[#1B5E20] text-white flex items-center justify-center font-serif font-bold text-xl mx-auto shadow-sm">
             🎓
           </div>
-          <h2 className="text-xl font-serif font-bold text-[#181A1C]">
+          <h2 className="text-xl font-serif font-bold text-[#181A1C] dark:text-[#F1F3F5]">
             {mode === 'signin' ? 'مرحباً بك في Attocus' : 'إنشاء حساب جديد'}
           </h2>
-          <p className="text-xs text-[#6E757C]">
+          <p className="text-xs text-[#6E757C] dark:text-[#9AA0A6]">
             {mode === 'signin'
               ? 'سجّل الدخول لمزامنة جلسات دراستك ونقاط تركيزك سحابياً'
               : 'انضم لـ Attocus واحصل على مساعدك الدراسي الذكي'}
@@ -107,7 +107,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           type="button"
           onClick={handleGoogleSignIn}
           disabled={submitting}
-          className="w-full py-2.5 px-4 rounded-xl border border-[#D5D8CF] bg-white hover:bg-[#FAFBF8] text-[#2D3135] text-sm font-medium flex items-center justify-center gap-3 transition-colors shadow-2xs disabled:opacity-60 cursor-pointer"
+          className="w-full py-2.5 px-4 rounded-xl border border-[#D5D8CF] dark:border-[#2E3339] bg-white dark:bg-[#22262C] hover:bg-[#FAFBF8] dark:hover:bg-[#2A2E35] text-[#2D3135] dark:text-[#F1F3F5] text-sm font-medium flex items-center justify-center gap-3 transition-colors shadow-2xs disabled:opacity-60 cursor-pointer"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path
@@ -132,9 +132,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
         {/* Divider */}
         <div className="flex items-center gap-3">
-          <div className="h-px bg-[#E4E6DF] flex-1" />
-          <span className="text-[11px] font-medium text-[#888E95]">أو بالبريد الإلكتروني</span>
-          <div className="h-px bg-[#E4E6DF] flex-1" />
+          <div className="h-px bg-[#E4E6DF] dark:bg-[#2E3339] flex-1" />
+          <span className="text-[11px] font-medium text-[#888E95] dark:text-[#9AA0A6]">أو بالبريد الإلكتروني</span>
+          <div className="h-px bg-[#E4E6DF] dark:bg-[#2E3339] flex-1" />
         </div>
 
         {/* Error Notification */}
@@ -149,7 +149,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === 'signup' && (
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-[#404448] block">الاسم (اختياري)</label>
+              <label className="text-xs font-semibold text-[#404448] dark:text-[#CBD5E1] block">الاسم (اختياري)</label>
               <div className="relative">
                 <UserIcon className="w-4 h-4 text-[#8C9299] absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -157,14 +157,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="اسم الطالب"
-                  className="w-full pl-9 pr-3 py-2 text-sm bg-[#FAFBF8] border border-[#D7DAD1] rounded-xl focus:outline-none focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] text-[#1E2124]"
+                  className="w-full pl-9 pr-3 py-2 text-sm bg-[#FAFBF8] dark:bg-[#22262C] border border-[#D7DAD1] dark:border-[#2E3339] rounded-xl focus:outline-none focus:border-[#2E7D32] dark:focus:border-[#4ADE80] focus:ring-1 focus:ring-[#2E7D32] text-[#1E2124] dark:text-[#F1F3F5]"
                 />
               </div>
             </div>
           )}
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-[#404448] block">البريد الإلكتروني</label>
+            <label className="text-xs font-semibold text-[#404448] dark:text-[#CBD5E1] block">البريد الإلكتروني</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-[#8C9299] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -173,13 +173,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="student@example.com"
-                className="w-full pl-9 pr-3 py-2 text-sm bg-[#FAFBF8] border border-[#D7DAD1] rounded-xl focus:outline-none focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] text-[#1E2124]"
+                className="w-full pl-9 pr-3 py-2 text-sm bg-[#FAFBF8] dark:bg-[#22262C] border border-[#D7DAD1] dark:border-[#2E3339] rounded-xl focus:outline-none focus:border-[#2E7D32] dark:focus:border-[#4ADE80] focus:ring-1 focus:ring-[#2E7D32] text-[#1E2124] dark:text-[#F1F3F5]"
               />
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-[#404448] block">كلمة المرور</label>
+            <label className="text-xs font-semibold text-[#404448] dark:text-[#CBD5E1] block">كلمة المرور</label>
             <div className="relative">
               <Lock className="w-4 h-4 text-[#8C9299] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -188,7 +188,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-9 pr-3 py-2 text-sm bg-[#FAFBF8] border border-[#D7DAD1] rounded-xl focus:outline-none focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] text-[#1E2124]"
+                className="w-full pl-9 pr-3 py-2 text-sm bg-[#FAFBF8] dark:bg-[#22262C] border border-[#D7DAD1] dark:border-[#2E3339] rounded-xl focus:outline-none focus:border-[#2E7D32] dark:focus:border-[#4ADE80] focus:ring-1 focus:ring-[#2E7D32] text-[#1E2124] dark:text-[#F1F3F5]"
               />
             </div>
           </div>
@@ -212,7 +212,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         </form>
 
         {/* Toggle Mode */}
-        <div className="text-center text-xs text-[#6B7177] pt-1">
+        <div className="text-center text-xs text-[#6B7177] dark:text-[#9AA0A6] pt-1">
           {mode === 'signin' ? (
             <span>
               ليس لديك حساب؟{' '}
@@ -222,7 +222,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   setMode('signup');
                   setError(null);
                 }}
-                className="text-[#2E7D32] font-semibold hover:underline cursor-pointer"
+                className="text-[#2E7D32] dark:text-[#4ADE80] font-semibold hover:underline cursor-pointer"
               >
                 إنشاء حساب جديد
               </button>
@@ -236,7 +236,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   setMode('signin');
                   setError(null);
                 }}
-                className="text-[#2E7D32] font-semibold hover:underline cursor-pointer"
+                className="text-[#2E7D32] dark:text-[#4ADE80] font-semibold hover:underline cursor-pointer"
               >
                 تسجيل الدخول
               </button>

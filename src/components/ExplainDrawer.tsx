@@ -88,23 +88,23 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
   return (
     <div
       id="explain-agent-drawer-overlay"
-      className="fixed inset-0 z-50 bg-black/35 backdrop-blur-2xs flex justify-end"
+      className="fixed inset-0 z-50 bg-black/40 dark:bg-black/70 backdrop-blur-2xs flex justify-end"
     >
       <div
         id="explain-agent-drawer"
-        className="w-full max-w-md bg-[#FDFDFC] h-full shadow-2xl flex flex-col justify-between border-l border-[#E2E5DC] text-[#222629] animate-in slide-in-from-right duration-200"
+        className="w-full max-w-md bg-[#FDFDFC] dark:bg-[#16181B] h-full shadow-2xl flex flex-col justify-between border-l border-[#E2E5DC] dark:border-[#2E3339] text-[#222629] dark:text-[#F1F3F5] animate-in slide-in-from-right duration-200"
       >
         {/* Drawer Header */}
-        <div className="p-4 border-b border-[#E6E8E0] bg-white flex items-center justify-between">
+        <div className="p-4 border-b border-[#E6E8E0] dark:border-[#2E3339] bg-white dark:bg-[#1A1D22] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#EBF3EA] text-[#2E7D32] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-[#EBF3EA] dark:bg-[#1E3A24] text-[#2E7D32] dark:text-[#4ADE80] flex items-center justify-center">
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-serif font-bold text-[#1A1D20]">
+              <h3 className="text-sm font-serif font-bold text-[#1A1D20] dark:text-[#F1F3F5]">
                 Ask Coach
               </h3>
-              <p className="text-[11px] text-[#697076]">
+              <p className="text-[11px] text-[#697076] dark:text-[#9AA0A6]">
                 Grounded in Slide {slide.pageNumber}: {slide.topic}
               </p>
             </div>
@@ -113,7 +113,7 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
             type="button"
             id="close-explain-drawer-btn"
             onClick={onClose}
-            className="w-7 h-7 rounded-lg hover:bg-[#F0F2EC] flex items-center justify-center text-[#697076]"
+            className="w-7 h-7 rounded-lg hover:bg-[#F0F2EC] dark:hover:bg-[#252930] flex items-center justify-center text-[#697076] dark:text-[#9AA0A6]"
           >
             <X className="w-4 h-4" />
           </button>
@@ -129,17 +129,17 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
               <div
                 className={`p-3.5 rounded-xl text-xs max-w-[90%] leading-relaxed ${
                   m.role === 'student'
-                    ? 'bg-[#2E7D32] text-white rounded-br-none shadow-xs'
-                    : 'bg-white border border-[#E0E2DA] text-[#272B2F] rounded-bl-none shadow-2xs'
+                    ? 'bg-[#2E7D32] dark:bg-[#1B5E20] text-white rounded-br-none shadow-xs'
+                    : 'bg-white dark:bg-[#22262C] border border-[#E0E2DA] dark:border-[#2E3339] text-[#272B2F] dark:text-[#F1F3F5] rounded-bl-none shadow-2xs'
                 }`}
               >
                 {m.text}
               </div>
 
               {m.role === 'coach' && m.citedPages && (
-                <div className="flex items-center gap-2 mt-1 text-[10px] text-[#787F86] px-1">
+                <div className="flex items-center gap-2 mt-1 text-[10px] text-[#787F86] dark:text-[#9AA0A6] px-1">
                   <span className="flex items-center gap-1">
-                    <BookOpen className="w-2.5 h-2.5 text-[#2E7D32]" />
+                    <BookOpen className="w-2.5 h-2.5 text-[#2E7D32] dark:text-[#4ADE80]" />
                     <span>Cited Slide {m.citedPages.join(', ')}</span>
                   </span>
                   {m.externalCitation && (
@@ -154,15 +154,15 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
           ))}
 
           {isLoading && (
-            <div className="flex items-center gap-2 text-xs text-[#7B8289] p-2 italic">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#2E7D32] animate-ping" />
+            <div className="flex items-center gap-2 text-xs text-[#7B8289] dark:text-[#9AA0A6] p-2 italic">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#2E7D32] dark:bg-[#4ADE80] animate-ping" />
               <span>Consulting lecture notes...</span>
             </div>
           )}
         </div>
 
         {/* Question Input */}
-        <div className="p-3 border-t border-[#E6E8E0] bg-white">
+        <div className="p-3 border-t border-[#E6E8E0] dark:border-[#2E3339] bg-white dark:bg-[#1A1D22]">
           <form
             onSubmit={e => {
               e.preventDefault();
@@ -176,7 +176,7 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
               value={questionInput}
               onChange={e => setQuestionInput(e.target.value)}
               placeholder="e.g. Why is randomized timeout used here?"
-              className="flex-1 p-2.5 rounded-xl bg-[#F5F6F2] border border-[#D7DAD2] text-xs text-[#202428] outline-hidden focus:border-[#2E7D32] focus:bg-white transition-all"
+              className="flex-1 p-2.5 rounded-xl bg-[#F5F6F2] dark:bg-[#252930] border border-[#D7DAD2] dark:border-[#2E3339] text-xs text-[#202428] dark:text-[#F1F3F5] outline-hidden focus:border-[#2E7D32] dark:focus:border-[#4ADE80] focus:bg-white dark:focus:bg-[#16181B] transition-all"
             />
             <button
               type="submit"
@@ -184,8 +184,8 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
               disabled={!questionInput.trim() || isLoading}
               className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
                 questionInput.trim() && !isLoading
-                  ? 'bg-[#2E7D32] text-white hover:bg-[#256629]'
-                  : 'bg-[#E3E5DF] text-[#8D9298] cursor-not-allowed'
+                  ? 'bg-[#2E7D32] hover:bg-[#256629] dark:bg-[#1B5E20] dark:hover:bg-[#2E7D32] text-white'
+                  : 'bg-[#E3E5DF] dark:bg-[#252930] text-[#8D9298] dark:text-[#64748B] cursor-not-allowed'
               }`}
             >
               <Send className="w-3.5 h-3.5" />
@@ -196,3 +196,4 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
     </div>
   );
 };
+
