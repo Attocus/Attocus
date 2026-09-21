@@ -21,7 +21,11 @@ import {
   Sparkles,
   HelpCircle,
   CheckCircle2,
-  Upload
+  Upload,
+  Eraser,
+  Type,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { SlideViewer } from './SlideViewer';
 import { AnnotationCanvas } from './AnnotationCanvas';
@@ -68,8 +72,11 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   // Sidebar collapse state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
 
+  // Dark mode state
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
   // Annotation states
-  const [activeTool, setActiveTool] = useState<'pen' | 'highlighter' | 'none'>('pen');
+  const [activeTool, setActiveTool] = useState<'pen' | 'highlighter' | 'eraser' | 'text' | 'none'>('pen');
   const [activeColor, setActiveColor] = useState<string>(PEN_COLOR_OPTIONS[0].color);
   const [pageAnnotations, setPageAnnotations] = useState<PageAnnotationsMap>(() => {
     try {
@@ -530,6 +537,17 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     });
   };
 
+  const handleEraseStroke = (strokeId: string) => {
+    registerEngagement();
+    setPageAnnotations(prev => {
+      const existing = prev[currentPage] || [];
+      return {
+        ...prev,
+        [currentPage]: existing.filter(s => s.id !== strokeId)
+      };
+    });
+  };
+
   const handleDeclineStillReading = () => {
     snoozedUntilRef.current[currentPage] = Date.now() + 45_000;
     setStuckState(prev => ({
@@ -585,12 +603,12 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   return (
     <div
       dir="rtl"
-      className="h-screen w-screen bg-[#F8FAFC] text-slate-900 flex flex-col overflow-hidden selection:bg-[#0F172A] selection:text-white"
+      className={`h-screen w-screen flex flex-col overflow-hidden selection:bg-[#0F172A] selection:text-white transition-colors duration-300 ${isDarkMode ? 'bg-[#0F172A] text-slate-100' : 'bg-[#F8FAFC] text-slate-900'}`}
       onMouseMove={registerEngagement}
       onKeyDown={registerEngagement}
     >
       {/* ─── 1. TOP HEADER TOOLBAR (APPLE MINIMALIST) ─────────────── */}
-      <header className="h-16 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-6 flex items-center justify-between shrink-0 select-none z-30">
+      <header className={`h-16 backdrop-blur-md border-b px-6 flex items-center justify-between shrink-0 select-none z-30 transition-colors duration-300 ${isDarkMode ? 'bg-slate-900/95 border-slate-700/80' : 'bg-white/90 border-slate-200/80'}`}>
 
         {/* Right: Return + Document Title */}
         <div className="flex items-center gap-4 min-w-0">
@@ -637,21 +655,17 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           />
 
           {/* شريط أدوات الرسم والتحديد */}
-          <div className="flex items-center bg-slate-100/80 p-1 rounded-2xl border border-slate-200/60 gap-1">
+          <div className={`flex items-center p-1 rounded-2xl border gap-1 transition-colors ${isDarkMode ? 'bg-slate-800/80 border-slate-600/60' : 'bg-slate-100/80 border-slate-200/60'}`}>
+
             {/* أداة القلم */}
             <button
               type="button"
               id="annotation-tool-pen-btn"
-              onClick={() => {
-                setActiveTool('pen');
-                setActiveColor(PEN_COLOR_OPTIONS[0].color);
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${activeTool === 'pen'
-                  ? 'bg-white text-[#0F172A] shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900'
-                }`}
+              onClick={() => { setActiveTool('pen'); setActiveColor(PEN_COLOR_OPTIONS[0].color); }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${activeTool === 'pen' ? (isDarkMode ? 'bg-slate-700 text-white shadow-xs' : 'bg-white text-[#0F172A] shadow-xs') : (isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900')}`}
+              title="قلم - كتابة وتدوين"
             >
-              <Edit2 className="w-3.5 h-3.5 text-blue-600" />
+              <Edit2 className="w-3.5 h-3.5 text-blue-500" />
               <span className="hidden sm:inline">قلم</span>
             </button>
 
@@ -659,49 +673,76 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
             <button
               type="button"
               id="annotation-tool-highlighter-btn"
-              onClick={() => {
-                setActiveTool('highlighter');
-                setActiveColor(MARKER_COLOR_OPTIONS[0].color);
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${activeTool === 'highlighter'
-                  ? 'bg-white text-[#0F172A] shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900'
-                }`}
+              onClick={() => { setActiveTool('highlighter'); setActiveColor(MARKER_COLOR_OPTIONS[0].color); }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${activeTool === 'highlighter' ? (isDarkMode ? 'bg-slate-700 text-white shadow-xs' : 'bg-white text-[#0F172A] shadow-xs') : (isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900')}`}
+              title="تظليل"
             >
               <Highlighter className="w-3.5 h-3.5 text-amber-500" />
               <span className="hidden sm:inline">تظليل</span>
             </button>
 
+            {/* أداة الممحاة */}
+            <button
+              type="button"
+              id="annotation-tool-eraser-btn"
+              onClick={() => setActiveTool('eraser')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${activeTool === 'eraser' ? (isDarkMode ? 'bg-slate-700 text-white shadow-xs' : 'bg-white text-[#0F172A] shadow-xs') : (isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900')}`}
+              title="ممحاة"
+            >
+              <Eraser className="w-3.5 h-3.5 text-rose-500" />
+              <span className="hidden sm:inline">ممحاة</span>
+            </button>
+
+            {/* أداة النص */}
+            <button
+              type="button"
+              id="annotation-tool-text-btn"
+              onClick={() => { setActiveTool('text'); setActiveColor(PEN_COLOR_OPTIONS[0].color); }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${activeTool === 'text' ? (isDarkMode ? 'bg-slate-700 text-white shadow-xs' : 'bg-white text-[#0F172A] shadow-xs') : (isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900')}`}
+              title="مربع نص"
+            >
+              <Type className="w-3.5 h-3.5 text-purple-500" />
+              <span className="hidden sm:inline">نص</span>
+            </button>
+
             {/* ألوان القلم */}
-            {activeTool === 'pen' && (
-              <div className="flex items-center gap-1.5 px-2 border-r border-slate-200 mr-1">
+            {(activeTool === 'pen' || activeTool === 'text') && (
+              <div className={`flex items-center gap-1.5 px-2 border-r mr-1 ${isDarkMode ? 'border-slate-600' : 'border-slate-200'}`}>
                 {PEN_COLOR_OPTIONS.map(opt => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setActiveColor(opt.color)}
-                    className={`w-4 h-4 rounded-full transition-all relative flex items-center justify-center ${activeColor === opt.color ? 'scale-125 ring-2 ring-slate-900/30' : 'opacity-60 hover:opacity-100'
-                      }`}
-                    style={{ backgroundColor: opt.color }}
-                    title={`${opt.name}`}
-                  />
+                  <div key={opt.id} className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => setActiveColor(opt.color)}
+                      className={`w-4 h-4 rounded-full transition-all ${activeColor === opt.color ? 'scale-125 ring-2 ring-offset-1 ring-slate-400' : 'opacity-60 hover:opacity-100 hover:scale-110'}`}
+                      style={{ backgroundColor: opt.color }}
+                    />
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] rounded-lg px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                      <div className="font-bold">{opt.name}</div>
+                      <div className="text-slate-300">{opt.meaning}</div>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
 
             {/* ألوان التظليل */}
             {activeTool === 'highlighter' && (
-              <div className="flex items-center gap-1.5 px-2 border-r border-slate-200 mr-1">
+              <div className={`flex items-center gap-1.5 px-2 border-r mr-1 ${isDarkMode ? 'border-slate-600' : 'border-slate-200'}`}>
                 {MARKER_COLOR_OPTIONS.map(opt => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setActiveColor(opt.color)}
-                    className={`w-4 h-4 rounded-full transition-all relative flex items-center justify-center ${activeColor === opt.color ? 'scale-125 ring-2 ring-slate-900/30' : 'opacity-60 hover:opacity-100'
-                      }`}
-                    style={{ backgroundColor: opt.dotColor }}
-                    title={`${opt.name}`}
-                  />
+                  <div key={opt.id} className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => setActiveColor(opt.color)}
+                      className={`w-4 h-4 rounded-full transition-all ${activeColor === opt.color ? 'scale-125 ring-2 ring-offset-1 ring-slate-400' : 'opacity-60 hover:opacity-100 hover:scale-110'}`}
+                      style={{ backgroundColor: opt.dotColor }}
+                    />
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] rounded-lg px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                      <div className="font-bold">{opt.name}</div>
+                      <div className="text-slate-300">{opt.meaning}</div>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
@@ -711,7 +752,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               type="button"
               id="annotation-tool-undo-btn"
               onClick={handleUndoAnnotation}
-              className="p-1.5 rounded-xl hover:bg-white text-slate-500 hover:text-slate-900 transition-colors mr-0.5"
+              className={`p-1.5 rounded-xl transition-colors mr-0.5 ${isDarkMode ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-white text-slate-500 hover:text-slate-900'}`}
               title="تراجع"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -740,26 +781,26 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           </div>
         </div>
 
-        {/* Left: Ask Coach + Need Help + Finish Studying Button */}
+        {/* Left: Dark Mode + Ask Coach + Finish Studying Button */}
         <div className="flex items-center gap-2.5">
+
+          {/* زر الوضع الليلي */}
           <button
             type="button"
-            onClick={handleOpenHelpIntervention}
-            className={`text-xs px-3 py-2 rounded-xl border transition-all flex items-center gap-1.5 ${stuckState.level >= 2
-                ? 'bg-amber-50 border-amber-200 text-amber-800 font-bold animate-pulse'
-                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-600 font-semibold'
-              }`}
+            id="dark-mode-toggle-btn"
+            onClick={() => setIsDarkMode(prev => !prev)}
+            className={`p-2 rounded-xl border transition-all ${isDarkMode ? 'bg-slate-700 border-slate-600 text-yellow-400 hover:bg-slate-600' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+            title={isDarkMode ? 'الوضع النهاري' : 'الوضع الليلي'}
           >
-            <HelpCircle className="w-3.5 h-3.5 text-amber-600" />
-            <span>طلب مساعدة</span>
+            {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
           <button
             type="button"
             onClick={() => setExplainDrawerOpen(true)}
-            className="text-xs px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold flex items-center gap-1.5 transition-colors"
+            className={`text-xs px-3.5 py-2 rounded-xl border font-semibold flex items-center gap-1.5 transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
             <span>اسأل المساعد</span>
           </button>
 
@@ -803,8 +844,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         {/* Central Document Canvas Area */}
         <main
           ref={documentContainerRef}
-          className={`flex-1 overflow-auto p-6 sm:p-10 flex justify-center items-start transition-all relative ${attentionState.visualPulseActive ? 'ring-4 ring-amber-400/40' : ''
-            }`}
+          className={`flex-1 overflow-auto p-6 sm:p-10 flex justify-center items-start transition-all relative ${attentionState.visualPulseActive ? 'ring-4 ring-amber-400/40' : ''} ${isDarkMode ? 'bg-slate-950' : ''}`}
         >
           {/* Previous Slide Floating Button */}
           <button
@@ -820,19 +860,21 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           {/* Document Sheet Container */}
           <div
             id="study-document-page-sheet"
-            className="relative bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.04)] overflow-hidden transition-transform duration-200 shrink-0"
+            className={`relative rounded-3xl border shadow-[0_4px_24px_rgba(0,0,0,0.04)] overflow-hidden transition-all duration-300 shrink-0 ${isDarkMode ? 'border-slate-700/60' : 'border-slate-200/80 bg-white'}`}
             style={{
               width: `${(zoomLevel / 100) * 880}px`,
               minHeight: `${(zoomLevel / 100) * 620}px`
             }}
           >
-            <SlideViewer slide={currentSlide} totalSlides={lecture.totalPages} />
+            <SlideViewer slide={currentSlide} totalSlides={lecture.totalPages} isDarkMode={isDarkMode} />
 
             <AnnotationCanvas
               activeTool={activeTool}
               activeColor={activeColor}
+              isDarkMode={isDarkMode}
               strokes={pageAnnotations[currentPage] || []}
               onAddStroke={handleAddStroke}
+              onEraseStroke={handleEraseStroke}
               width={(zoomLevel / 100) * 880}
               height={(zoomLevel / 100) * 620}
             />
@@ -883,7 +925,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         <button
           type="button"
           onClick={handleOpenHelpIntervention}
-          className="fixed bottom-6 left-6 z-30 flex items-center gap-2.5 px-4 py-3 bg-[#0F172A] hover:bg-[#1E293B] text-white text-xs font-semibold rounded-2xl shadow-xl transition-all hover:scale-105"
+          className={`fixed bottom-6 left-6 z-30 flex items-center gap-2.5 px-4 py-3 text-white text-xs font-semibold rounded-2xl shadow-xl transition-all hover:scale-105 ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-[#0F172A] hover:bg-[#1E293B]'}`}
         >
           <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
           <HelpCircle className="w-4 h-4 text-blue-300" />

@@ -5,126 +5,127 @@ import { BookOpen, Layers, Network, Table as TableIcon, GitBranch, ArrowLeft, Ch
 interface SlideViewerProps {
   slide: Slide;
   totalSlides: number;
+  isDarkMode?: boolean;
 }
 
-export const SlideViewer: React.FC<SlideViewerProps> = ({ slide, totalSlides }) => {
+export const SlideViewer: React.FC<SlideViewerProps> = ({ slide, totalSlides, isDarkMode }) => {
+  const dm = isDarkMode;
+
   return (
     <div
       dir="rtl"
-      className="w-full h-full flex flex-col justify-between p-6 sm:p-8 select-text bg-white text-slate-900 font-sans antialiased"
+      className={`w-full h-full flex flex-col justify-between p-6 sm:p-8 select-text font-sans antialiased transition-colors duration-300 ${
+        dm ? 'bg-[#1a2236] text-slate-100' : 'bg-white text-slate-900'
+      }`}
     >
-      {/* ─── رأس الشريحة والبيانات الوصفية (Header Metadata) ─── */}
+      {/* ─── رأس الشريحة ─── */}
       <div>
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div className={`flex items-center justify-between pb-3 border-b mb-4 ${dm ? 'border-slate-700/60' : 'border-slate-100'}`}>
           <div className="flex items-center gap-2.5">
-            <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 tracking-wide">
+            <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg tracking-wide ${dm ? 'bg-slate-700 text-slate-200' : 'bg-slate-100 text-slate-700'}`}>
               {slide.topic || 'عام'}
             </span>
             {slide.externalCitations && slide.externalCitations.length > 0 && (
-              <span className="text-[11px] text-slate-400">
+              <span className={`text-[11px] ${dm ? 'text-slate-400' : 'text-slate-400'}`}>
                 مرجع: {slide.externalCitations[0]}
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+          <div className={`flex items-center gap-2 text-xs font-medium ${dm ? 'text-slate-400' : 'text-slate-400'}`}>
             <span>صفحة {slide.pageNumber} من {totalSlides}</span>
-            <span className="inline-block w-1 h-1 rounded-full bg-slate-300" />
-            <span className="text-slate-500 font-semibold">كثافة المحتوى {slide.densityScore}/5</span>
+            <span className={`inline-block w-1 h-1 rounded-full ${dm ? 'bg-slate-600' : 'bg-slate-300'}`} />
+            <span className={`font-semibold ${dm ? 'text-slate-300' : 'text-slate-500'}`}>كثافة المحتوى {slide.densityScore}/5</span>
           </div>
         </div>
 
         {/* عنوان الشريحة */}
-        <h1 className="text-xl sm:text-2xl font-bold text-[#0F172A] tracking-tight leading-snug">
+        <h1 className={`text-xl sm:text-2xl font-bold tracking-tight leading-snug ${dm ? 'text-white' : 'text-[#0F172A]'}`}>
           {slide.title}
         </h1>
         {slide.subtitle && (
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-normal leading-relaxed">
+          <p className={`text-xs sm:text-sm mt-1 font-normal leading-relaxed ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
             {slide.subtitle}
           </p>
         )}
 
-        {/* عرض صورة الصفحة المرفوعة إن وُجدت */}
+        {/* صورة الشريحة */}
         {slide.pageImageUrl ? (
-          <div className="mt-5 rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs bg-slate-50">
+          <div className={`mt-5 rounded-2xl overflow-hidden border shadow-xs ${dm ? 'border-slate-700/50 bg-slate-800' : 'border-slate-200/80 bg-slate-50'}`}>
             <img
               src={slide.pageImageUrl}
               alt={`صفحة ${slide.pageNumber}: ${slide.title}`}
-              className="w-full h-auto object-contain select-none"
+              className={`w-full h-auto object-contain select-none ${dm ? 'opacity-90' : ''}`}
               style={{ imageRendering: 'high-quality' }}
               referrerPolicy="no-referrer"
             />
           </div>
         ) : (
-          /* محتوى الشريحة النصي */
           <div className="mt-5 space-y-3.5 max-w-4xl">
             {slide.content.map((paragraph, idx) => (
-              <p key={idx} className="text-slate-700 text-sm sm:text-base leading-relaxed text-justify">
+              <p key={idx} className={`text-sm sm:text-base leading-relaxed text-justify ${dm ? 'text-slate-300' : 'text-slate-700'}`}>
                 {paragraph}
               </p>
             ))}
           </div>
         )}
 
-        {/* ─── المخططات والرسومات البيانية إن وُجدت ─── */}
+        {/* المخططات */}
         {slide.diagramType && (
-          <div className="mt-5 p-5 rounded-2xl bg-slate-50 border border-slate-200/70 shadow-2xs">
-            <div className="flex items-center gap-2 mb-3 text-xs font-bold text-slate-700 uppercase tracking-wider">
-              {slide.diagramType === 'flowchart' && <GitBranch className="w-4 h-4 text-blue-600" />}
-              {slide.diagramType === 'architecture' && <Network className="w-4 h-4 text-indigo-600" />}
-              {slide.diagramType === 'table' && <TableIcon className="w-4 h-4 text-purple-600" />}
-              {slide.diagramType === 'cycle' && <Layers className="w-4 h-4 text-amber-600" />}
-              {slide.diagramType === 'equation' && <BookOpen className="w-4 h-4 text-blue-600" />}
+          <div className={`mt-5 p-5 rounded-2xl border shadow-2xs ${dm ? 'bg-slate-800/60 border-slate-700/50' : 'bg-slate-50 border-slate-200/70'}`}>
+            <div className={`flex items-center gap-2 mb-3 text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-300' : 'text-slate-700'}`}>
+              {slide.diagramType === 'flowchart' && <GitBranch className="w-4 h-4 text-blue-400" />}
+              {slide.diagramType === 'architecture' && <Network className="w-4 h-4 text-indigo-400" />}
+              {slide.diagramType === 'table' && <TableIcon className="w-4 h-4 text-purple-400" />}
+              {slide.diagramType === 'cycle' && <Layers className="w-4 h-4 text-amber-400" />}
+              {slide.diagramType === 'equation' && <BookOpen className="w-4 h-4 text-blue-400" />}
               <span>النموذج التحليلي: {slide.diagramType}</span>
             </div>
 
-            {/* تفاصيل المخطط الانسيابي (Flowchart Steps) */}
             {slide.diagramType === 'flowchart' && slide.diagramData?.steps && (
-              <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2.5 text-xs text-slate-800">
+              <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2.5 text-xs">
                 {slide.diagramData.steps.map((step: string, i: number) => (
                   <React.Fragment key={i}>
-                    <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200/80 font-semibold shadow-2xs text-center">
+                    <div className={`px-3.5 py-2 rounded-xl border font-semibold shadow-2xs text-center ${dm ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-slate-200/80 text-slate-800'}`}>
                       {step}
                     </div>
                     {i < slide.diagramData.steps.length - 1 && (
-                      <ArrowLeft className="w-4 h-4 text-slate-400 shrink-0" />
+                      <ArrowLeft className={`w-4 h-4 shrink-0 ${dm ? 'text-slate-500' : 'text-slate-400'}`} />
                     )}
                   </React.Fragment>
                 ))}
               </div>
             )}
 
-            {/* تفاصيل حالات المخطط (Transitions) */}
             {slide.diagramType === 'flowchart' && slide.diagramData?.transitions && (
-              <div className="space-y-1.5 text-xs text-slate-700">
-                <div className="font-bold text-[#0F172A] mb-1">
+              <div className={`space-y-1.5 text-xs ${dm ? 'text-slate-300' : 'text-slate-700'}`}>
+                <div className={`font-bold mb-1 ${dm ? 'text-white' : 'text-[#0F172A]'}`}>
                   مسار الحالات: {(slide.diagramData.states || []).join(' ← ')}
                 </div>
                 {slide.diagramData.transitions.map((t: string, i: number) => (
                   <div key={i} className="flex items-start gap-2">
-                    <span className="text-slate-400">•</span>
+                    <span className={dm ? 'text-slate-500' : 'text-slate-400'}>•</span>
                     <span>{t}</span>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* الجداول التحليلية (Tables) */}
             {slide.diagramType === 'table' && slide.diagramData?.headers && (
               <div className="overflow-x-auto text-xs">
                 <table className="w-full text-right border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-200 text-slate-600">
+                    <tr className={`border-b ${dm ? 'border-slate-600 text-slate-300' : 'border-slate-200 text-slate-600'}`}>
                       {slide.diagramData.headers.map((h: string, i: number) => (
                         <th key={i} className="pb-2 font-bold pl-3">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
                     {slide.diagramData.rows.map((row: string[], ri: number) => (
-                      <tr key={ri} className="hover:bg-white/80 transition-colors">
+                      <tr key={ri} className={`transition-colors ${dm ? 'hover:bg-slate-700/40' : 'hover:bg-white/80'}`}>
                         {row.map((cell: string, ci: number) => (
-                          <td key={ci} className={`py-2 pl-3 text-slate-700 ${ci === 0 ? 'font-bold text-[#0F172A]' : ''}`}>{cell}</td>
+                          <td key={ci} className={`py-2 pl-3 ${ci === 0 ? (dm ? 'font-bold text-white' : 'font-bold text-[#0F172A]') : (dm ? 'text-slate-300' : 'text-slate-700')}`}>{cell}</td>
                         ))}
                       </tr>
                     ))}
@@ -133,34 +134,32 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({ slide, totalSlides }) 
               </div>
             )}
 
-            {/* المعادلات الرياضية (Equations) */}
             {slide.diagramType === 'equation' && (
               <div className="text-center py-2 space-y-2">
-                <div className="text-sm sm:text-base font-mono font-bold text-[#0F172A] bg-white border border-slate-200 py-2 px-4 rounded-xl inline-block shadow-2xs" dir="ltr">
+                <div className={`text-sm sm:text-base font-mono font-bold py-2 px-4 rounded-xl inline-block shadow-2xs border ${dm ? 'bg-slate-700 border-slate-600 text-blue-300' : 'bg-white border-slate-200 text-[#0F172A]'}`} dir="ltr">
                   {slide.diagramData.formula}
                 </div>
                 {slide.diagramData.interpretation && (
-                  <p className="text-xs text-slate-500 italic">{slide.diagramData.interpretation}</p>
+                  <p className={`text-xs italic ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{slide.diagramData.interpretation}</p>
                 )}
                 {slide.diagramData.implication && (
-                  <p className="text-xs text-slate-500 italic">{slide.diagramData.implication}</p>
+                  <p className={`text-xs italic ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{slide.diagramData.implication}</p>
                 )}
               </div>
             )}
 
-            {/* النماذج الهيكلية (Architecture) */}
             {slide.diagramType === 'architecture' && (
-              <div className="space-y-2 text-xs text-slate-700">
+              <div className={`space-y-2 text-xs ${dm ? 'text-slate-300' : 'text-slate-700'}`}>
                 {slide.diagramData.description && (
-                  <p className="font-semibold text-[#0F172A]">{slide.diagramData.description}</p>
+                  <p className={`font-semibold ${dm ? 'text-white' : 'text-[#0F172A]'}`}>{slide.diagramData.description}</p>
                 )}
                 {slide.diagramData.partitions && slide.diagramData.partitions.map((p: string, i: number) => (
-                  <div key={i} className="p-2.5 rounded-xl bg-white border border-slate-200/80 font-medium">
+                  <div key={i} className={`p-2.5 rounded-xl border font-medium ${dm ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-slate-200/80'}`}>
                     {p}
                   </div>
                 ))}
                 {slide.diagramData.complexes && (
-                  <ul className="list-disc pr-4 space-y-1 text-slate-600">
+                  <ul className="list-disc pr-4 space-y-1">
                     {slide.diagramData.complexes.map((c: string, i: number) => (
                       <li key={i}>{c}</li>
                     ))}
@@ -169,18 +168,17 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({ slide, totalSlides }) 
               </div>
             )}
 
-            {/* الدورات والعمليات الدائرية (Cycles) */}
             {slide.diagramType === 'cycle' && (
-              <div className="text-xs text-slate-700 space-y-2">
+              <div className={`text-xs space-y-2 ${dm ? 'text-slate-300' : 'text-slate-700'}`}>
                 {slide.diagramData.cycle && (
-                  <div className="font-mono bg-white p-3 rounded-xl border border-slate-200/80 leading-relaxed shadow-2xs">
+                  <div className={`font-mono p-3 rounded-xl border leading-relaxed shadow-2xs ${dm ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-slate-200/80'}`}>
                     {slide.diagramData.cycle}
                   </div>
                 )}
                 {slide.diagramData.inputs && (
                   <div className="flex gap-4 font-mono text-xs pt-1">
-                    <span className="text-blue-600 font-semibold">المدخلات: {slide.diagramData.inputs}</span>
-                    <span className="text-emerald-600 font-semibold">المخرجات: {slide.diagramData.outputs}</span>
+                    <span className="text-blue-400 font-semibold">المدخلات: {slide.diagramData.inputs}</span>
+                    <span className="text-emerald-400 font-semibold">المخرجات: {slide.diagramData.outputs}</span>
                   </div>
                 )}
               </div>
@@ -189,17 +187,17 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({ slide, totalSlides }) 
         )}
       </div>
 
-      {/* ─── النقاط الجوهرية ومراجعة الاختبار (Core Takeaways) ─── */}
-      <div className="mt-6 pt-4 border-t border-slate-100">
+      {/* ─── النقاط الجوهرية ─── */}
+      <div className={`mt-6 pt-4 border-t ${dm ? 'border-slate-700/60' : 'border-slate-100'}`}>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2 text-xs font-bold text-[#0F172A] uppercase tracking-wider">
-            <CheckCircle2 className="w-4 h-4 text-blue-600" />
+          <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-200' : 'text-[#0F172A]'}`}>
+            <CheckCircle2 className="w-4 h-4 text-blue-400" />
             <span>النقاط الجوهرية للشريحة</span>
-            <span className="text-[10px] text-slate-500 font-medium normal-case hidden sm:inline bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/60">
+            <span className={`text-[10px] font-medium normal-case hidden sm:inline px-2.5 py-0.5 rounded-full border ${dm ? 'text-slate-400 bg-slate-800 border-slate-700' : 'text-slate-500 bg-slate-100 border-slate-200/60'}`}>
               ملخصة تلقائياً عبر المساعد الذكي
             </span>
           </div>
-          <span className="text-[11px] text-slate-400">
+          <span className={`text-[11px] ${dm ? 'text-slate-500' : 'text-slate-400'}`}>
             مفاهيم أساسية للاختبار والمراجعة
           </span>
         </div>
@@ -208,9 +206,13 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({ slide, totalSlides }) 
           {slide.keyPoints.map((point, idx) => (
             <div
               key={idx}
-              className="text-xs text-slate-700 bg-slate-50/70 p-3 rounded-2xl border border-slate-200/70 leading-relaxed shadow-2xs hover:bg-slate-50 transition-colors"
+              className={`text-xs p-3 rounded-2xl border leading-relaxed shadow-2xs transition-colors ${
+                dm
+                  ? 'text-slate-300 bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
+                  : 'text-slate-700 bg-slate-50/70 border-slate-200/70 hover:bg-slate-50'
+              }`}
             >
-              <span className="font-bold text-[#0F172A] ml-1.5">{idx + 1}.</span>
+              <span className={`font-bold ml-1.5 ${dm ? 'text-blue-400' : 'text-[#0F172A]'}`}>{idx + 1}.</span>
               {point}
             </div>
           ))}
