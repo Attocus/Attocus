@@ -29,13 +29,15 @@ import {
   Eraser,
   Type,
   Moon,
-  Sun
+  Sun,
+  BookOpen
 } from 'lucide-react';
 import { SlideViewer } from './SlideViewer';
 import { AnnotationCanvas } from './AnnotationCanvas';
 import { StudySidebar } from './StudySidebar';
 import { WrapUpModal } from './WrapUpModal';
 import { UnderstandingModal } from './UnderstandingModal';
+import { SavedSummariesModal } from './SavedSummariesModal';
 import { ExplainDrawer } from './ExplainDrawer';
 import { QuickQuizModal } from './QuickQuizModal';
 import { CameraConsentModal } from './CameraConsentModal';
@@ -108,13 +110,52 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
 
-    // Utilize 100% of viewport area, fitting native 880x620 aspect ratio comfortably with zero distortion
-    const scaleW = screenW / 880;
-    const scaleH = screenH / 620;
+    // Account for top floating pen toolbar (approx 68px) and side padding
+    const availableH = Math.max(300, screenH - 72);
+    const availableW = Math.max(400, screenW - 24);
+    const scaleW = availableW / 880;
+    const scaleH = availableH / 620;
     return Math.min(scaleW, scaleH);
   }, []);
 
   const [fullScreenScale, setFullScreenScale] = useState<number>(calculateFullScreenScale);
+
+  const enterFullScreen = useCallback(async () => {
+    try {
+      if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (err) {
+      console.warn('Fullscreen request failed:', err);
+    }
+    setIsFullScreen(true);
+  }, []);
+
+  const exitFullScreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+    } catch (err) {
+      console.warn('Fullscreen exit failed:', err);
+    }
+    setIsFullScreen(false);
+  }, []);
+
+  // Sync with browser fullscreen changes (e.g. user pressed Esc natively or browser toolbar)
+  useEffect(() => {
+    const handleFsChange = () => {
+      if (!document.fullscreenElement && isFullScreen) {
+        setIsFullScreen(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+    };
+  }, [isFullScreen]);
 
   useEffect(() => {
     const updateScale = () => {
@@ -154,16 +195,17 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isFullScreen) {
-        setIsFullScreen(false);
+        exitFullScreen();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFullScreen]);
+  }, [isFullScreen, exitFullScreen]);
 
   // Modals & Panels
   const [wrapUpModalOpen, setWrapUpModalOpen] = useState(false);
   const [understandingModalOpen, setUnderstandingModalOpen] = useState(false);
+  const [savedSummariesModalOpen, setSavedSummariesModalOpen] = useState(false);
   const [explainDrawerOpen, setExplainDrawerOpen] = useState(false);
   const [quickQuizModalOpen, setQuickQuizModalOpen] = useState(false);
 
@@ -207,6 +249,12 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   const tabHiddenTimestampRef = useRef<number | null>(null);
   const tabSwitchesCountRef = useRef<number>(0);
   const totalAwaySecondsRef = useRef<number>(0);
+
+  // Cooldown لمنع تكرار تنبيهات القهوة والأكل مع كل رشفة أو لقمة
+  const lastCoffeeAlertTimestampRef = useRef<number>(0);
+  const lastEatingAlertTimestampRef = useRef<number>(0);
+  const COFFEE_ALERT_COOLDOWN_MS = 10 * 60 * 1000; // 10 دقائق تهدئة
+  const EATING_ALERT_COOLDOWN_MS = 6 * 60 * 1000;  // 6 دقائق تهدئة
 
   const currentSlide: Slide = lecture.slides.find(s => s.pageNumber === currentPage) || lecture.slides[0];
 
@@ -555,6 +603,102 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     }));
   };
 
+  const handleTriggerCoffeeDetected = (reason?: string) => {
+    const now = Date.now();
+    const shouldShowToast = (now - lastCoffeeAlertTimestampRef.current) > COFFEE_ALERT_COOLDOWN_MS;
+    const msg = reason || 'بالعافية وصحة وهنا! ☕️ روّق برشفة القهوة.. وبعدها عندنا كويز خفيف نثبّت به معلومات اليوم! 🎯';
+
+    setAttentionState(prev => ({
+      ...prev,
+      detectedState: 'coffee',
+      detectionReason: msg,
+      phoneAlertOpen: false,
+      sleepingAlertOpen: false,
+      awayAlertOpen: false,
+      attentionDrifted: false,
+      tabSwitchToast: shouldShowToast ? {
+        show: true,
+        timestamp: now,
+        message: msg
+      } : prev.tabSwitchToast
+    }));
+
+    if (shouldShowToast) {
+      lastCoffeeAlertTimestampRef.current = now;
+      sendAttentionTelemetry({ state: 'coffee', confidence: 0.9 });
+      setTimeout(() => {
+        setAttentionState(p => ({
+          ...p,
+          tabSwitchToast: p.tabSwitchToast?.message === msg ? null : p.tabSwitchToast
+        }));
+      }, 6000);
+    }
+  };
+
+  const handleTriggerEatingDetected = (reason?: string) => {
+    const now = Date.now();
+    const shouldShowToast = (now - lastEatingAlertTimestampRef.current) > EATING_ALERT_COOLDOWN_MS;
+    const msg = reason || 'صحة وعافية! 🥪 الأكل بيُحسب كفترة تشتت خفيفة، خذ لك لقمة سريعة ونرجع نركز عشان ما يطير حماس الجلسة.';
+
+    setAttentionState(prev => ({
+      ...prev,
+      detectedState: 'eating',
+      detectionReason: msg,
+      phoneAlertOpen: false,
+      sleepingAlertOpen: false,
+      awayAlertOpen: false,
+      attentionDrifted: true,
+      tabSwitchToast: shouldShowToast ? {
+        show: true,
+        timestamp: now,
+        message: msg
+      } : prev.tabSwitchToast
+    }));
+
+    if (shouldShowToast) {
+      lastEatingAlertTimestampRef.current = now;
+      sendAttentionTelemetry({ state: 'eating', confidence: 0.85 });
+      setTimeout(() => {
+        setAttentionState(p => ({
+          ...p,
+          tabSwitchToast: p.tabSwitchToast?.message === msg ? null : p.tabSwitchToast
+        }));
+      }, 6000);
+    }
+  };
+
+  const handleTriggerBookDetected = (reason?: string) => {
+    const msg = reason || 'تركيز رائع في قراءة الكتاب وتدوين الملاحظات! 📖 وقت قراءتك محسوب بالكامل من جلسة المذاكرة.';
+    setAttentionState(prev => ({
+      ...prev,
+      detectedState: 'book',
+      detectionReason: msg,
+      attentionDrifted: false,
+      driftSeconds: 0,
+      visualPulseActive: false,
+      phoneAlertOpen: false,
+      sleepingAlertOpen: false,
+      awayAlertOpen: false
+    }));
+    sendAttentionTelemetry({ state: 'book', confidence: 0.9 });
+  };
+
+  const handleTriggerLaptopDetected = (reason?: string) => {
+    const msg = reason || 'جلسة عمل ومذاكرة مركزة على اللابتوب! 💻 أحسنت في استغلال الوقت ومتابعة المادة.';
+    setAttentionState(prev => ({
+      ...prev,
+      detectedState: 'laptop',
+      detectionReason: msg,
+      attentionDrifted: false,
+      driftSeconds: 0,
+      visualPulseActive: false,
+      phoneAlertOpen: false,
+      sleepingAlertOpen: false,
+      awayAlertOpen: false
+    }));
+    sendAttentionTelemetry({ state: 'laptop', confidence: 0.9 });
+  };
+
   const handleAnalyzeFrameSnapshot = async (imageBase64: string) => {
     setAttentionState(prev => ({ ...prev, isAnalyzingFrame: true }));
     try {
@@ -570,6 +714,16 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           handleTriggerPhoneDetected(data.coachMessage || data.reason);
         } else if (state === 'sleeping') {
           handleTriggerSleepingDetected(data.coachMessage || data.reason);
+        } else if (state === 'coffee' || state === 'drinking_coffee') {
+          handleTriggerCoffeeDetected(data.coachMessage || data.reason);
+        } else if (state === 'eating') {
+          handleTriggerEatingDetected(data.coachMessage || data.reason);
+        } else if (state === 'book' || state === 'reading_book') {
+          handleTriggerBookDetected(data.coachMessage || data.reason);
+        } else if (state === 'laptop' || state === 'using_laptop') {
+          handleTriggerLaptopDetected(data.coachMessage || data.reason);
+        } else if (state === 'away') {
+          handleTriggerAwayDetected(data.coachMessage || data.reason);
         } else if (state === 'distracted') {
           handleTriggerGazeDrift();
         } else {
@@ -911,7 +1065,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
             <button
               type="button"
               id="fullscreen-toggle-btn"
-              onClick={() => setIsFullScreen(true)}
+              onClick={enterFullScreen}
               className={`p-1.5 rounded-xl transition-all flex items-center justify-center ${
                 isDarkMode
                   ? 'hover:bg-slate-700 text-slate-300 hover:text-white'
@@ -925,13 +1079,29 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           </div>
         </div>
 
-        {/* End: Language Selector + Dark Mode Toggle + Finish Studying Button */}
-        <div className="flex items-center gap-3">
+        {/* End: Language Selector + Dark Mode Toggle + Saved Summaries + Finish Studying Button */}
+        <div className="flex items-center gap-2.5">
           {/* محول اللغة */}
           <LanguageSelector />
 
           {/* زر الوضع الداكن */}
           <ThemeToggle />
+
+          {/* زر ملخصاتي */}
+          <button
+            type="button"
+            id="open-saved-summaries-btn"
+            onClick={() => setSavedSummariesModalOpen(true)}
+            className={`text-xs px-3 py-2 rounded-xl border font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
+              isDarkMode
+                ? 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border-slate-700'
+                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700 border-slate-200/80'
+            }`}
+            title={isAr ? 'الملخصات المحفوظة لهذه المحاضرة' : 'Saved Summaries'}
+          >
+            <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+            <span className="hidden sm:inline">{isAr ? 'ملخصاتي' : 'Summaries'}</span>
+          </button>
 
           {/* زر إنهاء الجلسة */}
           <button
@@ -964,6 +1134,10 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           onTriggerPhoneDetected={handleTriggerPhoneDetected}
           onTriggerSleepingDetected={handleTriggerSleepingDetected}
           onTriggerAwayDetected={handleTriggerAwayDetected}
+          onTriggerBookDetected={handleTriggerBookDetected}
+          onTriggerLaptopDetected={handleTriggerLaptopDetected}
+          onTriggerCoffeeDetected={handleTriggerCoffeeDetected}
+          onTriggerEatingDetected={handleTriggerEatingDetected}
           onTriggerGazeDrift={handleTriggerGazeDrift}
           onTriggerFocused={handleTriggerFocused}
           onAnalyzeFrameSnapshot={handleAnalyzeFrameSnapshot}
@@ -1088,6 +1262,14 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         isOpen={understandingModalOpen}
         onClose={() => setUnderstandingModalOpen(false)}
         slide={currentSlide}
+        lectureTitle={lecture.title}
+        lectureId={lecture.id}
+      />
+
+      <SavedSummariesModal
+        isOpen={savedSummariesModalOpen}
+        onClose={() => setSavedSummariesModalOpen(false)}
+        lectureId={lecture.id}
         lectureTitle={lecture.title}
       />
 
@@ -1221,15 +1403,19 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         <div
           id="fullscreen-slide-overlay"
           dir={dir}
-          className={`fixed inset-0 z-50 flex items-center justify-center select-none overflow-hidden transition-colors duration-200 ${
-            isDarkMode ? 'bg-[#141b2d]' : 'bg-white'
+          className={`fixed inset-0 z-50 flex flex-col items-center justify-center select-none overflow-hidden transition-colors duration-200 pt-14 sm:pt-16 ${
+            isDarkMode ? 'bg-[#141b2d]' : 'bg-[#F8FAFC]'
           }`}
           style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}
         >
-          {/* Floating Notability-style Pill Toolbar */}
+          {/* Floating Notability-style Pill Toolbar - Adapts to Dark/Light Mode */}
           <div
             id="fullscreen-pen-toolbar"
-            className="absolute top-2.5 sm:top-3.5 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 backdrop-blur-2xl border border-slate-700/80 shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-2xl p-1.5 px-3 flex items-center gap-1 sm:gap-1.5 text-white max-w-[98vw] overflow-x-auto scrollbar-none animate-in slide-in-from-top-3 duration-150"
+            className={`absolute top-2.5 sm:top-3.5 left-1/2 -translate-x-1/2 z-50 backdrop-blur-2xl border rounded-2xl p-1.5 px-3 flex items-center gap-1 sm:gap-1.5 max-w-[98vw] overflow-x-auto scrollbar-none animate-in slide-in-from-top-3 duration-150 transition-colors ${
+              isDarkMode
+                ? 'bg-slate-900/95 border-slate-700/80 shadow-[0_8px_32px_rgba(0,0,0,0.5)] text-white'
+                : 'bg-white/95 border-slate-200/90 shadow-[0_8px_32px_rgba(0,0,0,0.12)] text-slate-800'
+            }`}
           >
             {/* التنقل بين السلايدات */}
             <div className="flex items-center gap-1 shrink-0">
@@ -1238,14 +1424,18 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                 id="fullscreen-prev-slide-btn"
                 onClick={handlePrevPage}
                 disabled={currentPage <= 1}
-                className="p-1 sm:px-2 rounded-xl border border-slate-700/80 hover:bg-slate-800 disabled:opacity-25 disabled:pointer-events-none transition-all flex items-center gap-1 text-xs font-semibold"
+                className={`p-1 sm:px-2 rounded-xl border disabled:opacity-25 disabled:pointer-events-none transition-all flex items-center gap-1 text-xs font-semibold ${
+                  isDarkMode
+                    ? 'border-slate-700/80 hover:bg-slate-800 text-slate-200 hover:text-white'
+                    : 'border-slate-200 hover:bg-slate-100 text-slate-700 hover:text-slate-900'
+                }`}
                 title={t('workspace.previousSlide', 'الشريحة السابقة')}
               >
                 {isAr ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
                 <span className="hidden md:inline">{t('workspace.previousSlide', 'السابق')}</span>
               </button>
 
-              <span className="text-xs font-semibold px-2 text-slate-300 whitespace-nowrap">
+              <span className={`text-xs font-semibold px-2 whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
                 {isAr ? `شريحة ${currentPage} من ${lecture.totalPages}` : `Slide ${currentPage} of ${lecture.totalPages}`}
               </span>
 
@@ -1254,7 +1444,11 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                 id="fullscreen-next-slide-btn"
                 onClick={handleNextPage}
                 disabled={currentPage >= lecture.totalPages}
-                className="p-1 sm:px-2 rounded-xl border border-slate-700/80 hover:bg-slate-800 disabled:opacity-25 disabled:pointer-events-none transition-all flex items-center gap-1 text-xs font-semibold"
+                className={`p-1 sm:px-2 rounded-xl border disabled:opacity-25 disabled:pointer-events-none transition-all flex items-center gap-1 text-xs font-semibold ${
+                  isDarkMode
+                    ? 'border-slate-700/80 hover:bg-slate-800 text-slate-200 hover:text-white'
+                    : 'border-slate-200 hover:bg-slate-100 text-slate-700 hover:text-slate-900'
+                }`}
                 title={t('workspace.nextSlide', 'الشريحة التالية')}
               >
                 <span className="hidden md:inline">{t('workspace.nextSlide', 'التالي')}</span>
@@ -1262,7 +1456,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               </button>
             </div>
 
-            <div className="w-px h-5 bg-slate-700/80 mx-0.5 shrink-0" />
+            <div className={`w-px h-5 mx-0.5 shrink-0 ${isDarkMode ? 'bg-slate-700/80' : 'bg-slate-200'}`} />
 
             {/* أدوات الرسم: قلم، تظليل، ممحاة، نص */}
             <div className="flex items-center gap-1 shrink-0">
@@ -1274,11 +1468,13 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                 className={`p-1.5 px-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold ${
                   activeTool === 'pen'
                     ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-400/40'
-                    : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                    : isDarkMode
+                      ? 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                      : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
                 }`}
                 title={t('workspace.pen', 'قلم')}
               >
-                <Edit2 className="w-3.5 h-3.5 text-blue-300" />
+                <Edit2 className={`w-3.5 h-3.5 ${activeTool === 'pen' ? 'text-white' : 'text-blue-500'}`} />
                 <span className="hidden lg:inline">{t('workspace.pen', 'قلم')}</span>
               </button>
 
@@ -1290,11 +1486,13 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                 className={`p-1.5 px-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold ${
                   activeTool === 'highlighter'
                     ? 'bg-amber-500 text-white shadow-xs ring-2 ring-amber-300/40'
-                    : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                    : isDarkMode
+                      ? 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                      : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
                 }`}
                 title={t('workspace.highlighter', 'تظليل')}
               >
-                <Highlighter className="w-3.5 h-3.5 text-amber-200" />
+                <Highlighter className={`w-3.5 h-3.5 ${activeTool === 'highlighter' ? 'text-white' : 'text-amber-500'}`} />
                 <span className="hidden lg:inline">{t('workspace.highlighter', 'تظليل')}</span>
               </button>
 
@@ -1306,11 +1504,13 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                 className={`p-1.5 px-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold ${
                   activeTool === 'eraser'
                     ? 'bg-rose-600 text-white shadow-xs ring-2 ring-rose-400/40'
-                    : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                    : isDarkMode
+                      ? 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                      : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
                 }`}
                 title={t('workspace.eraser', 'ممحاة')}
               >
-                <Eraser className="w-3.5 h-3.5 text-rose-300" />
+                <Eraser className={`w-3.5 h-3.5 ${activeTool === 'eraser' ? 'text-white' : 'text-rose-500'}`} />
                 <span className="hidden lg:inline">{t('workspace.eraser', 'ممحاة')}</span>
               </button>
 
@@ -1322,19 +1522,21 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                 className={`p-1.5 px-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold ${
                   activeTool === 'text'
                     ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-400/40'
-                    : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                    : isDarkMode
+                      ? 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                      : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
                 }`}
                 title={t('workspace.text', 'نص')}
               >
-                <Type className="w-3.5 h-3.5 text-purple-300" />
+                <Type className={`w-3.5 h-3.5 ${activeTool === 'text' ? 'text-white' : 'text-purple-500'}`} />
                 <span className="hidden lg:inline">{t('workspace.text', 'نص')}</span>
               </button>
             </div>
 
-            {/* لوحة ألوان القلم: نفس التصميم الحالي تماماً وبدون أي تكرار */}
+            {/* لوحة ألوان القلم */}
             {(activeTool === 'pen' || activeTool === 'text' || activeTool === 'none') && (
               <>
-                <div className="w-px h-5 bg-slate-700/80 mx-0.5 shrink-0" />
+                <div className={`w-px h-5 mx-0.5 shrink-0 ${isDarkMode ? 'bg-slate-700/80' : 'bg-slate-200'}`} />
                 <div className="flex items-center gap-1.5 px-1 shrink-0">
                   {PEN_COLOR_OPTIONS.map(opt => (
                     <div key={opt.id} className="relative group flex flex-col items-center">
@@ -1342,16 +1544,26 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                         type="button"
                         onClick={() => setActiveColor(opt.color)}
                         className={`w-4 h-4 rounded-full transition-all ${
-                          activeColor === opt.color ? 'scale-125 ring-2 ring-offset-1 ring-white' : 'opacity-75 hover:opacity-100 hover:scale-110'
+                          activeColor === opt.color
+                            ? isDarkMode
+                              ? 'scale-125 ring-2 ring-offset-1 ring-white ring-offset-slate-900'
+                              : 'scale-125 ring-2 ring-offset-1 ring-slate-800 ring-offset-white'
+                            : 'opacity-75 hover:opacity-100 hover:scale-110'
                         }`}
                         style={{ backgroundColor: opt.color }}
                         aria-label={isAr ? `${opt.name} - ${opt.meaning}` : `${opt.nameEn || opt.name} - ${opt.meaningEn || opt.meaning}`}
                       />
-                      {/* التوضيح أسفل اللون مباشرة بنفس التصميم والمحتوى تماماً */}
-                      <div className="absolute top-full mt-2.5 left-1/2 -translate-x-1/2 bg-slate-900/95 dark:bg-slate-800 border border-slate-700/80 text-white text-[11px] rounded-xl px-3 py-1.5 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50 shadow-xl flex flex-col items-center gap-0.5">
-                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 bg-slate-900/95 dark:bg-slate-800 border-t border-l border-slate-700/80" />
+                      {/* التوضيح أسفل اللون مباشرة */}
+                      <div className={`absolute top-full mt-2.5 left-1/2 -translate-x-1/2 border text-[11px] rounded-xl px-3 py-1.5 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50 shadow-xl flex flex-col items-center gap-0.5 ${
+                        isDarkMode
+                          ? 'bg-slate-900/95 border-slate-700/80 text-white'
+                          : 'bg-white border-slate-200 text-slate-800 shadow-md'
+                      }`}>
+                        <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 border-t border-l ${
+                          isDarkMode ? 'bg-slate-900/95 border-slate-700/80' : 'bg-white border-slate-200'
+                        }`} />
                         <span className="font-bold relative z-10">{isAr ? opt.name : (opt.nameEn || opt.name)}</span>
-                        <span className="text-slate-300 dark:text-slate-400 text-[10px] relative z-10">{isAr ? opt.meaning : (opt.meaningEn || opt.meaning)}</span>
+                        <span className={`text-[10px] relative z-10 ${isDarkMode ? 'text-slate-300' : 'text-slate-500'}`}>{isAr ? opt.meaning : (opt.meaningEn || opt.meaning)}</span>
                       </div>
                     </div>
                   ))}
@@ -1359,10 +1571,10 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               </>
             )}
 
-            {/* لوحة ألوان التظليل: نفس التصميم الحالي تماماً وبدون أي تكرار */}
+            {/* لوحة ألوان التظليل */}
             {activeTool === 'highlighter' && (
               <>
-                <div className="w-px h-5 bg-slate-700/80 mx-0.5 shrink-0" />
+                <div className={`w-px h-5 mx-0.5 shrink-0 ${isDarkMode ? 'bg-slate-700/80' : 'bg-slate-200'}`} />
                 <div className="flex items-center gap-1.5 px-1 shrink-0">
                   {MARKER_COLOR_OPTIONS.map(opt => (
                     <div key={opt.id} className="relative group flex flex-col items-center">
@@ -1370,16 +1582,26 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                         type="button"
                         onClick={() => setActiveColor(opt.color)}
                         className={`w-4 h-4 rounded-full transition-all ${
-                          activeColor === opt.color ? 'scale-125 ring-2 ring-offset-1 ring-white' : 'opacity-75 hover:opacity-100 hover:scale-110'
+                          activeColor === opt.color
+                            ? isDarkMode
+                              ? 'scale-125 ring-2 ring-offset-1 ring-white ring-offset-slate-900'
+                              : 'scale-125 ring-2 ring-offset-1 ring-slate-800 ring-offset-white'
+                            : 'opacity-75 hover:opacity-100 hover:scale-110'
                         }`}
                         style={{ backgroundColor: opt.dotColor }}
                         aria-label={isAr ? `${opt.name} - ${opt.meaning}` : `${opt.nameEn || opt.name} - ${opt.meaningEn || opt.meaning}`}
                       />
-                      {/* التوضيح أسفل اللون مباشرة بنفس التصميم والمحتوى تماماً */}
-                      <div className="absolute top-full mt-2.5 left-1/2 -translate-x-1/2 bg-slate-900/95 dark:bg-slate-800 border border-slate-700/80 text-white text-[11px] rounded-xl px-3 py-1.5 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50 shadow-xl flex flex-col items-center gap-0.5">
-                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 bg-slate-900/95 dark:bg-slate-800 border-t border-l border-slate-700/80" />
+                      {/* التوضيح أسفل اللون مباشرة */}
+                      <div className={`absolute top-full mt-2.5 left-1/2 -translate-x-1/2 border text-[11px] rounded-xl px-3 py-1.5 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50 shadow-xl flex flex-col items-center gap-0.5 ${
+                        isDarkMode
+                          ? 'bg-slate-900/95 border-slate-700/80 text-white'
+                          : 'bg-white border-slate-200 text-slate-800 shadow-md'
+                      }`}>
+                        <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 border-t border-l ${
+                          isDarkMode ? 'bg-slate-900/95 border-slate-700/80' : 'bg-white border-slate-200'
+                        }`} />
                         <span className="font-bold relative z-10">{isAr ? opt.name : (opt.nameEn || opt.name)}</span>
-                        <span className="text-slate-300 dark:text-slate-400 text-[10px] relative z-10">{isAr ? opt.meaning : (opt.meaningEn || opt.meaning)}</span>
+                        <span className={`text-[10px] relative z-10 ${isDarkMode ? 'text-slate-300' : 'text-slate-500'}`}>{isAr ? opt.meaning : (opt.meaningEn || opt.meaning)}</span>
                       </div>
                     </div>
                   ))}
@@ -1388,8 +1610,10 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
             )}
 
             {/* التحكم بسُمك القلم */}
-            <div className="w-px h-5 bg-slate-700/80 mx-0.5 shrink-0" />
-            <div className="flex items-center gap-1 bg-slate-800/90 p-0.5 rounded-xl border border-slate-700/80 shrink-0">
+            <div className={`w-px h-5 mx-0.5 shrink-0 ${isDarkMode ? 'bg-slate-700/80' : 'bg-slate-200'}`} />
+            <div className={`flex items-center gap-1 p-0.5 rounded-xl border shrink-0 ${
+              isDarkMode ? 'bg-slate-800/90 border-slate-700/80' : 'bg-slate-100 border-slate-200'
+            }`}>
               {[
                 { size: 2, label: '2px', titleAr: 'رقيق (2px)', titleEn: 'Thin (2px)', dotClass: 'w-1.5 h-1.5' },
                 { size: 4, label: '4px', titleAr: 'متوسط (4px)', titleEn: 'Medium (4px)', dotClass: 'w-2.5 h-2.5' },
@@ -1402,7 +1626,9 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                   className={`px-1.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
                     strokeThickness === item.size
                       ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
+                      : isDarkMode
+                        ? 'text-slate-400 hover:text-white hover:bg-slate-700/60'
+                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/70'
                   }`}
                   title={isAr ? item.titleAr : item.titleEn}
                 >
@@ -1413,14 +1639,18 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
             </div>
 
             {/* تراجع، إعادة، مسح الكل */}
-            <div className="w-px h-5 bg-slate-700/80 mx-0.5 shrink-0" />
+            <div className={`w-px h-5 mx-0.5 shrink-0 ${isDarkMode ? 'bg-slate-700/80' : 'bg-slate-200'}`} />
             <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
                 id="fullscreen-undo-btn"
                 onClick={handleUndoAnnotation}
                 disabled={(pageAnnotations[currentPage] || []).length === 0}
-                className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white disabled:opacity-25 disabled:pointer-events-none transition-colors"
+                className={`p-1.5 rounded-xl disabled:opacity-25 disabled:pointer-events-none transition-colors ${
+                  isDarkMode
+                    ? 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                    : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
+                }`}
                 title={t('workspace.undo', 'تراجع')}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -1431,7 +1661,11 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                 id="fullscreen-redo-btn"
                 onClick={handleRedoAnnotation}
                 disabled={(redoStack[currentPage] || []).length === 0}
-                className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white disabled:opacity-25 disabled:pointer-events-none transition-colors"
+                className={`p-1.5 rounded-xl disabled:opacity-25 disabled:pointer-events-none transition-colors ${
+                  isDarkMode
+                    ? 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                    : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
+                }`}
                 title={t('workspace.redo', 'إعادة')}
               >
                 <RotateCw className="w-3.5 h-3.5" />
@@ -1442,20 +1676,28 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                 id="fullscreen-clear-btn"
                 onClick={handleClearAllAnnotations}
                 disabled={(pageAnnotations[currentPage] || []).length === 0}
-                className="p-1.5 rounded-xl hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 disabled:opacity-25 disabled:pointer-events-none transition-colors"
+                className={`p-1.5 rounded-xl disabled:opacity-25 disabled:pointer-events-none transition-colors ${
+                  isDarkMode
+                    ? 'hover:bg-rose-900/40 text-slate-300 hover:text-rose-300'
+                    : 'hover:bg-rose-50 text-slate-600 hover:text-rose-600'
+                }`}
                 title={t('workspace.clearAll', 'مسح الكل')}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* زر Full Screen الموحد - يتحول في ملء الشاشة إلى زر Exit Full Screen بأيقونة فقط بدون نصوص */}
-            <div className="w-px h-5 bg-slate-700/80 mx-0.5 shrink-0" />
+            {/* زر Full Screen الموحد - خروج من ملء الشاشة */}
+            <div className={`w-px h-5 mx-0.5 shrink-0 ${isDarkMode ? 'bg-slate-700/80' : 'bg-slate-200'}`} />
             <button
               type="button"
               id="fullscreen-toggle-btn"
-              onClick={() => setIsFullScreen(false)}
-              className="p-1.5 rounded-xl hover:bg-slate-800 text-blue-400 hover:text-blue-300 transition-colors shrink-0 flex items-center justify-center"
+              onClick={exitFullScreen}
+              className={`p-1.5 rounded-xl transition-colors shrink-0 flex items-center justify-center ${
+                isDarkMode
+                  ? 'hover:bg-slate-800 text-blue-400 hover:text-blue-300'
+                  : 'hover:bg-slate-100 text-blue-600 hover:text-blue-700'
+              }`}
               title={t('workspace.exitFullScreen', 'خروج من ملء الشاشة')}
               aria-label={t('workspace.exitFullScreen', 'خروج من ملء الشاشة')}
             >

@@ -13,7 +13,11 @@ import {
   RefreshCw,
   PanelRightClose,
   PanelRightOpen,
-  UserX
+  UserX,
+  BookOpen,
+  Laptop,
+  Coffee,
+  Utensils
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -32,6 +36,10 @@ interface StudySidebarProps {
   onTriggerPhoneDetected: (reason?: string) => void;
   onTriggerSleepingDetected: (reason?: string) => void;
   onTriggerAwayDetected?: (reason?: string) => void;
+  onTriggerBookDetected?: (reason?: string) => void;
+  onTriggerLaptopDetected?: (reason?: string) => void;
+  onTriggerCoffeeDetected?: (reason?: string) => void;
+  onTriggerEatingDetected?: (reason?: string) => void;
   onTriggerGazeDrift: () => void;
   onTriggerFocused: () => void;
   onAnalyzeFrameSnapshot: (dataUrl: string) => Promise<void>;
@@ -59,6 +67,10 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
   onTriggerPhoneDetected,
   onTriggerSleepingDetected,
   onTriggerAwayDetected,
+  onTriggerBookDetected,
+  onTriggerLaptopDetected,
+  onTriggerCoffeeDetected,
+  onTriggerEatingDetected,
   onTriggerGazeDrift,
   onTriggerFocused,
   onAnalyzeFrameSnapshot,
@@ -428,11 +440,17 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                     ? 'bg-blue-600 animate-pulse'
                     : cameraActive && (detectedState === 'away' || isAwayVisible)
                       ? 'bg-amber-500 animate-pulse'
-                      : cameraActive && (detectedState === 'distracted' || attentionDrifted)
-                        ? 'bg-orange-500'
-                        : cameraActive && detectedState === 'focused'
-                          ? 'bg-emerald-500 animate-pulse'
-                          : 'bg-slate-300 dark:bg-slate-600'
+                      : cameraActive && (detectedState === 'book' || detectedState === 'reading_book' || detectedState === 'laptop' || detectedState === 'using_laptop')
+                        ? 'bg-emerald-500 animate-pulse'
+                        : cameraActive && (detectedState === 'coffee' || detectedState === 'drinking_coffee')
+                          ? 'bg-amber-600 animate-pulse'
+                          : cameraActive && detectedState === 'eating'
+                            ? 'bg-yellow-500 animate-pulse'
+                            : cameraActive && (detectedState === 'distracted' || attentionDrifted)
+                              ? 'bg-orange-500'
+                              : cameraActive && detectedState === 'focused'
+                                ? 'bg-emerald-500 animate-pulse'
+                                : 'bg-slate-300 dark:bg-slate-600'
                 }`}
             />
             <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -443,9 +461,17 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                     ? (isAr ? 'رصد إغلاق العينين 💤' : 'Eyes Closed 💤')
                     : (detectedState === 'away' || isAwayVisible)
                       ? (isAr ? 'مغادرة المقعد 🚶‍♂️' : 'Away from Seat 🚶‍♂️')
-                      : detectedState === 'distracted' || attentionDrifted
-                        ? (isAr ? 'تشتت الانتباه' : 'Distracted')
-                        : (isAr ? 'مراقب التركيز: نشط' : 'Focus Monitor: Active')
+                      : (detectedState === 'book' || detectedState === 'reading_book')
+                        ? (isAr ? 'مذاكرة: قراءة كتاب 📖 (محسوب)' : 'Studying: Book reading 📖')
+                        : (detectedState === 'laptop' || detectedState === 'using_laptop')
+                          ? (isAr ? 'مذاكرة: على اللابتوب 💻 (محسوب)' : 'Studying: Laptop work 💻')
+                          : (detectedState === 'coffee' || detectedState === 'drinking_coffee')
+                            ? (isAr ? 'رشفة قهوة ☕️ (كويز قادم)' : 'Coffee Break ☕️ (Quiz next)')
+                            : detectedState === 'eating'
+                              ? (isAr ? 'تناول وجبة 🥪 (تشتت خفيف)' : 'Snack/Eating 🥪 (Mild)')
+                              : detectedState === 'distracted' || attentionDrifted
+                                ? (isAr ? 'تشتت الانتباه' : 'Distracted')
+                                : (isAr ? 'مراقب التركيز: نشط' : 'Focus Monitor: Active')
                 : (isAr ? 'مراقب التركيز: متوقف' : 'Focus Monitor: Off')}
             </span>
           </div>
@@ -511,6 +537,42 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                 <div className="px-3 py-1.5 rounded-xl bg-white shadow-md text-xs font-bold text-blue-600 flex items-center gap-1.5">
                   <Moon className="w-3.5 h-3.5" />
                   <span>خذ استراحة قصيرة ☕</span>
+                </div>
+              </div>
+            )}
+
+            {(detectedState === 'book' || detectedState === 'reading_book') && (
+              <div className="absolute inset-0 bg-emerald-600/25 backdrop-blur-[1px] flex items-center justify-center animate-in fade-in">
+                <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 shadow-md text-xs font-bold text-emerald-600 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>{isAr ? 'مذاكرة ممتازة في الكتاب 📖' : 'Studying with Book 📖'}</span>
+                </div>
+              </div>
+            )}
+
+            {(detectedState === 'laptop' || detectedState === 'using_laptop') && (
+              <div className="absolute inset-0 bg-emerald-600/25 backdrop-blur-[1px] flex items-center justify-center animate-in fade-in">
+                <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 shadow-md text-xs font-bold text-emerald-600 flex items-center gap-1.5">
+                  <Laptop className="w-3.5 h-3.5" />
+                  <span>{isAr ? 'مذاكرة مركزة على اللابتوب 💻' : 'Focused Laptop Study 💻'}</span>
+                </div>
+              </div>
+            )}
+
+            {(detectedState === 'coffee' || detectedState === 'drinking_coffee') && (
+              <div className="absolute inset-0 bg-amber-700/25 backdrop-blur-[1px] flex items-center justify-center animate-in fade-in">
+                <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 shadow-md text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                  <Coffee className="w-3.5 h-3.5" />
+                  <span>{isAr ? 'بالعافية! ☕️ بعد القهوة كويز' : 'Enjoy your coffee! ☕️ Quiz next'}</span>
+                </div>
+              </div>
+            )}
+
+            {detectedState === 'eating' && (
+              <div className="absolute inset-0 bg-yellow-500/25 backdrop-blur-[1px] flex items-center justify-center animate-in fade-in">
+                <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 shadow-md text-xs font-bold text-yellow-700 dark:text-yellow-400 flex items-center gap-1.5">
+                  <Utensils className="w-3.5 h-3.5" />
+                  <span>{isAr ? 'عوافي! 🥪 لقمة سريعة ونرجع نركز' : 'Enjoy your snack! 🥪 Let\'s refocus soon'}</span>
                 </div>
               </div>
             )}

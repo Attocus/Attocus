@@ -135,16 +135,27 @@ async function parseTextOrPptxFile(file: File, title: string): Promise<Lecture> 
     // Split by common slide delimiters or markdown headers
     const chunks = text.split(/(?:---|\n## |\n# |Slide \d+:)/i).filter(c => c.trim().length > 20);
     
-    const slides: Slide[] = (chunks.length > 0 ? chunks : [text]).slice(0, 15).map((chunk, idx) => {
-      const lines = chunk.split('\n').map(l => l.trim()).filter(Boolean);
+    const slides: Slide[] = (chunks.length > 0 ? chunks : [text]).slice(0, 25).map((chunk, idx) => {
+      const rawLines = chunk.split('\n').map(l => l.trim()).filter(Boolean);
+      const lines: string[] = [];
+      for (const line of rawLines) {
+        const parts = line.split(/[●•·]/).map((p: string) => p.trim()).filter((p: string) => p.length > 5);
+        if (parts.length > 1) {
+          lines.push(...parts);
+        } else {
+          lines.push(line.replace(/^[●•·\-\*]\s*/, '').trim());
+        }
+      }
+
       const pageTitle = lines[0]?.replace(/^[#\-\s]+/, '').slice(0, 60) || `Slide ${idx + 1}`;
-      const content = lines.slice(1, 6);
+      const content = lines.slice(1, 8);
+      const keyPoints = content.slice(0, 3).map(k => k.replace(/^[0-9]+[\.\-\)]\s*/, '').trim());
       return {
         id: `slide-${idx + 1}`,
         pageNumber: idx + 1,
         title: pageTitle,
         content: content.length > 0 ? content : ['Section notes and key lecture points.'],
-        keyPoints: content.slice(0, 2),
+        keyPoints: keyPoints.length > 0 ? keyPoints : ['Core concept review and application'],
         topic: pageTitle,
         densityScore: 3
       };

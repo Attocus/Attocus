@@ -35,29 +35,56 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
 
   const loadQuiz = async () => {
     setLoading(true);
+    const pastKey = `attocus_past_quiz_q_${slide.id}`;
+    let pastQuestions: string[] = [];
+    try {
+      const stored = localStorage.getItem(pastKey);
+      if (stored) pastQuestions = JSON.parse(stored);
+    } catch {}
+
     try {
       const res = await fetch('/api/coach/quiz/quick', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slide, lectureTitle })
+        body: JSON.stringify({
+          slide,
+          lectureTitle,
+          previousQuestions: pastQuestions,
+          language: isAr ? 'ar' : 'en'
+        })
       });
       const data = await res.json();
-      setQuestion(data.question || (isAr ? `ما هو المبدأ الأساسي في "${slide.title}"؟` : `What is the primary principle in "${slide.title}"?`));
+      const qText = data.question || (isAr ? `ما هو المبدأ الأساسي في "${slide.title}"؟` : `What is the primary principle in "${slide.title}"?`);
+      setQuestion(qText);
       setOptions(data.options || []);
       setCorrectAnswer(data.correctAnswer || data.options?.[0] || '');
       setExplanation(data.explanation || (isAr ? 'تم التحقق من محتوى شريحة المحاضرة.' : 'Verified from lecture slide content.'));
+
+      if (qText) {
+        const updated = [...pastQuestions, qText].slice(-25);
+        try { localStorage.setItem(pastKey, JSON.stringify(updated)); } catch {}
+      }
     } catch {
       const cleanKeyPoints = (slide.keyPoints || []).filter(
         kp => !kp.toLowerCase().includes('visual and conceptual takeaways') && !kp.toLowerCase().includes('visual presentation')
       );
-      setQuestion(isAr ? `فيما يخص "${slide.title}"، أي من العبارات التالية تعتبر صحيحة؟` : `Regarding "${slide.title}", which of the following statements is correct?`);
+      // Pick rotating question based on past questions length
+      const qVariations = [
+        isAr ? `فيما يخص "${slide.title}"، أي من العبارات التالية تعتبر صحيحة؟` : `Regarding "${slide.title}", which of the following statements is correct?`,
+        isAr ? `ما هو المبدأ والهدف الأكاديمي الأساسي في "${slide.topic || slide.title}"؟` : `What is the core principle and objective in "${slide.topic || slide.title}"?`,
+        isAr ? `أي من المفاهيم التالية يعد متطلباً محورياً لـ "${slide.topic || slide.title}"؟` : `Which of the following is a vital requirement for "${slide.topic || slide.title}"?`
+      ];
+      const selectedQ = qVariations[pastQuestions.length % qVariations.length];
+      setQuestion(selectedQ);
+
+      const mainPoint = cleanKeyPoints[pastQuestions.length % (cleanKeyPoints.length || 1)] || (isAr ? 'يحافظ على اتساق وتزامن البيانات عبر جميع العقد والنُسخ.' : 'Maintains consistency and synchronization across all nodes.');
       const opts = isAr ? [
-        cleanKeyPoints[0] || 'يحافظ على اتساق وتزامن البيانات عبر جميع العقد والنُسخ.',
+        mainPoint,
         'يسمح بتجاوز عمليات التحقق من النصاب بالأغلبية.',
         'يتطلب مزامنة ساعة مادية دقيقة بين جميع الخوادم.',
         'يعمل فقط عندما تكون جميع خوادم المجموعة نشطة معاً.'
       ] : [
-        cleanKeyPoints[0] || 'Maintains consistency and synchronization across all nodes.',
+        mainPoint,
         'Allows bypassing majority consensus validation checks.',
         'Requires atomic physical clock synchronization between all servers.',
         'Only operates when every single server in the cluster is healthy.'
@@ -65,6 +92,9 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
       setOptions(opts);
       setCorrectAnswer(opts[0]);
       setExplanation(isAr ? 'هذا الخيار يمثل المفهوم الجوهري المثبت في هذه الشريحة.' : 'This option represents the core concept verified in this slide.');
+
+      const updated = [...pastQuestions, selectedQ].slice(-25);
+      try { localStorage.setItem(pastKey, JSON.stringify(updated)); } catch {}
     } finally {
       setLoading(false);
     }

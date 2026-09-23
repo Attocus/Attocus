@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Slide } from '../types';
-import { BookOpen, Layers, Network, Table as TableIcon, GitBranch, ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { BookOpen, Layers, Network, Table as TableIcon, GitBranch, ArrowLeft, ArrowRight, CheckCircle2, Sparkles, Loader2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { runTakeawaysAgent } from '../agents/takeawaysAgent';
 
 interface SlideViewerProps {
   slide: Slide;
@@ -16,6 +17,102 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({
 }) => {
   const dm = isDarkMode;
   const { isAr, dir, t } = useLanguage();
+
+  // Check if current points are raw or overly verbose prose
+  const isRawPoints = (pts: string[]) => {
+    if (!pts || pts.length === 0) return true;
+    return pts.some(p =>
+      p.includes('●') ||
+      p.includes('•') ||
+      p.length > 95 ||
+      p.includes('Visual presentation') ||
+      p.includes('Visual and conceptual') ||
+      p.includes('Section notes and key')
+    );
+  };
+
+  const [takeaways, setTakeaways] = useState<string[]>(() => {
+    try {
+      const cached = localStorage.getItem(`attocus_llm_takeaways_v3_${slide.id}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return slide.keyPoints || [];
+  });
+  const [isLoadingTakeaways, setIsLoadingTakeaways] = useState<boolean>(false);
+
+  const fetchLLMTakeaways = useCallback(async (force = false) => {
+    const slideFullText = [
+      slide.title || '',
+      slide.subtitle || '',
+      (slide.content || []).join('\n'),
+      (slide.keyPoints || []).join('\n'),
+      (slide as any).rawText || ''
+    ].join('\n').trim();
+
+    // Auto-detect the slide's dominant language directly from the content
+    const arabicCount = (slideFullText.match(/[\u0600-\u06FF]/g) || []).length;
+    const latinCount = (slideFullText.match(/[a-zA-Z]/g) || []).length;
+    const slideLanguage = arabicCount > latinCount ? 'ar' : 'en';
+
+    if (!force) {
+      try {
+        const cached = localStorage.getItem(`attocus_llm_takeaways_v3_${slide.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setTakeaways(parsed);
+            return;
+          }
+        }
+      } catch {}
+    }
+
+    if (!slideFullText || slideFullText.length < 15) return;
+
+    setIsLoadingTakeaways(true);
+    try {
+      const res = await runTakeawaysAgent({
+        slideTitle: slide.title,
+        slideText: slideFullText,
+        topic: slide.topic,
+        language: slideLanguage
+      });
+      if (res && res.coreTakeaways && res.coreTakeaways.length > 0) {
+        setTakeaways(res.coreTakeaways);
+        slide.keyPoints = res.coreTakeaways;
+        try {
+          localStorage.setItem(`attocus_llm_takeaways_v3_${slide.id}`, JSON.stringify(res.coreTakeaways));
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('Failed to fetch LLM takeaways:', e);
+    } finally {
+      setIsLoadingTakeaways(false);
+    }
+  }, [slide]);
+
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(`attocus_llm_takeaways_v3_${slide.id}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setTakeaways(parsed);
+          slide.keyPoints = parsed;
+          return;
+        }
+      }
+    } catch {}
+
+    if (isRawPoints(slide.keyPoints || [])) {
+      fetchLLMTakeaways();
+    } else {
+      setTakeaways(slide.keyPoints || []);
+    }
+  }, [slide.id, fetchLLMTakeaways]);
 
   return (
     <div
@@ -204,9 +301,33 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({
           <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-200' : 'text-[#0F172A]'}`}>
             <CheckCircle2 className="w-4 h-4 text-blue-400" />
             <span>{isAr ? 'النقاط الجوهرية للشريحة' : 'Slide Key Takeaways'}</span>
-            <span className={`text-[10px] font-medium normal-case hidden sm:inline px-2 py-0.5 rounded-full border ${dm ? 'text-slate-400 bg-slate-800 border-slate-700' : 'text-slate-500 bg-slate-100 border-slate-200/60'}`}>
-              {isAr ? 'ملخصة تلقائياً عبر المساعد الذكي' : 'Auto-summarized by AI'}
-            </span>
+
+            {/* زر وحالة استخلاص الذكاء الاصطناعي */}
+            <button
+              type="button"
+              onClick={() => fetchLLMTakeaways(true)}
+              disabled={isLoadingTakeaways}
+              className={`text-[10px] font-semibold normal-case px-2.5 py-0.5 rounded-full border transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer ${
+                isLoadingTakeaways
+                  ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 cursor-wait'
+                  : dm
+                    ? 'text-blue-300 bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20'
+                    : 'text-blue-600 bg-blue-50 border-blue-200 hover:bg-blue-100'
+              }`}
+              title={isAr ? 'إعادة استخلاص النقاط بالذكاء الاصطناعي LLM' : 'Regenerate takeaways with LLM'}
+            >
+              {isLoadingTakeaways ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
+                  <span>{isAr ? 'جاري الاستخلاص بالذكاء الاصطناعي...' : 'Extracting with AI...'}</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3 h-3 text-blue-500" />
+                  <span>{isAr ? 'استخلاص ذكي عبر LLM' : 'AI LLM Takeaways'}</span>
+                </>
+              )}
+            </button>
           </div>
           <span className={`text-[11px] ${dm ? 'text-slate-500' : 'text-slate-400'}`}>
             {isAr ? 'مفاهيم أساسية للاختبار والمراجعة' : 'Core concepts for exam review'}
@@ -214,19 +335,48 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {slide.keyPoints.map((point, idx) => (
-            <div
-              key={idx}
-              className={`text-xs p-2.5 rounded-xl border leading-relaxed shadow-2xs transition-colors ${
-                dm
-                  ? 'text-slate-300 bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
-                  : 'text-slate-700 bg-slate-50/70 border-slate-200/70 hover:bg-slate-50'
-              }`}
-            >
-              <span className={`font-bold ml-1.5 ${dm ? 'text-blue-400' : 'text-[#0F172A]'}`}>{idx + 1}.</span>
-              {point}
-            </div>
-          ))}
+          {takeaways.map((point, idx) => {
+            const isPointArabic = /[\u0600-\u06FF]/.test(point);
+            return (
+              <div
+                key={idx}
+                className={`flex items-start gap-2.5 text-xs p-3 rounded-xl border leading-relaxed shadow-2xs transition-all ${
+                  dm
+                    ? 'text-slate-200 bg-slate-800/60 border-slate-700/60 hover:bg-slate-800'
+                    : 'text-slate-800 bg-slate-50/80 border-slate-200/80 hover:bg-slate-100/60'
+                }`}
+              >
+                <span
+                  className={`shrink-0 w-5 h-5 rounded-lg flex items-center justify-center text-[11px] font-bold ${
+                    dm
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : 'bg-blue-50 text-blue-600 border border-blue-200/60'
+                  }`}
+                >
+                  {idx + 1}
+                </span>
+                <div
+                  className="flex-1 min-w-0 font-medium leading-relaxed"
+                  dir={isPointArabic ? 'rtl' : 'ltr'}
+                >
+                  {(() => {
+                    const colonIdx = point.indexOf(':');
+                    if (colonIdx > 0 && colonIdx < 35) {
+                      const heading = point.slice(0, colonIdx);
+                      const body = point.slice(colonIdx + 1);
+                      return (
+                        <>
+                          <span className={`font-bold ${dm ? 'text-blue-300' : 'text-[#0F172A]'}`}>{heading}:</span>
+                          <span>{body}</span>
+                        </>
+                      );
+                    }
+                    return point;
+                  })()}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

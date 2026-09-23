@@ -93,6 +93,8 @@ class QuizGenerateRequest(BaseModel):
     num_questions: int = 4
     topic: Optional[str] = None
     pdf_name: Optional[str] = None
+    language: Optional[str] = "ar"
+    previous_questions: Optional[List[str]] = None
 
 class RAGRetrieveRequest(BaseModel):
     query: str
@@ -103,17 +105,24 @@ class QuizSubmitRequest(BaseModel):
     session_id: str
     student_id: str = "STU_101"
     student_answers: List[Dict[str, Any]]
+    language: Optional[str] = "ar"
 
 class ExplainRequest(BaseModel):
     topic: str
     slide_content: str
     student_question: Optional[str] = None
     chat_history: Optional[List[Dict[str, str]]] = None
+    language: Optional[str] = "ar"
+
+class SpacedRepetitionReviewRequest(BaseModel):
+    item_id: str
+    is_correct: bool
 
 class SummaryStartRequest(BaseModel):
     session_id: str
     topic: str
     context: str
+    language: Optional[str] = "ar"
 
 class SummaryStepRequest(BaseModel):
     session_id: str
@@ -129,6 +138,13 @@ class EvalValidateRequest(BaseModel):
     expected_output: Optional[str] = None
     faithfulness_threshold: float = 0.7
     relevancy_threshold: float = 0.7
+
+class TakeawaysRequest(BaseModel):
+    slideTitle: Optional[str] = ""
+    slideText: Optional[str] = ""
+    topic: Optional[str] = ""
+    courseSubject: Optional[str] = ""
+    language: Optional[str] = "ar"
 
 
 # -------------------------------------------------------------
@@ -218,12 +234,14 @@ def process_telemetry(payload: TelemetryRequest):
 
 @app.post("/api/quiz/generate")
 def generate_quiz(payload: QuizGenerateRequest):
-    """Generates quiz questions strictly grounded in the slide context or Shared RAG."""
+    """Generates quiz questions strictly grounded in the slide context or Shared RAG with anti-duplication."""
     quiz_data = orchestrator.run_quiz(
         context=payload.context,
         num_questions=payload.num_questions,
         topic=payload.topic,
-        pdf_name=payload.pdf_name
+        pdf_name=payload.pdf_name,
+        language=payload.language or "ar",
+        previous_questions=payload.previous_questions
     )
     return quiz_data
 
@@ -231,35 +249,84 @@ def generate_quiz(payload: QuizGenerateRequest):
 def submit_quiz(payload: QuizSubmitRequest):
     """
     Grades quiz answers, executes the Learning Coach analysis,
-    and records spaced repetition review items.
+    and records spaced repetition review items specifically scheduled for 3 days later.
     """
     results = orchestrator.grade_quiz_and_coach(
         session_id=payload.session_id,
         student_answers=payload.student_answers,
-        student_id=payload.student_id
+        student_id=payload.student_id,
+        language=payload.language or "ar"
     )
     return results
 
 @app.post("/api/learning/explain")
+@app.post("/api/coach/explain")
 def explain_concept(payload: ExplainRequest):
-    """Socratic / tutor explanation for difficult slide concepts."""
+    """Socratic / tutor explanation for difficult slide concepts without repeating past chat content."""
     explanation = orchestrator.explain_slide(
         topic=payload.topic,
         slide_content=payload.slide_content,
         student_question=payload.student_question,
-        chat_history=payload.chat_history
+        chat_history=payload.chat_history,
+        language=payload.language or "ar"
     )
     return {"explanation": explanation}
 
+@app.post("/api/coach/takeaways")
+def extract_takeaways(payload: TakeawaysRequest):
+    """Extracts 2-4 standalone key takeaways from an academic slide using LLM."""
+    return orchestrator.extract_takeaways(
+        slide_title=payload.slideTitle or "",
+        slide_text=payload.slideText or "",
+        topic=payload.topic or "",
+        language=payload.language or "ar"
+    )
+
+@app.get("/api/spaced-repetition/queue")
+def get_spaced_repetition_queue(student_id: str = "STU_101"):
+    """Returns scheduled questions for spaced repetition with days remaining."""
+    queue = orchestrator.get_spaced_repetition_queue(student_id=student_id)
+    return {
+        "student_id": student_id,
+        "queue": queue,
+        "total_scheduled": len(queue),
+        "due_count": sum(1 for q in queue if q.get("is_due", False))
+    }
+
+@app.get("/api/spaced-repetition/due")
+def get_spaced_repetition_due(student_id: str = "STU_101"):
+    """Returns questions that have reached their scheduled 3-day review date."""
+    due_items = orchestrator.get_spaced_repetition_due(student_id=student_id)
+    return {
+        "student_id": student_id,
+        "due_questions": due_items,
+        "count": len(due_items)
+    }
+
+@app.post("/api/spaced-repetition/review")
+def review_spaced_repetition(payload: SpacedRepetitionReviewRequest):
+    """Marks a spaced repetition question as reviewed/mastered or rescheduled."""
+    success = orchestrator.mark_spaced_repetition_result(
+        item_id=payload.item_id,
+        is_correct=payload.is_correct
+    )
+    return {"success": success}
+
 @app.post("/api/summary/start")
 def start_summary(payload: SummaryStartRequest):
-    """Starts the multi-turn Socratic Summary agent."""
+    """Starts the multi-turn Socratic Summary agent and returns slide axes."""
     first_question = orchestrator.start_summary(
         session_id=payload.session_id,
         topic=payload.topic,
-        context=payload.context
+        context=payload.context,
+        language=payload.language or "ar"
     )
-    return {"reply": first_question}
+    session = orchestrator.get_or_create_session(payload.session_id)
+    return {
+        "reply": first_question,
+        "slide_axes": session.get("slide_axes", []),
+        "covered_axes": session.get("covered_axes", [])
+    }
 
 @app.post("/api/summary/step")
 def step_summary(payload: SummaryStepRequest):
@@ -272,9 +339,16 @@ def step_summary(payload: SummaryStepRequest):
 
 @app.post("/api/summary/force")
 def force_summary(payload: SummaryForceRequest):
-    """Forces immediate compilation of the summary."""
+    """Forces immediate compilation of the summary and returns slide axes."""
     final_summary = orchestrator.force_summary(session_id=payload.session_id)
-    return {"final_summary": final_summary}
+    session = orchestrator.get_or_create_session(payload.session_id)
+    agent = session.get("summary_agent")
+    return {
+        "final_summary": final_summary,
+        "slide_axes": session.get("slide_axes", []),
+        "covered_axes": session.get("covered_axes", []),
+        "structured_summary": getattr(agent, "structured_summary", None) if agent else None
+    }
 
 
 # -------------------------------------------------------------

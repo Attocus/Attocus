@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Play, Pause, RotateCcw, Coffee, Brain, Star, X, Plus, Minus } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -39,6 +40,8 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
   const [sessionElapsed, setSessionElapsed] = useState(0);
   const [tempStudy, setTempStudy] = useState(30);
   const [tempBreak, setTempBreak] = useState(5);
+  const [autoRepeat, setAutoRepeat] = useState(true);
+  const [targetCycles, setTargetCycles] = useState(0); // 0 = continuous repeat
 
   const popoverRef = useRef<HTMLDivElement>(null);
   const endTimeRef = useRef<number | null>(null);
@@ -109,8 +112,6 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
       if (next <= 0) {
         clearInterval(interval);
         playChime();
-        setIsRunning(false);
-        endTimeRef.current = null;
 
         if (!isBreak) {
           const newCycles = completedCycles + 1;
@@ -120,16 +121,29 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
           setIsBreak(true);
           setSecondsRemaining(breakSecs);
           setTotalPhaseSeconds(breakSecs);
+          if (autoRepeat) {
+            endTimeRef.current = Date.now() + breakSecs * 1000;
+          } else {
+            setIsRunning(false);
+            endTimeRef.current = null;
+          }
         } else {
           const studySecs = getStudySeconds();
           setIsBreak(false);
           setSecondsRemaining(studySecs);
           setTotalPhaseSeconds(studySecs);
+          const hasMore = targetCycles === 0 || completedCycles < targetCycles;
+          if (autoRepeat && hasMore) {
+            endTimeRef.current = Date.now() + studySecs * 1000;
+          } else {
+            setIsRunning(false);
+            endTimeRef.current = null;
+          }
         }
       }
     }, 250);
     return () => clearInterval(interval);
-  }, [isRunning, isBreak, completedCycles, getStudySeconds, getBreakSeconds, playChime, onPomodoroComplete]);
+  }, [isRunning, isBreak, completedCycles, getStudySeconds, getBreakSeconds, playChime, onPomodoroComplete, autoRepeat, targetCycles]);
 
   useEffect(() => {
     if (pointIntervalRef.current) clearInterval(pointIntervalRef.current);
@@ -386,9 +400,9 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
       )}
 
       {/* ─── تحذير إيقاف المؤقت ─── */}
-      {showStopWarning && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xs w-full p-6 shadow-2xl space-y-3 text-right">
+      {showStopWarning && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xs w-full p-6 shadow-2xl space-y-3 text-right animate-in fade-in zoom-in-95 duration-150">
             <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
               <span className="text-2xl">⚠️</span>
             </div>
@@ -415,22 +429,23 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ─── نافذة التخصيص ─── */}
-      {showCustomSheet && (
+      {showCustomSheet && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
           onClick={() => setShowCustomSheet(false)}
         >
           <div
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-xs rounded-3xl p-6 shadow-2xl space-y-4 text-right"
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 text-right animate-in fade-in zoom-in-95 duration-150"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                {isAr ? "تخصيص الوقت" : "Customize Durations"}
+                {isAr ? "تخصيص مؤقت المذاكرة" : "Customize Study Timer"}
               </h3>
               <button type="button" onClick={() => setShowCustomSheet(false)} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
                 <X className="w-4 h-4" />
@@ -473,15 +488,50 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
               </div>
             </div>
 
+            {/* عدد الجولات والتكرار */}
+            <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
+                <span>{isAr ? "عدد الجولات بالجلسة" : "Cycles per session"}</span>
+                <span className="font-mono text-indigo-600 dark:text-indigo-400">
+                  {targetCycles === 0 ? (isAr ? "مستمر ♾️" : "Continuous ♾️") : `${targetCycles} ${isAr ? "جولات" : "cycles"}`}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setTargetCycles(v => Math.max(0, v - 1))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:text-slate-300">
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <div className="flex-1 text-center text-xs text-slate-500">
+                  {targetCycles === 0 ? (isAr ? "تكرار مستمر بدون توقف" : "Non-stop continuous") : `${targetCycles} ${isAr ? "جولات مبرمجة" : "preset cycles"}`}
+                </div>
+                <button type="button" onClick={() => setTargetCycles(v => Math.min(10, v + 1))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:text-slate-300">
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* الانتقال التلقائي بين الجولات */}
+            <label className="flex items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer pt-1">
+              <input
+                type="checkbox"
+                checked={autoRepeat}
+                onChange={e => setAutoRepeat(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="font-medium">
+                {isAr ? "الانتقال التلقائي للجولة التالية بدون توقف" : "Auto-advance to next cycle without stopping"}
+              </span>
+            </label>
+
             <button
               type="button"
               onClick={applyCustomTimes}
               className="w-full py-2.5 rounded-xl bg-[#0F172A] dark:bg-blue-600 text-white font-bold text-xs hover:bg-slate-800 dark:hover:bg-blue-500 transition-colors"
             >
-              {isAr ? "حفظ" : "Save"}
+              {isAr ? "حفظ وتطبيق المؤقت" : "Save and Apply"}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

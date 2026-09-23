@@ -8,13 +8,15 @@ interface UnderstandingModalProps {
   onClose: () => void;
   slide: Slide;
   lectureTitle: string;
+  lectureId?: string;
 }
 
 export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
   isOpen,
   onClose,
   slide,
-  lectureTitle
+  lectureTitle,
+  lectureId
 }) => {
   const [history, setHistory] = useState<UnderstandingTurn[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<string>('');
@@ -24,6 +26,34 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
   const [compiledSummary, setCompiledSummary] = useState<CompiledSummary | null>(null);
   const [editableSummaryText, setEditableSummaryText] = useState<string>('');
   const [isEditingSummary, setIsEditingSummary] = useState<boolean>(false);
+  const [slideAxes, setSlideAxes] = useState<string[]>([]);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+
+  const saveSummaryToStorage = (summaryObj: CompiledSummary, text: string) => {
+    const targetLectureId = lectureId || 'current';
+    const storageKey = `attocus_lecture_summaries_${targetLectureId}`;
+    try {
+      const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      const newEntry = {
+        id: `sum-${Date.now()}`,
+        slideId: slide.id,
+        slideNumber: slide.pageNumber,
+        slideTopic: slide.topic || slide.title,
+        date: new Date().toLocaleDateString(isAr ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        studentWordsSummary: text,
+        takeaways: summaryObj.lectureTakeaways || slide.keyPoints || [],
+        strengths: summaryObj.strengths || [],
+        corrections: summaryObj.corrections || []
+      };
+      const filtered = existing.filter((s: any) => s.slideId !== slide.id);
+      const updated = [newEntry, ...filtered];
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      setSaveNotice(isAr ? '✓ تم حفظ الملخص بنجاح في مذكراتك الأكاديمية!' : '✓ Summary saved to your academic notes!');
+      setTimeout(() => setSaveNotice(null), 3000);
+    } catch (err) {
+      console.warn('Failed to save summary to localStorage:', err);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -32,6 +62,7 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
       setCompiledSummary(null);
       setStudentInput('');
       setIsEditingSummary(false);
+      setSlideAxes([]);
       startLoop();
     }
   }, [isOpen, slide.id]);
@@ -46,6 +77,9 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
       });
       const data = await response.json();
       setCurrentQuestion(data.question || `بأسلوبك الخاص، ما الذي فهمته من "${slide.topic || slide.title}"؟`);
+      if (data.slideAxes && data.slideAxes.length > 0) {
+        setSlideAxes(data.slideAxes);
+      }
     } catch {
       setCurrentQuestion(`بأسلوبك الخاص، ما الذي فهمته من "${slide.topic || slide.title}"؟`);
     } finally {
@@ -129,6 +163,7 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
       const data: CompiledSummary = await response.json();
       setCompiledSummary(data);
       setEditableSummaryText(data.studentWordsSummary);
+      saveSummaryToStorage(data, data.studentWordsSummary);
     } catch {
       const validAnswers = currentHistory.map(h => h.studentAnswer).filter(a => !a.includes("لا أعلم"));
       const fallbackParagraphs = validAnswers.length > 1
@@ -151,10 +186,11 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
           'التعبير عن الفكرة الجوهرية بأسلوبك وكلماتك الخاصة.',
           'المشاركة النشطة والتفاعل خلال الحوار السقراطي.'
         ],
-        lectureTakeaways: slide.keyPoints
+        lectureTakeaways: slideAxes.length > 0 ? slideAxes : slide.keyPoints
       };
       setCompiledSummary(fallbackSummary);
       setEditableSummaryText(fallbackSummary.studentWordsSummary);
+      saveSummaryToStorage(fallbackSummary, fallbackSummary.studentWordsSummary);
     } finally {
       setIsLoading(false);
     }
@@ -238,6 +274,31 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
             </div>
           ))}
 
+          {/* Slide Axes Roadmap */}
+          {slideAxes.length > 0 && history.length === 0 && !isFinished && (
+            <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/70 dark:border-indigo-900/50 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider">
+                  {isAr ? 'المحاور الأساسية للشريحة' : 'Key Axes of This Topic'}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {slideAxes.map((axis, idx) => (
+                  <div key={idx} className="flex items-center gap-2.5 text-xs text-indigo-900 dark:text-indigo-200">
+                    <span className="w-5 h-5 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold shrink-0 border border-indigo-200/60 dark:border-indigo-800/50">
+                      {idx + 1}
+                    </span>
+                    <span className="leading-relaxed font-medium">{axis}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-indigo-500 dark:text-indigo-400 pt-1">
+                {isAr ? 'سيتم توجيه الحوار السقراطي لتغطية هذه المحاور تدريجياً.' : 'The Socratic dialogue will guide you through these axes step by step.'}
+              </p>
+            </div>
+          )}
+
           {/* Active Question */}
           {!isFinished && (
             <div className="space-y-4 pt-2">
@@ -312,13 +373,25 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
                   <button
                     type="button"
                     id="toggle-edit-summary-btn"
-                    onClick={() => setIsEditingSummary(!isEditingSummary)}
+                    onClick={() => {
+                      if (isEditingSummary && compiledSummary) {
+                        saveSummaryToStorage(compiledSummary, editableSummaryText);
+                      }
+                      setIsEditingSummary(!isEditingSummary);
+                    }}
                     className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1 font-bold transition-colors"
                   >
                     <Edit3 className="w-3 h-3" />
                     <span>{isEditingSummary ? (isAr ? 'حفظ التعديل' : 'Save Edit') : (isAr ? 'تعديل الصياغة' : 'Edit Text')}</span>
                   </button>
                 </div>
+
+                {saveNotice && (
+                  <div className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-semibold text-center animate-in fade-in duration-150">
+                    {saveNotice}
+                  </div>
+                )}
+
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   {isAr
                     ? 'تمت صياغة هذا الملخص من إجاباتك السقراطية لترتيب الفهم في فقرات مترابطة.'
@@ -441,7 +514,12 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
             <button
               type="button"
               id="save-understanding-and-close-btn"
-              onClick={onClose}
+              onClick={() => {
+                if (compiledSummary) {
+                  saveSummaryToStorage(compiledSummary, editableSummaryText);
+                }
+                onClose();
+              }}
               className="text-xs px-5 py-2.5 rounded-xl bg-[#0F172A] dark:bg-blue-600 hover:bg-[#1E293B] dark:hover:bg-blue-700 text-white font-bold flex items-center gap-2 transition-all shadow-xs active:scale-[0.98]"
             >
               <CheckCheck className="w-4 h-4 text-blue-400 dark:text-white" />

@@ -133,7 +133,19 @@ export interface StuckDetectionState {
   specialistOffered: 'quiz' | 'understanding' | 'summary';
 }
 
-export type AttentionStateKind = 'focused' | 'using_phone' | 'sleeping' | 'distracted' | 'away';
+export type AttentionStateKind = 
+  | 'focused' 
+  | 'using_phone' 
+  | 'sleeping' 
+  | 'distracted' 
+  | 'away'
+  | 'book'
+  | 'reading_book'
+  | 'laptop'
+  | 'using_laptop'
+  | 'coffee'
+  | 'drinking_coffee'
+  | 'eating';
 
 export interface AttentionTrackingState {
   cameraActive: boolean;

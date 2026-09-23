@@ -30,32 +30,106 @@ class AttentionAgent:
         """
         Evaluates the student's current attention and decides whether to intervene.
         """
-        # 1. Check Computer Vision state first (highest priority if camera is on)
-        cv_state = (cv_data or {}).get("state", "unknown")
-        cv_confidence = (cv_data or {}).get("confidence", 0.0)
+        # 1. Check Computer Vision state & detected objects (from YOLO / CoreML / Vision model)
+        cv = cv_data or {}
+        cv_state = str(cv.get("state", "")).lower()
+        cv_label = str(cv.get("label", "")).lower()
+        cv_confidence = float(cv.get("confidence", 0.0))
+        
+        raw_objects = cv.get("detected_objects") or cv.get("objects") or []
+        detected_objects = {str(obj).lower() for obj in raw_objects}
+        
+        # Combine all CV state identifiers and detected object labels
+        detected_signals = {cv_state, cv_label} | detected_objects
 
         # A: Student sleeping / eyes closed
-        if cv_state == "sleeping" and cv_confidence >= 0.6:
+        if ("sleeping" in detected_signals or "drowsy" in detected_signals) and cv_confidence >= 0.5:
             return {
                 "state": "sleeping",
                 "urgency": "high",
                 "should_alert": True,
                 "alert_type": "sleeping_modal",
                 "recommended_action": "pomodoro_break",
+                "is_study_time": False,
+                "is_distraction": True,
                 "coach_nudge": "لاحظت أنك تشعر بالنعاس! 💤 خذ استراحة قصيرة واشرب ماء لتستعيد نشاطك." if language == "ar" 
                                else "You look tired! 💤 Take a 5-minute breather, hydrate, and come back fresh."
             }
 
         # B: Student using phone
-        if cv_state == "using_phone" and cv_confidence >= 0.6:
+        phone_triggers = {"using_phone", "phone", "cell phone", "mobile"}
+        if (detected_signals & phone_triggers) and cv_confidence >= 0.5:
             return {
                 "state": "using_phone",
                 "urgency": "medium",
                 "should_alert": True,
                 "alert_type": "phone_modal",
                 "recommended_action": "refocus_nudge",
+                "is_study_time": False,
+                "is_distraction": True,
                 "coach_nudge": "خلي الجوال بعيد عنك شوية 📱 وركز على شريحة اليوم لننهي جلستك بإتقان!" if language == "ar"
                                else "Put the phone aside for a moment 📱 Let's wrap up this topic strong!"
+            }
+
+        # C: Eating / Food (Mild distraction - يحسب شوي من التشتت مع تنبيه لطيف)
+        food_triggers = {"eating", "food", "snack", "sandwich", "pizza", "dining"}
+        if (detected_signals & food_triggers) and cv_confidence >= 0.5:
+            return {
+                "state": "eating",
+                "urgency": "low",
+                "should_alert": True,
+                "alert_type": "toast",
+                "recommended_action": "refocus_nudge",
+                "is_study_time": False,
+                "is_distraction": True,
+                "distraction_level": "mild",
+                "coach_nudge": "صحة وعافية! 🥪 الأكل بيُحسب كفترة تشتت خفيفة، خذ لك لقمة سريعة ونرجع نركز عشان ما يطير حماس الجلسة." if language == "ar"
+                               else "Enjoy your snack! 🥪 Eating is counted as a brief distraction—take a quick bite and let's get back in the zone."
+            }
+
+        # D: Drinking Coffee / Cup (استراحة صحية + تشجيع على الكويز بعد القهوة)
+        coffee_triggers = {"cup", "coffee", "drinking", "mug", "tea"}
+        if (detected_signals & coffee_triggers) and cv_confidence >= 0.5:
+            return {
+                "state": "drinking_coffee",
+                "urgency": "low",
+                "should_alert": True,
+                "alert_type": "toast",
+                "recommended_action": "quick_quiz",
+                "is_study_time": True,
+                "is_distraction": False,
+                "coach_nudge": "بالعافية وصحة وهنا! ☕️ روّق برشفة القهوة.. وبعدها عندنا كويز خفيف نثبّت به معلومات اليوم! 🎯" if language == "ar"
+                               else "Enjoy your coffee! ☕️ Savor the sip.. Right after your coffee break, we have a quick quiz ready to test your knowledge! 🎯"
+            }
+
+        # E: Studying with Book (يحسب من وقت المذاكرة والتركيز)
+        book_triggers = {"book", "reading_book", "reading", "notebook"}
+        if (detected_signals & book_triggers) and cv_confidence >= 0.4:
+            return {
+                "state": "reading_book",
+                "urgency": "none",
+                "should_alert": False,
+                "alert_type": "none",
+                "recommended_action": "continue_study",
+                "is_study_time": True,
+                "is_distraction": False,
+                "coach_nudge": "تركيز رائع في قراءة الكتاب وتدوين الملاحظات! 📖 وقت قراءتك محسوب بالكامل من جلسة المذاكرة." if language == "ar"
+                               else "Great deep focus reading your book! 📖 Your reading time is actively counted towards your study session."
+            }
+
+        # F: Studying on Laptop (يحسب من وقت المذاكرة والتركيز)
+        laptop_triggers = {"laptop", "using_laptop", "computer"}
+        if (detected_signals & laptop_triggers) and cv_confidence >= 0.4:
+            return {
+                "state": "using_laptop",
+                "urgency": "none",
+                "should_alert": False,
+                "alert_type": "none",
+                "recommended_action": "continue_study",
+                "is_study_time": True,
+                "is_distraction": False,
+                "coach_nudge": "جلسة عمل ومذاكرة مركزة على اللابتوب! 💻 أحسنت في استغلال الوقت ومتابعة المادة." if language == "ar"
+                               else "Focused study on your laptop! 💻 Your digital study time is actively counted."
             }
 
         # C: Browser Tab Switching Analysis
@@ -73,6 +147,8 @@ class AttentionAgent:
                 "should_alert": True,
                 "alert_type": "toast",
                 "recommended_action": "refocus_nudge",
+                "is_study_time": False,
+                "is_distraction": True,
                 "coach_nudge": nudge
             }
 
@@ -84,6 +160,8 @@ class AttentionAgent:
                 "should_alert": True,
                 "alert_type": "toast",
                 "recommended_action": "quick_quiz",
+                "is_study_time": False,
+                "is_distraction": True,
                 "coach_nudge": "يبدو أن تركيزك تشتت بين الصفحات 💡 هل تود تجربة كويز سريع لتنشيط ذهنك؟" if language == "ar"
                                else "Noticing some multitasking 💡 How about a quick 2-minute quiz to test your memory?"
             }
@@ -96,6 +174,8 @@ class AttentionAgent:
                 "should_alert": True,
                 "alert_type": "toast",
                 "recommended_action": "explain_offer",
+                "is_study_time": True,
+                "is_distraction": False,
                 "coach_nudge": f"هل الشريحة تحتاج توضيح أكثر؟ اضغط على زر الشرح لمساعدتك في {current_topic}." if language == "ar"
                                else f"Stuck on this slide? Ask Attocus to break down {current_topic} simply."
             }
@@ -107,6 +187,8 @@ class AttentionAgent:
             "should_alert": False,
             "alert_type": "none",
             "recommended_action": "none",
+            "is_study_time": True,
+            "is_distraction": False,
             "coach_nudge": "أداء رائع وتركيز مستمر! 🎯" if language == "ar" else "Great focus, keep going! 🎯"
         }
 

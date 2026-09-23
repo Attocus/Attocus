@@ -2,7 +2,7 @@
  * Takeaways Agent
  * 
  * Specialized AI Agent dedicated to analyzing academic slides, extracting 
- * hierarchical mental models, core definitions, and exam-critical takeaways.
+ * hierarchical mental models, core definitions, and exam-critical takeaways via LLM.
  */
 
 export interface SlideTakeawayInput {
@@ -10,6 +10,7 @@ export interface SlideTakeawayInput {
   slideText: string;
   topic?: string;
   courseSubject?: string;
+  language?: string;
 }
 
 export interface TakeawayResult {
@@ -19,7 +20,6 @@ export interface TakeawayResult {
 }
 
 export async function runTakeawaysAgent(input: SlideTakeawayInput): Promise<TakeawayResult> {
-  // If a server-side Gemini/Custom LLM agent route is configured:
   try {
     const res = await fetch('/api/coach/takeaways', {
       method: 'POST',
@@ -27,24 +27,31 @@ export async function runTakeawaysAgent(input: SlideTakeawayInput): Promise<Take
       body: JSON.stringify(input)
     });
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      if (data && Array.isArray(data.coreTakeaways) && data.coreTakeaways.length > 0) {
+        return {
+          coreTakeaways: data.coreTakeaways,
+          suggestedFocusFormula: data.suggestedFocusFormula,
+          examRelevanceScore: data.examRelevanceScore || 4
+        };
+      }
     }
-  } catch {
-    // Fall back to client heuristics
+  } catch (err) {
+    console.warn('[TakeawaysAgent] Server LLM fetch error, falling back:', err);
   }
 
-  // Baseline extraction logic
-  const lines = input.slideText
-    .split(/\n|\.\s+/)
-    .map(s => s.trim())
-    .filter(s => s.length > 20);
+  // Smart client fallback
+  const isAr = input.language === 'ar' || /[\u0600-\u06FF]/.test(input.slideText + input.slideTitle);
+  const rawBullets = input.slideText
+    .split(/\n|[●•·]\s*/)
+    .map(s => s.replace(/^[0-9]+[\.\-\)]\s*/, '').replace(/^[●•·\-\*]\s*/, '').trim())
+    .filter(s => s.length > 15 && !s.toLowerCase().includes('visual presentation') && !s.toLowerCase().includes('takeaways'));
 
-  const coreTakeaways = lines.slice(0, 4).length > 0
-    ? lines.slice(0, 4)
+  const coreTakeaways = rawBullets.slice(0, 3).length > 0
+    ? rawBullets.slice(0, 3)
     : [
-        `Master the primary definitions in ${input.slideTitle}`,
-        `Understand the relationship between input factors and outcomes`,
-        `Review the core diagrams and algorithmic steps presented`
+        isAr ? `فهم المفهوم الأساسي في: ${input.slideTitle}` : `Master the primary concept in: ${input.slideTitle}`,
+        isAr ? `استيعاب العلاقات والمخرجات الرئيسية للشريحة` : `Understand key mechanisms and constraints outlined in the slide`
       ];
 
   return {

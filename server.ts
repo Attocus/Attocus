@@ -499,6 +499,106 @@ Does that clarify how it connects to ${currentSlide?.topic || 'this topic'}?`;
     }
   });
 
+  // 1.5 Takeaways Agent - Extract Exam-Critical Takeaways via LLM
+  app.post('/api/coach/takeaways', async (req, res) => {
+    try {
+      const { slideTitle, slideText, topic, courseSubject, language } = req.body;
+
+      // 1. Try Python backend if available
+      try {
+        const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/coach/takeaways`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slideTitle, slideText, topic, courseSubject, language })
+        });
+        if (pyRes.ok) {
+          const data = await pyRes.json();
+          if (data.coreTakeaways && data.coreTakeaways.length > 0) {
+            return res.json(data);
+          }
+        }
+      } catch {}
+
+      const cleanText = (slideText || '').replace(/[●•·]/g, '-').trim();
+      const fullSlideStr = `${slideTitle || ''} ${cleanText}`;
+      const arabicCount = (fullSlideStr.match(/[\u0600-\u06FF]/g) || []).length;
+      const latinCount = (fullSlideStr.match(/[a-zA-Z]/g) || []).length;
+      // Strictly detect slide's own native language
+      const isArabicSlide = arabicCount > latinCount;
+
+      const systemPrompt = `You are an elite academic professor and learning coach.
+Your task is to analyze this academic slide and extract 2 to 4 ultra-concise, high-impact bullet takeaways (رؤوس أقلام مقتضبة).
+
+CRITICAL RULES:
+1. FORMAT AS "رؤوس أقلام" (BULLET HEADLINES):
+   - Each takeaway must be ONE brief phrase/line only (STRICT MAXIMUM 6 TO 12 WORDS).
+   - Format each point strictly as: "[Key Concept / Keyword]: [Brief definition or core takeaway]"
+   - DO NOT write full paragraphs, long explanatory sentences, or verbose prose.
+2. STRICT LANGUAGE MATCHING (تلقائي بنفس لغة السلايد):
+   ${isArabicSlide 
+     ? '- The slide is in ARABIC: You MUST output all takeaways in ARABIC ONLY (اللغة العربية - رؤوس أقلام).'
+     : '- The slide is in ENGLISH: You MUST output all takeaways in ENGLISH ONLY (Crisp English bullet headlines).'
+   }
+3. Clean out all raw symbols, bullet dots (●, •), dashes, or slide line numbers.
+4. Return strictly valid JSON:
+{
+  "coreTakeaways": [
+    "${isArabicSlide ? 'المفهوم الأساسي: ملخص دقيق من كلمات معدودة' : 'Concept Name: Short punchy core definition (6-12 words)'}"
+  ],
+  "suggestedFocusFormula": "optional formula or rule of thumb",
+  "examRelevanceScore": 5
+}`;
+
+      const prompt = `Slide Title: ${slideTitle || 'Untitled'}
+Topic: ${topic || slideTitle || 'General'}
+Course: ${courseSubject || 'Academic Course'}
+Slide Raw Content:
+${cleanText}
+
+Extract 2-4 ultra-concise bullet headlines (رؤوس أقلام) now in the exact language of the slide.`;
+
+      interface TakeawayJson {
+        coreTakeaways: string[];
+        suggestedFocusFormula?: string;
+        examRelevanceScore?: number;
+      }
+
+      const parsed = await generateJsonWithLLM<TakeawayJson>(prompt, systemPrompt);
+      if (parsed && Array.isArray(parsed.coreTakeaways) && parsed.coreTakeaways.length > 0) {
+        const cleanTakeaways = parsed.coreTakeaways.map(t => 
+          t.replace(/^[0-9]+[\.\-\)]\s*/, '').replace(/^[●•·\-\*]\s*/, '').trim()
+        ).filter(t => t.length > 3);
+
+        return res.json({
+          coreTakeaways: cleanTakeaways.slice(0, 4),
+          suggestedFocusFormula: parsed.suggestedFocusFormula,
+          examRelevanceScore: parsed.examRelevanceScore || 4
+        });
+      }
+
+      // High-quality smart fallback
+      const lines = cleanText
+        .split(/\n|\.\s+/)
+        .map((s: string) => s.replace(/^[●•·\-\*]\s*/, '').trim())
+        .filter((s: string) => s.length > 15 && !s.toLowerCase().includes('visual presentation'));
+
+      const fallbackTakeaways = lines.slice(0, 3).length > 0
+        ? lines.slice(0, 3).map((l: string) => l.slice(0, 70))
+        : [
+            isArabicSlide ? `المفهوم المحوري: ${slideTitle}` : `Core Concept: ${slideTitle}`,
+            isArabicSlide ? `الآليات الأساسية: فهم المتغيرات والنتائج الرئيسية` : `Key Mechanism: Understand primary inputs and outputs`
+          ];
+
+      return res.json({
+        coreTakeaways: fallbackTakeaways,
+        examRelevanceScore: 4
+      });
+    } catch (err: any) {
+      console.error('Takeaways agent error:', err);
+      res.status(500).json({ error: err.message || 'Failed to generate takeaways' });
+    }
+  });
+
   // 2. Understanding Agent - Start Socratic Session (calls Python SocraticSummaryAgent)
   app.post('/api/coach/understanding/start', async (req, res) => {
     try {
@@ -561,7 +661,8 @@ Does that clarify how it connects to ${currentSlide?.topic || 'this topic'}?`;
           if (data.reply) {
             return res.json({
               question: data.reply,
-              topic: slide?.topic || slide?.title
+              topic: slide?.topic || slide?.title,
+              slideAxes: data.slide_axes || []
             });
           }
         }
@@ -783,7 +884,7 @@ Respond in valid JSON with schema:
               corrections: parsed.corrections,
               strengths: parsed.strengths,
               inlineCorrections: [],
-              lectureTakeaways: slide?.keyPoints || ['Core concept solidified']
+              lectureTakeaways: data.slide_axes || slide?.keyPoints || ['Core concept solidified']
             });
           }
         }
@@ -877,7 +978,7 @@ Respond in JSON:
   // 5. Quick Quiz (calls Python QuizAgent)
   app.post('/api/coach/quiz/quick', async (req, res) => {
     try {
-      const { slide, lectureTitle, pdfName } = req.body;
+      const { slide, lectureTitle, pdfName, previousQuestions = [], language = 'ar' } = req.body;
 
       const rawContentList = (slide?.content || []).filter(
         (c: string) => !c.includes('Visual presentation content') && !c.includes('Section notes and key lecture points')
@@ -921,7 +1022,7 @@ Respond in JSON:
         }
       }
 
-      // Try Python Backend (QuizAgent)
+      // Try Python Backend (QuizAgent) with anti-duplication
       try {
         const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/quiz/generate`, {
           method: 'POST',
@@ -930,7 +1031,9 @@ Respond in JSON:
             context: slideContext,
             num_questions: 1,
             topic: slide?.topic || slide?.title,
-            pdf_name: pdfName || lectureTitle
+            pdf_name: pdfName || lectureTitle,
+            language: language,
+            previous_questions: previousQuestions
           })
         });
 
@@ -950,6 +1053,15 @@ Respond in JSON:
         console.warn('Python quiz generation failed, falling back:', err);
       }
 
+      const antiDupClause = previousQuestions.length > 0 ? `
+PREVIOUSLY ASKED QUESTIONS (DO NOT REPEAT OR REPHRASE ANY OF THESE):
+${previousQuestions.map((q: string) => `- ${q}`).join('\n')}
+
+STRICT ANTI-DUPLICATION RULE:
+- The student has already answered the above questions.
+- You MUST generate a COMPLETELY NEW, different question testing another angle, definition, mechanism, or detail of the slide.
+` : '';
+
       const prompt = `Create ONE clean, high-quality multiple choice question testing genuine conceptual understanding of:
 Lecture: "${lectureTitle || ''}"
 Slide: "${slide?.title || ''}"
@@ -957,9 +1069,12 @@ Topic: "${slide?.topic || slide?.title || 'Key Concept'}"
 Content:
 ${slideContext}
 
+${antiDupClause}
+
 CRITICAL RULES:
 - Test academic knowledge of principles, definitions, or algorithms.
-- NEVER ask questions about slide numbers, file names, or presentation formatting (e.g. NEVER ask "Does Slide 1 include takeaways?").
+- NEVER ask questions about slide numbers, file names, or presentation formatting.
+- The question must be distinct from any previously asked questions.
 
 Return JSON:
 {
@@ -975,19 +1090,49 @@ Return JSON:
         return;
       }
 
-      // Safe Fallback
-      const cleanKp = rawKeyPointsList[0] || 'It ensures state machine consistency across all replicas.';
-      res.json({
-        question: `Regarding ${slide?.title || 'this topic'}, which of the following is true?`,
-        options: [
-          cleanKp,
-          'It allows uncommitted writes to bypass majority quorum checks.',
-          'It requires physical clock synchronization across nodes.',
-          'It only operates when all cluster nodes are active.'
-        ],
-        correctAnswer: cleanKp,
-        explanation: `As noted in the lecture: ${cleanKp}`
-      });
+      // Safe Rotating Fallback Quiz Questions (Never repeat identical question)
+      const topicName = slide?.topic || slide?.title || 'هذا المفهوم';
+      const fallbackPool = [
+        {
+          question: `ما هو المبدأ المحوري الذي يقوم عليه ${topicName}؟`,
+          options: [
+            rawKeyPointsList[0] || 'تحقيق اتساق ومزامنة البيانات عبر النظام',
+            'إلغاء قيود التحقق والاستجابة الفورية',
+            'الاعتماد الحصري على التخزين المؤقت العشوائي',
+            'تعطيل المراقبة والتحليل الدوري'
+          ],
+          correctAnswer: rawKeyPointsList[0] || 'تحقيق اتساق ومزامنة البيانات عبر النظام',
+          explanation: `يرتكز ${topicName} على ضمان اتساق وحماية البيانات المشروحة.`
+        },
+        {
+          question: `أي من الشروط التالية يعتبر أساسياً لتطبيق ${topicName} بنجاح؟`,
+          options: [
+            rawKeyPointsList[1] || 'مراعاة القيود والمعايير المحددة في المحاضرة',
+            'تجاهل حالات الفشل الجزئي في النظام',
+            'تقليل عدد الاختبارات والتحققات',
+            'تطبيق المفاهيم دون الرجوع للمرجع الأكاديمي'
+          ],
+          correctAnswer: rawKeyPointsList[1] || 'مراعاة القيود والمعايير المحددة في المحاضرة',
+          explanation: `التطبيق الناجح لـ ${topicName} يتطلب الالتزام بالشروط والحدود المعرفية.`
+        },
+        {
+          question: `ما هي الفائدة الأكاديمية الأهم من استيعاب ${topicName}؟`,
+          options: [
+            rawKeyPointsList[2] || 'القدرة على حل المسائل المعقدة وربط الأفكار بنموذج تحليلي دقيق',
+            'حفظ النصوص حرفياً دون فهم الميكانيزم',
+            'تجاوز مراحل الاختبار والتدقيق',
+            'الاكتفاء بالتعريفات السطحية فقط'
+          ],
+          correctAnswer: rawKeyPointsList[2] || 'القدرة على حل المسائل المعقدة وربط الأفكار بنموذج تحليلي دقيق',
+          explanation: `الفهم العميق لـ ${topicName} يمنحك القدرة على التحليل المنهجي والتطبيق العملي.`
+        }
+      ];
+
+      // Pick one that is not in previousQuestions
+      const filteredFallbacks = fallbackPool.filter(fb => !previousQuestions.some((pq: string) => pq.includes(fb.question.slice(0, 15))));
+      const selectedFallback = filteredFallbacks.length > 0 ? filteredFallbacks[0] : fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+
+      res.json(selectedFallback);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1215,16 +1360,21 @@ Your task is to detect the student's physical and focus state accurately.
 Evaluate specifically:
 1. "using_phone": Is the student holding, touching, or looking down at a mobile phone / smartphone / handheld device?
 2. "sleeping": Is the student asleep, eyes closed, head resting on their desk/arms/hands, or nodding off?
-3. "distracted": Has their gaze or head turned away from their study material for an extended period?
-4. "away": Is the student not in frame / empty chair?
-5. "focused": Is the student sitting normally, looking at their study screen, reading, or writing notes?
+3. "book": Is the student actively reading a physical book, textbook, or writing notes in a notebook? (This counts as active focus study time!)
+4. "laptop": Is the student actively working/reading on their laptop computer screen? (This counts as active focus study time!)
+5. "coffee": Is the student drinking from a cup/mug, holding a coffee or tea cup, or taking a sip? (Warmly praise them: "بالعافية وصحة وهنا! ☕️ روّق برشفة القهوة.. وبعدها عندنا كويز خفيف نثبّت به معلومات اليوم! 🎯")
+6. "eating": Is the student eating food, having a snack, sandwich, or meal? (Counted as mild distraction: "صحة وعافية! 🥪 الأكل بيُحسب كفترة تشتت خفيفة، خذ لك لقمة سريعة ونرجع نركز عشان ما يطير حماس الجلسة.")
+7. "distracted": Has their gaze or head turned away from their study material for an extended period?
+8. "away": Is the student not in frame / empty chair?
+9. "focused": Is the student sitting normally, looking at their study screen, reading, or writing notes?
 
 Return ONLY valid JSON with this exact schema:
 {
-  "state": "focused" | "using_phone" | "sleeping" | "distracted" | "away",
+  "state": "focused" | "using_phone" | "sleeping" | "book" | "laptop" | "coffee" | "eating" | "distracted" | "away",
   "confidence": number between 0.0 and 1.0,
-  "reason": "Brief 1-sentence respectful description of what you observe",
-  "coachMessage": "Kind, encouraging teacher prompt if state is not focused, or null if focused"
+  "is_study_time": boolean,
+  "reason": "Brief 1-sentence respectful description in Arabic or English of what you observe",
+  "coachMessage": "Kind, encouraging Arabic prompt tailored to the state"
 }`;
 
       // 1. Try OpenAI Vision (gpt-4o-mini)

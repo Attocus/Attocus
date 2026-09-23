@@ -10,15 +10,12 @@ except Exception:
     try:
         from rag_service import SharedRAGService
     except Exception:
-        from backend.rag_service import SharedRAGService  # type: ignore
+        from backend.rag_service import SharedRAGService  
 
 try:
-    from services.observability import traceable_agent
+    from ..services.observability import traceable_agent
 except Exception:
-    try:
-        from backend.services.observability import traceable_agent
-    except Exception:
-        traceable_agent = lambda *a, **k: (lambda f: f)  # type: ignore
+    traceable_agent = lambda *a, **k: (lambda f: f)
 
 
 class OrchestratorAgent:
@@ -154,35 +151,54 @@ class OrchestratorAgent:
         context: Any = None,
         num_questions: int = 4,
         topic: Optional[str] = None,
-        pdf_name: Optional[str] = None
+        pdf_name: Optional[str] = None,
+        language: str = "ar",
+        previous_questions: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        """Triggers the Quiz Agent using explicit context or Shared RAG."""
+        """Triggers the Quiz Agent using explicit context or Shared RAG with anti-duplication."""
         return self.quiz_agent.generate_quiz(
             context=context,
             num_questions=num_questions,
             topic=topic,
-            pdf_name=pdf_name
+            pdf_name=pdf_name,
+            language=language,
+            previous_questions=previous_questions
         )
 
-    def grade_quiz_and_coach(self, session_id: str, student_answers: list, student_id: str = "STU_101") -> Dict[str, Any]:
-        """Grades the quiz, runs learning coach analysis, and saves to spaced repetition."""
+    def grade_quiz_and_coach(
+        self,
+        session_id: str,
+        student_answers: list,
+        student_id: str = "STU_101",
+        language: str = "ar"
+    ) -> Dict[str, Any]:
+        """Grades the quiz, runs learning coach analysis, and saves missed concepts to 3-day spaced repetition."""
         grade_result = self.quiz_agent.grade_quiz(student_answers)
         
-        # Analyze with Learning Coach
-        coach_analysis = self.learning_agent.analyze_quiz_results(grade_result.get("results", []))
+        # Analyze with Learning Coach in target language
+        coach_analysis = self.learning_agent.analyze_quiz_results(
+            grade_result.get("results", []),
+            language=language
+        )
         
-        # Save to Spaced Repetition if Firestore is available
-        self.learning_agent.save_spaced_repetition(grade_result.get("results", []), student_id=student_id)
+        # Save to Spaced Repetition scheduled for 3 days later
+        saved = self.learning_agent.save_spaced_repetition(
+            grade_result.get("results", []),
+            student_id=student_id,
+            days_interval=3
+        )
         
         session = self.get_or_create_session(session_id)
         session["quiz_history"].append({
             "grade": grade_result,
-            "analysis": coach_analysis
+            "analysis": coach_analysis,
+            "spaced_repetition_saved": saved
         })
 
         return {
             "grade": grade_result,
-            "coach_analysis": coach_analysis
+            "coach_analysis": coach_analysis,
+            "spaced_repetition_scheduled_in_days": 3
         }
 
     def explain_slide(
@@ -190,33 +206,92 @@ class OrchestratorAgent:
         topic: str,
         slide_content: str,
         student_question: Optional[str] = None,
-        chat_history: Optional[List[Dict[str, str]]] = None
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        language: str = "ar"
     ) -> str:
-        """Triggers the Learning Coach explanation."""
+        """Triggers the Learning Coach explanation without repeating past chat content."""
         return self.learning_agent.explain_concept(
             topic=topic,
             slide_content=slide_content,
             student_question=student_question,
-            chat_history=chat_history
+            chat_history=chat_history,
+            language=language
         )
 
-    def start_summary(self, session_id: str, topic: str, context: str = "") -> str:
-        """Starts Socratic Summary session with Shared RAG."""
+    def extract_takeaways(
+        self,
+        slide_title: str,
+        slide_text: str,
+        topic: str = "",
+        language: str = "ar"
+    ) -> Dict[str, Any]:
+        """Extracts exam-critical core takeaways from a slide using LLM."""
+        return self.learning_agent.extract_takeaways(
+            slide_title=slide_title,
+            slide_text=slide_text,
+            topic=topic,
+            language=language
+        )
+
+    def get_spaced_repetition_due(self, student_id: str = "STU_101") -> List[Dict[str, Any]]:
+        """Retrieves questions currently due for spaced repetition review."""
+        return self.learning_agent.get_due_reviews(student_id=student_id)
+
+    def get_spaced_repetition_queue(self, student_id: str = "STU_101") -> List[Dict[str, Any]]:
+        """Retrieves all scheduled spaced repetition questions with time remaining."""
+        return self.learning_agent.get_all_scheduled_reviews(student_id=student_id)
+
+    def mark_spaced_repetition_result(self, item_id: str, is_correct: bool) -> bool:
+        """Updates spaced repetition status for a question."""
+        return self.learning_agent.mark_review_completed(item_id=item_id, is_correct=is_correct)
+
+    def start_summary(self, session_id: str, topic: str, context: str = "", language: str = "ar") -> str:
+        """Starts Socratic Summary session with Shared RAG and extracts slide axes."""
         session = self.get_or_create_session(session_id, topic=topic)
-        session["summary_agent"] = SocraticSummaryAgent(topic=topic, api_key=self.api_key, rag=self.rag)
-        return session["summary_agent"].start_session(initial_context=context)
+        session["summary_agent"] = SocraticSummaryAgent(
+            topic=topic,
+            api_key=self.api_key,
+            rag=self.rag,
+            language=language
+        )
+        first_reply = session["summary_agent"].start_session(initial_context=context)
+        session["slide_axes"] = session["summary_agent"].slide_axes
+        session["covered_axes"] = session["summary_agent"].covered_axes
+        return first_reply
 
     def step_summary(self, session_id: str, user_input: str) -> Dict[str, Any]:
         """Steps Socratic Summary dialogue."""
         session = self.get_or_create_session(session_id)
-        reply, is_finished = session["summary_agent"].process_input(user_input)
+        agent = session.get("summary_agent")
+        if not agent:
+            return {
+                "reply": "No active summary session found.",
+                "is_finished": True,
+                "final_summary": None,
+                "slide_axes": [],
+                "covered_axes": [],
+                "structured_summary": None
+            }
+
+        reply, is_finished = agent.process_input(user_input)
+        session["slide_axes"] = agent.slide_axes
+        session["covered_axes"] = agent.covered_axes
         return {
             "reply": reply,
             "is_finished": is_finished,
-            "final_summary": session["summary_agent"].final_summary if is_finished else None
+            "final_summary": agent.final_summary if is_finished else None,
+            "slide_axes": agent.slide_axes,
+            "covered_axes": agent.covered_axes,
+            "structured_summary": getattr(agent, "structured_summary", None)
         }
 
     def force_summary(self, session_id: str) -> str:
         """Forces immediate summary generation."""
         session = self.get_or_create_session(session_id)
-        return session["summary_agent"].force_summary()
+        agent = session.get("summary_agent")
+        if not agent:
+            return "No active summary session found."
+        res = agent.force_summary()
+        session["slide_axes"] = agent.slide_axes
+        session["covered_axes"] = agent.covered_axes
+        return res

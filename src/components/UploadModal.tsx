@@ -84,9 +84,18 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 let keyPoints = existingSlide?.keyPoints || [];
 
                 if (isPlaceholder && backendLines.length > 0) {
-                  content = backendLines.slice(backendLines[0] === title ? 1 : 0, 8);
+                  const cleanedLines: string[] = [];
+                  for (const line of backendLines) {
+                    const parts = line.split(/[●•·]/).map((p: string) => p.trim()).filter((p: string) => p.length > 5);
+                    if (parts.length > 1) {
+                      cleanedLines.push(...parts);
+                    } else {
+                      cleanedLines.push(line.replace(/^[●•·\-\*]\s*/, '').trim());
+                    }
+                  }
+                  content = cleanedLines.slice(cleanedLines[0] === title ? 1 : 0, 10);
                   if (content.length === 0) content = [backendText.slice(0, 350)];
-                  keyPoints = content.slice(0, 3);
+                  keyPoints = content.slice(0, 3).map((k: string) => k.replace(/^[0-9]+[\.\-\)]\s*/, '').trim());
                 } else if (isPlaceholder && backendText) {
                   content = [backendText.slice(0, 350)];
                   keyPoints = [backendText.slice(0, 100)];
