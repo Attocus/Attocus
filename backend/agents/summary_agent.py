@@ -15,6 +15,14 @@ except Exception:
         wrap_client = lambda c: c  
         traceable_agent = lambda *a, **k: (lambda f: f) 
 
+try:
+    from agents.security import check_sql_injection, get_safe_rejection_response
+except ImportError:
+    try:
+        from backend.agents.security import check_sql_injection, get_safe_rejection_response
+    except ImportError:
+        from security import check_sql_injection, get_safe_rejection_response
+
 
 class SocraticSummaryAgent:
     MAX_ANSWER_CHARS = 500 
@@ -246,6 +254,10 @@ Example:
         if self.finished:
             return self.final_summary or "Session already ended.", True
 
+        # Check for SQL injection or unsafe input
+        if check_sql_injection(user_input):
+            return get_safe_rejection_response(getattr(self, "session_language", "ar")), False
+
         if new_context and new_context != self.context:
             self.context = new_context
 
@@ -328,6 +340,10 @@ Example:
         lang_rule = "Respond in Arabic." if self.language == "ar" else ("Respond in English." if self.language == "en" else "Match the student's language.")
         axes_list_str = "\n".join(f"- {ax}" for ax in self.slide_axes) if self.slide_axes else f"- {self.topic}"
 
+        summary_header = "ملخصك بأسلوبك الخاص" if self.language == "ar" else "Your Summary in Your Own Words"
+        corrections_header = "التصحيحات" if self.language == "ar" else "Corrections"
+        strengths_header = "نقاط قوتك" if self.language == "ar" else "Your Strengths"
+
         summary_prompt = f"""You are producing a FINAL SUMMARY for a Socratic study session.
 
 TOPIC: {self.topic}
@@ -347,7 +363,7 @@ STUDENT'S EXACT ANSWERS (in order, verbatim):
 TASK: Produce the final summary in EXACTLY this format.
 ===============================================================
 
-Your Summary in Your Own Words:
+{summary_header}:
 [Write a structured synthesis composed of 2 to 3 distinct paragraphs separated by blank lines. 
 Use ONLY the student's own words, explanations, and phrasings. 
 Organize their understanding logically across the covered axes:
@@ -356,22 +372,22 @@ Paragraph 2: Mechanics, relationships, or conditions they discussed.
 Paragraph 3 (optional): Main conclusions or significance they identified.
 CRITICAL: DO NOT write as a single block or monolithic paragraph. You MUST separate each paragraph with a blank line.]
 
-Corrections:
-- [Point 1: Clearly specify any misconception, factual inaccuracy, or omitted nuance identified from their explanations in bullet format.]
-- [Point 2: Additional clarification or critical correction in bullet format.]
+{corrections_header}:
+- [Point 1: Clearly specify any misconception, factual inaccuracy, or omitted nuance identified from their explanations in bullet format starting with - ]
+- [Point 2: Additional clarification or critical correction in bullet format starting with - ]
 (CRITICAL: The Corrections section MUST be formatted strictly as bullet points starting with `- `, NEVER as a continuous paragraph.)
 
-Your Strengths:
-- [Bullet 1: Specific concepts or nuances the student explained accurately.]
-- [Bullet 2: Clear evidence of solid comprehension shown in their answers.]
+{strengths_header}:
+- [Bullet 1: Specific concepts or nuances the student explained accurately starting with - ]
+- [Bullet 2: Clear evidence of solid comprehension shown in their answers starting with - ]
 (CRITICAL: The Strengths section MUST be formatted strictly as bullet points starting with `- `.)
 
 ===============================================================
 CRITICAL RULES:
 - {lang_rule}
-- "Your Summary in Your Own Words" MUST contain 2 to 3 distinct paragraphs separated by a blank line (NEVER a single paragraph).
-- "Corrections" MUST be formatted as bullet points (`- ...`).
-- "Your Strengths" MUST be formatted as bullet points (`- ...`).
+- "{summary_header}" MUST contain 2 to 3 distinct paragraphs separated by a blank line (NEVER a single paragraph).
+- "{corrections_header}" MUST be formatted as bullet points (`- ...`).
+- "{strengths_header}" MUST be formatted as bullet points (`- ...`).
 - Do NOT invent achievements or claim discussions that did not happen.
 - Use ONLY what the student actually articulated in their answers.
 - If the student gave minimal input or had no misconceptions, state so clearly in bullet points.
@@ -414,18 +430,21 @@ CRITICAL RULES:
         corrections: List[str] = []
         strengths: List[str] = []
 
-        # Extract sections using regex
-        summary_match = re.search(r"(?:Your Summary in Your Own Words|ملخصك بأسلوبك(?: الخاص)?):\s*\n(.*?)(?=\n(?:Corrections|التصويبات|التصحيحات):|\Z)", summary_text, re.DOTALL | re.IGNORECASE)
+        # Extract sections using robust bilingual regex
+        summary_pattern = r"(?:(?:📝\s*)?(?:Your Summary in Your Own Words|ملخصك بأسلوبك(?: الخاص)?|الملخص في كلماتك|الملخص)):\s*\n(.*?)(?=\n(?:[🔍\s]*(?:Corrections|التصويبات|التصحيحات|تصويبات وملاحظات)):|\Z)"
+        summary_match = re.search(summary_pattern, summary_text, re.DOTALL | re.IGNORECASE)
         if summary_match:
             raw_paras = summary_match.group(1).strip().split("\n\n")
             paragraphs = [p.strip() for p in raw_paras if p.strip() and not p.strip().startswith("- ")]
 
-        corrections_match = re.search(r"(?:Corrections|التصويبات|التصحيحات):\s*\n(.*?)(?=\n(?:Your Strengths|نقاط قوتك):|\Z)", summary_text, re.DOTALL | re.IGNORECASE)
+        corrections_pattern = r"(?:(?:🔍\s*)?(?:Corrections|التصويبات|التصحيحات|تصويبات وملاحظات)):[\s]*\n(.*?)(?=\n(?:[✨\s]*(?:Your Strengths|نقاط قوتك|نقاط القوة)):|\Z)"
+        corrections_match = re.search(corrections_pattern, summary_text, re.DOTALL | re.IGNORECASE)
         if corrections_match:
             lines = corrections_match.group(1).strip().split("\n")
             corrections = [l.strip().lstrip("-*• ").strip() for l in lines if l.strip().startswith(("-", "*", "•"))]
 
-        strengths_match = re.search(r"(?:Your Strengths|نقاط قوتك):\s*\n(.*?)(?=\Z)", summary_text, re.DOTALL | re.IGNORECASE)
+        strengths_pattern = r"(?:(?:✨\s*)?(?:Your Strengths|نقاط قوتك|نقاط القوة)):[\s]*\n(.*?)(?=\Z)"
+        strengths_match = re.search(strengths_pattern, summary_text, re.DOTALL | re.IGNORECASE)
         if strengths_match:
             lines = strengths_match.group(1).strip().split("\n")
             strengths = [l.strip().lstrip("-*• ").strip() for l in lines if l.strip().startswith(("-", "*", "•"))]

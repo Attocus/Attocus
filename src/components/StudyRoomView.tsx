@@ -13,8 +13,6 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
-  ZoomIn,
-  ZoomOut,
   Edit2,
   Highlighter,
   RotateCcw,
@@ -30,7 +28,9 @@ import {
   Type,
   Moon,
   Sun,
-  BookOpen
+  BookOpen,
+  MousePointer,
+  ClipboardPaste
 } from 'lucide-react';
 import { SlideViewer } from './SlideViewer';
 import { AnnotationCanvas } from './AnnotationCanvas';
@@ -76,7 +76,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
 }) => {
   const { currentUser } = useAuth();
   const [currentPage, setCurrentPage] = useState<number>(lecture.currentPage || 1);
-  const [zoomLevel, setZoomLevel] = useState<number>(100);
+  const [zoomLevel] = useState<number>(100);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   // Sidebar collapse state
@@ -87,8 +87,8 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   const isDarkMode = isDark;
   const { isAr, dir, t } = useLanguage();
 
-  // Annotation states
-  const [activeTool, setActiveTool] = useState<'pen' | 'highlighter' | 'eraser' | 'text' | 'none'>('pen');
+  // Annotation states (Default to 'none' so user can immediately select/copy text from slide)
+  const [activeTool, setActiveTool] = useState<'pen' | 'highlighter' | 'eraser' | 'text' | 'none'>('none');
   const [activeColor, setActiveColor] = useState<string>(PEN_COLOR_OPTIONS[0].color);
   const [strokeThickness, setStrokeThickness] = useState<number>(3);
   const [pageAnnotations, setPageAnnotations] = useState<PageAnnotationsMap>(() => {
@@ -110,9 +110,9 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
 
-    // Account for top floating pen toolbar (approx 68px) and side padding
-    const availableH = Math.max(300, screenH - 72);
-    const availableW = Math.max(400, screenW - 24);
+    // Fill screen for the slide while allowing minimal clearance for the floating toolbar
+    const availableH = Math.max(300, screenH - 50);
+    const availableW = Math.max(400, screenW - 16);
     const scaleW = availableW / 880;
     const scaleH = availableH / 620;
     return Math.min(scaleW, scaleH);
@@ -837,6 +837,66 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     });
   };
 
+  // Handle Paste from Clipboard directly onto the slide
+  const handlePasteFromClipboard = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text && text.trim()) {
+        registerEngagement();
+        const newStroke: AnnotationStroke = {
+          id: `text-stroke-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          tool: 'text',
+          color: isDarkMode ? '#F8FAFC' : '#0F172A',
+          width: 2,
+          opacity: 1,
+          points: [],
+          text: text.trim(),
+          textX: 120 + Math.floor(Math.random() * 60),
+          textY: 140 + Math.floor(Math.random() * 60),
+          boxWidth: Math.min(480, Math.max(220, text.trim().length * 10)),
+          boxHeight: 80,
+          fontSize: 16
+        };
+        handleAddStroke(newStroke);
+      }
+    } catch (err) {
+      console.warn('Failed to read clipboard text:', err);
+    }
+  }, [currentPage, isDarkMode]);
+
+  // Global paste keyboard listener (Cmd+V / Ctrl+V)
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      const text = e.clipboardData?.getData('text/plain');
+      if (text && text.trim()) {
+        e.preventDefault();
+        registerEngagement();
+        const newStroke: AnnotationStroke = {
+          id: `text-stroke-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          tool: 'text',
+          color: isDarkMode ? '#F8FAFC' : '#0F172A',
+          width: 2,
+          opacity: 1,
+          points: [],
+          text: text.trim(),
+          textX: 120 + Math.floor(Math.random() * 60),
+          textY: 140 + Math.floor(Math.random() * 60),
+          boxWidth: Math.min(480, Math.max(220, text.trim().length * 10)),
+          boxHeight: 80,
+          fontSize: 16
+        };
+        handleAddStroke(newStroke);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [currentPage, isDarkMode]);
+
   const handleDeclineStillReading = () => {
     snoozedUntilRef.current[currentPage] = Date.now() + 45_000;
     setStuckState(prev => ({
@@ -933,6 +993,22 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
 
           {/* شريط أدوات الرسم والتحديد */}
           <div className={`flex items-center p-1 rounded-2xl border gap-1 transition-colors ${isDarkMode ? 'bg-slate-800/90 border-slate-700/80' : 'bg-slate-100/80 border-slate-200/60'}`}>
+
+            {/* أداة التحديد والنسخ (مؤشر) */}
+            <button
+              type="button"
+              id="annotation-tool-select-btn"
+              onClick={() => setActiveTool('none')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                activeTool === 'none'
+                  ? (isDarkMode ? 'bg-slate-700 text-white shadow-xs ring-1 ring-blue-500/50' : 'bg-white text-[#0F172A] shadow-xs ring-1 ring-blue-500/30')
+                  : (isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900')
+              }`}
+              title={isAr ? 'أداة التحديد والنسخ - لتحديد ونسخ نصوص السلايد' : 'Select / Cursor - select and copy slide text'}
+            >
+              <MousePointer className="w-3.5 h-3.5 text-blue-500" />
+              <span className="hidden sm:inline">{isAr ? 'تحديد' : 'Select'}</span>
+            </button>
 
             {/* أداة القلم */}
             <button
@@ -1033,50 +1109,39 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               type="button"
               id="annotation-tool-undo-btn"
               onClick={handleUndoAnnotation}
-              className={`p-1.5 rounded-xl transition-colors mr-0.5 ${isDarkMode ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-white text-slate-500 hover:text-slate-900'}`}
+              className={`p-1.5 rounded-xl transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-white text-slate-500 hover:text-slate-900'}`}
               title={t('workspace.undo', 'تراجع')}
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
+
+            {/* زر لصق ملاحظة بالسلايد */}
+            <button
+              type="button"
+              id="annotation-tool-paste-btn"
+              onClick={handlePasteFromClipboard}
+              className={`p-1.5 rounded-xl transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-white text-slate-500 hover:text-slate-900'}`}
+              title={isAr ? 'لصق ملاحظة على السلايد (أو اضغط Ctrl+V / Cmd+V)' : 'Paste note on slide (or press Ctrl+V / Cmd+V)'}
+            >
+              <ClipboardPaste className="w-3.5 h-3.5 text-indigo-500" />
+            </button>
           </div>
 
-          {/* أدوات التكبير والتصغير */}
-          <div className={`hidden lg:flex items-center gap-1 p-1 rounded-2xl border text-xs ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-100/80 border-slate-200/60'}`}>
-            <button
-              type="button"
-              onClick={() => setZoomLevel(prev => Math.max(75, prev - 15))}
-              className={`p-1.5 rounded-xl transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-white text-slate-500 hover:text-slate-900'}`}
-              title={t('workspace.zoomOut', 'تصغير')}
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span className="px-1.5 font-mono text-[11px] font-semibold text-slate-600 dark:text-slate-300">{zoomLevel}%</span>
-            <button
-              type="button"
-              onClick={() => setZoomLevel(prev => Math.min(140, prev + 15))}
-              className={`p-1.5 rounded-xl transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-white text-slate-500 hover:text-slate-900'}`}
-              title={t('workspace.zoomIn', 'تكبير')}
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-
-            {/* زر ملء الشاشة للسلايد - زر واحد فقط (أيقونة فقط) */}
-            <div className={`w-px h-4 mx-0.5 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`} />
-            <button
-              type="button"
-              id="fullscreen-toggle-btn"
-              onClick={enterFullScreen}
-              className={`p-1.5 rounded-xl transition-all flex items-center justify-center ${
-                isDarkMode
-                  ? 'hover:bg-slate-700 text-slate-300 hover:text-white'
-                  : 'hover:bg-white text-slate-600 hover:text-slate-900'
-              }`}
-              title={t('workspace.fullScreen', 'ملء الشاشة')}
-              aria-label={t('workspace.fullScreen', 'ملء الشاشة')}
-            >
-              <Maximize2 className="w-4 h-4 text-blue-500" />
-            </button>
-          </div>
+          {/* زر ملء الشاشة للسلايد فقط */}
+          <button
+            type="button"
+            id="fullscreen-toggle-btn"
+            onClick={enterFullScreen}
+            className={`p-2 rounded-2xl border transition-all flex items-center justify-center hover:scale-105 active:scale-95 shadow-xs ${
+              isDarkMode
+                ? 'bg-slate-800/90 border-slate-700/80 text-blue-400 hover:bg-slate-700 hover:text-white'
+                : 'bg-slate-100/80 border-slate-200/70 text-blue-600 hover:bg-white hover:text-blue-700'
+            }`}
+            title={isAr ? 'ملء الشاشة للسلايد بالكامل' : 'Full Screen Slide'}
+            aria-label={t('workspace.fullScreen', 'ملء الشاشة')}
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
         </div>
 
         {/* End: Language Selector + Dark Mode Toggle + Saved Summaries + Finish Studying Button */}
@@ -1221,6 +1286,10 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       <StuckInterventionCard
         isOpen={!isFullScreen && stuckState.interventionActive}
         specialistOffered={stuckState.specialistOffered}
+        onChooseExplain={() => {
+          setStuckState(prev => ({ ...prev, interventionActive: false }));
+          setExplainDrawerOpen(true);
+        }}
         onChooseQuiz={() => {
           setStuckState(prev => ({ ...prev, interventionActive: false }));
           setQuickQuizModalOpen(true);
@@ -1236,17 +1305,38 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         onDeclineStillReading={handleDeclineStillReading}
       />
 
-      {/* Floating Action Help Trigger */}
+      {/* Floating Action Help Trigger & Explain Coach - Right in English, Left in Arabic */}
       {!isFullScreen && !stuckState.interventionActive && (
-        <button
-          type="button"
-          onClick={handleOpenHelpIntervention}
-          className={`fixed bottom-6 left-6 z-30 flex items-center gap-2.5 px-4 py-3 text-white text-xs font-semibold rounded-2xl shadow-xl transition-all hover:scale-105 ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-[#0F172A] hover:bg-[#1E293B]'}`}
-        >
-          <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-          <HelpCircle className="w-4 h-4 text-blue-300" />
-          <span>{t('help.needHelp', 'تحتاج مساعدة في هذه الشريحة؟')}</span>
-        </button>
+        <div className={`fixed bottom-6 ${isAr ? 'left-6' : 'right-6'} z-30 flex items-center gap-2`}>
+          {/* كوتش الشرح */}
+          <button
+            type="button"
+            id="bottom-explain-coach-btn"
+            onClick={() => setExplainDrawerOpen(true)}
+            className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-2xl shadow-xl border transition-all hover:scale-105 active:scale-95 ${
+              isDarkMode
+                ? 'bg-slate-800 hover:bg-slate-700 text-blue-400 border-slate-700 shadow-slate-950/40'
+                : 'bg-white hover:bg-slate-50 text-blue-600 border-slate-200 shadow-slate-200/50'
+            }`}
+            title={isAr ? 'محادثة كوتش الشرح' : 'Chat with Explain Coach'}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+            <span>{isAr ? 'كوتش الشرح' : 'Explain Coach'}</span>
+          </button>
+
+          {/* تحتاج مساعدة في هذه الشريحة؟ */}
+          <button
+            type="button"
+            onClick={handleOpenHelpIntervention}
+            className={`flex items-center gap-2 px-3.5 py-2.5 text-white text-xs font-semibold rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95 ${
+              isDarkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-[#0F172A] hover:bg-[#1E293B]'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+            <HelpCircle className="w-3.5 h-3.5 text-blue-300" />
+            <span>{t('help.needHelp', 'تحتاج مساعدة؟')}</span>
+          </button>
+        </div>
       )}
 
       {/* Modals */}
@@ -1403,8 +1493,8 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         <div
           id="fullscreen-slide-overlay"
           dir={dir}
-          className={`fixed inset-0 z-50 flex flex-col items-center justify-center select-none overflow-hidden transition-colors duration-200 pt-14 sm:pt-16 ${
-            isDarkMode ? 'bg-[#141b2d]' : 'bg-[#F8FAFC]'
+          className={`fixed inset-0 z-50 flex items-center justify-center select-none overflow-hidden transition-colors duration-200 ${
+            isDarkMode ? 'bg-[#0f172a]' : 'bg-[#F8FAFC]'
           }`}
           style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}
         >
@@ -1458,8 +1548,26 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
 
             <div className={`w-px h-5 mx-0.5 shrink-0 ${isDarkMode ? 'bg-slate-700/80' : 'bg-slate-200'}`} />
 
-            {/* أدوات الرسم: قلم، تظليل، ممحاة، نص */}
+            {/* أدوات الرسم والتحديد: تحديد، قلم، تظليل، ممحاة، نص */}
             <div className="flex items-center gap-1 shrink-0">
+              {/* تحديد / مؤشر */}
+              <button
+                type="button"
+                id="fullscreen-tool-select-btn"
+                onClick={() => setActiveTool('none')}
+                className={`p-1.5 px-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold ${
+                  activeTool === 'none'
+                    ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-400/40'
+                    : isDarkMode
+                      ? 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                      : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
+                }`}
+                title={isAr ? 'تحديد ونسخ' : 'Select & Copy'}
+              >
+                <MousePointer className={`w-3.5 h-3.5 ${activeTool === 'none' ? 'text-white' : 'text-blue-500'}`} />
+                <span className="hidden lg:inline">{isAr ? 'تحديد' : 'Select'}</span>
+              </button>
+
               {/* قلم */}
               <button
                 type="button"
@@ -1737,6 +1845,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
                 slide={currentSlide}
                 totalSlides={lecture.totalPages}
                 isDarkMode={isDarkMode}
+                pureSlideOnly={true}
               />
 
               <AnnotationCanvas

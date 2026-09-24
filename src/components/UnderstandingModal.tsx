@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Slide, UnderstandingTurn, CompiledSummary } from '../types';
 import { Brain, Sparkles, ArrowLeft, CheckCheck, X, AlertCircle, CheckCircle2, FastForward, Edit3, HelpCircle, Loader2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { getSlideLanguage } from '../utils/slideLanguage';
 
 interface UnderstandingModalProps {
   isOpen: boolean;
@@ -69,19 +70,29 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
 
   const startLoop = async () => {
     setIsLoading(true);
+    const slideLang = getSlideLanguage(slide);
     try {
       const response = await fetch('/api/coach/understanding/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slide, lectureTitle })
+        body: JSON.stringify({ slide, lectureTitle, language: slideLang })
       });
       const data = await response.json();
-      setCurrentQuestion(data.question || `بأسلوبك الخاص، ما الذي فهمته من "${slide.topic || slide.title}"؟`);
+      setCurrentQuestion(
+        data.question ||
+        (slideLang === 'ar'
+          ? `بأسلوبك الخاص، ما الذي فهمته من "${slide.topic || slide.title}"؟`
+          : `In your own words, what did you understand about "${slide.topic || slide.title}"?`)
+      );
       if (data.slideAxes && data.slideAxes.length > 0) {
         setSlideAxes(data.slideAxes);
       }
     } catch {
-      setCurrentQuestion(`بأسلوبك الخاص، ما الذي فهمته من "${slide.topic || slide.title}"؟`);
+      setCurrentQuestion(
+        slideLang === 'ar'
+          ? `بأسلوبك الخاص، ما الذي فهمته من "${slide.topic || slide.title}"؟`
+          : `In your own words, what did you understand about "${slide.topic || slide.title}"?`
+      );
     } finally {
       setIsLoading(false);
     }
@@ -90,8 +101,11 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
   const handleSendAnswer = async (answerText: string, isIDontKnow = false) => {
     if (!answerText.trim() && !isIDontKnow) return;
     setIsLoading(true);
+    const slideLang = getSlideLanguage(slide);
 
-    const activeAnswer = isIDontKnow ? "لا أعلم شيئاً عن هذا المفهوم حتى الآن." : answerText;
+    const activeAnswer = isIDontKnow
+      ? (slideLang === 'ar' ? "لا أعلم شيئاً عن هذا المفهوم حتى الآن." : "I don't know much about this concept yet.")
+      : answerText;
 
     try {
       const response = await fetch('/api/coach/understanding/step', {
@@ -103,7 +117,8 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
           question: currentQuestion,
           studentAnswer: activeAnswer,
           history,
-          isIDontKnow
+          isIDontKnow,
+          language: slideLang
         })
       });
 
@@ -122,7 +137,12 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
         setIsFinished(true);
         generateSummary(updatedHistory);
       } else {
-        setCurrentQuestion(data.followUpQuestion || `ما هو دور ${slide.keyPoints[0] || 'هذا العنصر'} في السياق؟`);
+        setCurrentQuestion(
+          data.followUpQuestion ||
+          (slideLang === 'ar'
+            ? `ما هو دور ${(slide.keyPoints || [])[0] || 'هذا العنصر'} في السياق؟`
+            : `What role does ${(slide.keyPoints || [])[0] || 'this element'} play in this context?`)
+        );
       }
     } catch (err) {
       console.error('Understanding step error:', err);
@@ -133,7 +153,7 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
           covered: [slide.topic],
           missing: [],
           incorrect: [],
-          feedback: 'شكراً لصياغة إجابتك بوضوح.'
+          feedback: slideLang === 'ar' ? 'شكراً لصياغة إجابتك بوضوح.' : 'Thank you for explaining clearly.'
         }
       };
       setHistory([...history, newTurn]);
@@ -151,13 +171,15 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
 
   const generateSummary = async (currentHistory: UnderstandingTurn[]) => {
     setIsLoading(true);
+    const slideLang = getSlideLanguage(slide);
     try {
       const response = await fetch('/api/coach/understanding/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slide,
-          history: currentHistory
+          history: currentHistory,
+          language: slideLang
         })
       });
       const data: CompiledSummary = await response.json();
@@ -165,28 +187,43 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
       setEditableSummaryText(data.studentWordsSummary);
       saveSummaryToStorage(data, data.studentWordsSummary);
     } catch {
-      const validAnswers = currentHistory.map(h => h.studentAnswer).filter(a => !a.includes("لا أعلم"));
-      const fallbackParagraphs = validAnswers.length > 1
-        ? [
-          validAnswers.slice(0, Math.ceil(validAnswers.length / 2)).join('. ') + '.',
-          validAnswers.slice(Math.ceil(validAnswers.length / 2)).join('. ') + '.'
-        ].join('\n\n')
-        : (validAnswers[0]
-          ? `${validAnswers[0]}.\n\nأظهرت شروحاتك تفاعلاً إيجابياً مع المفاهيم والآليات الجوهرية للشريحة.`
-          : `تم استكشاف ${slide.topic || slide.title} وأهم خصائصها.\n\nتمت مراجعة الآليات الأساسية والعلاقات المترابطة.`);
+      const validAnswers = currentHistory.map(h => h.studentAnswer).filter(a => !a.includes("لا أعلم") && !a.toLowerCase().includes("don't know"));
+      const fallbackParagraphs = slideLang === 'ar'
+        ? (validAnswers.length > 1
+          ? [
+            validAnswers.slice(0, Math.ceil(validAnswers.length / 2)).join('. ') + '.',
+            validAnswers.slice(Math.ceil(validAnswers.length / 2)).join('. ') + '.'
+          ].join('\n\n')
+          : (validAnswers[0]
+            ? `${validAnswers[0]}.\n\nأظهرت شروحاتك تفاعلاً إيجابياً مع المفاهيم والآليات الجوهرية للشريحة.`
+            : `تم استكشاف ${slide.topic || slide.title} وأهم خصائصها.\n\nتمت مراجعة الآليات الأساسية والعلاقات المترابطة.`))
+        : (validAnswers.length > 1
+          ? [
+            validAnswers.slice(0, Math.ceil(validAnswers.length / 2)).join('. ') + '.',
+            validAnswers.slice(Math.ceil(validAnswers.length / 2)).join('. ') + '.'
+          ].join('\n\n')
+          : (validAnswers[0]
+            ? `${validAnswers[0]}.\n\nYour explanations demonstrated direct engagement with the core conceptual mechanisms.`
+            : `Explored the foundations of ${slide.topic || slide.title}.\n\nKey mechanisms and relationships were reviewed.`));
 
       const fallbackSummary: CompiledSummary = {
         studentWordsSummary: fallbackParagraphs,
         inlineCorrections: [],
-        corrections: [
+        corrections: slideLang === 'ar' ? [
           'التحقق من الحالات الطرفية والقيود المشروحة في المحاضرة.',
           'مراجعة التعريفات الدقيقة للمعايير الأساسية.'
+        ] : [
+          'Verify edge cases and operational constraints discussed in the lecture.',
+          'Review precise formal definitions of core principles.'
         ],
-        strengths: [
+        strengths: slideLang === 'ar' ? [
           'التعبير عن الفكرة الجوهرية بأسلوبك وكلماتك الخاصة.',
           'المشاركة النشطة والتفاعل خلال الحوار السقراطي.'
+        ] : [
+          'Articulating the core intuition using your own authentic words.',
+          'Active analytical engagement during the Socratic dialogue.'
         ],
-        lectureTakeaways: slideAxes.length > 0 ? slideAxes : slide.keyPoints
+        lectureTakeaways: slideAxes.length > 0 ? slideAxes : (slide.keyPoints || [slide.title])
       };
       setCompiledSummary(fallbackSummary);
       setEditableSummaryText(fallbackSummary.studentWordsSummary);

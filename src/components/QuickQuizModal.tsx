@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Slide } from '../types';
 import { CheckCircle2, X, HelpCircle, Loader2, Sparkles } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { getSlideLanguage } from '../utils/slideLanguage';
 
 interface QuickQuizModalProps {
   isOpen: boolean;
@@ -35,7 +36,8 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
 
   const loadQuiz = async () => {
     setLoading(true);
-    const pastKey = `attocus_past_quiz_q_${slide.id}`;
+    const slideLang = getSlideLanguage(slide);
+    const pastKey = `attocus_past_quiz_q_${lectureTitle || 'lecture'}_p${slide.pageNumber || 1}_${slide.id}`;
     let pastQuestions: string[] = [];
     try {
       const stored = localStorage.getItem(pastKey);
@@ -50,50 +52,69 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
           slide,
           lectureTitle,
           previousQuestions: pastQuestions,
-          language: isAr ? 'ar' : 'en'
+          language: slideLang
         })
       });
-      const data = await res.json();
-      const qText = data.question || (isAr ? `ما هو المبدأ الأساسي في "${slide.title}"؟` : `What is the primary principle in "${slide.title}"?`);
-      setQuestion(qText);
-      setOptions(data.options || []);
-      setCorrectAnswer(data.correctAnswer || data.options?.[0] || '');
-      setExplanation(data.explanation || (isAr ? 'تم التحقق من محتوى شريحة المحاضرة.' : 'Verified from lecture slide content.'));
 
-      if (qText) {
-        const updated = [...pastQuestions, qText].slice(-25);
-        try { localStorage.setItem(pastKey, JSON.stringify(updated)); } catch {}
+      if (!res.ok) {
+        throw new Error(`Quiz generation server returned status ${res.status}`);
       }
+
+      const data = await res.json();
+      if (!data || !data.question || !data.options || data.options.length < 2) {
+        throw new Error('Invalid quiz response received from server');
+      }
+
+      const qText = data.question;
+      setQuestion(qText);
+      setOptions(data.options);
+      setCorrectAnswer(data.correctAnswer || data.options[0]);
+      setExplanation(data.explanation || (slideLang === 'ar' ? 'تم التحقق من محتوى شريحة المحاضرة.' : 'Verified from lecture slide content.'));
+
+      // Save question in slide-specific anti-duplication history
+      const updated = Array.from(new Set([...pastQuestions, qText])).slice(-30);
+      try { localStorage.setItem(pastKey, JSON.stringify(updated)); } catch {}
     } catch {
       const cleanKeyPoints = (slide.keyPoints || []).filter(
         kp => !kp.toLowerCase().includes('visual and conceptual takeaways') && !kp.toLowerCase().includes('visual presentation')
       );
-      // Pick rotating question based on past questions length
+      const cleanContent = (slide.content || []).filter(
+        c => !c.toLowerCase().includes('visual presentation') && !c.toLowerCase().includes('section notes')
+      );
+      const availableFacts = cleanKeyPoints.length > 0 ? cleanKeyPoints : (cleanContent.length > 0 ? cleanContent : [slide.title]);
+
+      const rotIdx = pastQuestions.length;
+      const targetFact = availableFacts[rotIdx % availableFacts.length] || slide.title;
+
+      // Rotating contextual questions ensuring distinct concepts matching slide language
       const qVariations = [
-        isAr ? `فيما يخص "${slide.title}"، أي من العبارات التالية تعتبر صحيحة؟` : `Regarding "${slide.title}", which of the following statements is correct?`,
-        isAr ? `ما هو المبدأ والهدف الأكاديمي الأساسي في "${slide.topic || slide.title}"؟` : `What is the core principle and objective in "${slide.topic || slide.title}"?`,
-        isAr ? `أي من المفاهيم التالية يعد متطلباً محورياً لـ "${slide.topic || slide.title}"؟` : `Which of the following is a vital requirement for "${slide.topic || slide.title}"?`
+        slideLang === 'ar' ? `وفقاً للمحاضرة حول "${slide.topic || slide.title}"، ما هو الدور الأساسي لـ: "${targetFact.slice(0, 70)}..."؟` : `Regarding "${slide.topic || slide.title}", what is the primary role of "${targetFact.slice(0, 70)}..."?`,
+        slideLang === 'ar' ? `فيما يخص "${slide.title}"، أي من العبارات التالية تمثل حقيقة مثبتة في الشريحة؟` : `Regarding "${slide.title}", which of the following statements represents an established fact?`,
+        slideLang === 'ar' ? `ما هو المبدأ والهدف الأكاديمي الأساسي في موضوع "${slide.topic || slide.title}"؟` : `What is the core principle and objective in "${slide.topic || slide.title}"?`,
+        slideLang === 'ar' ? `أي من المفاهيم التالية يعد شرطاً جوهرياً لضمان سلامة تطبيق "${slide.topic || slide.title}"؟` : `Which of the following is a vital requirement for "${slide.topic || slide.title}"?`
       ];
-      const selectedQ = qVariations[pastQuestions.length % qVariations.length];
+
+      const selectedQ = qVariations[rotIdx % qVariations.length];
       setQuestion(selectedQ);
 
-      const mainPoint = cleanKeyPoints[pastQuestions.length % (cleanKeyPoints.length || 1)] || (isAr ? 'يحافظ على اتساق وتزامن البيانات عبر جميع العقد والنُسخ.' : 'Maintains consistency and synchronization across all nodes.');
-      const opts = isAr ? [
-        mainPoint,
-        'يسمح بتجاوز عمليات التحقق من النصاب بالأغلبية.',
-        'يتطلب مزامنة ساعة مادية دقيقة بين جميع الخوادم.',
-        'يعمل فقط عندما تكون جميع خوادم المجموعة نشطة معاً.'
+      const correctOpt = targetFact.slice(0, 80);
+      const opts = slideLang === 'ar' ? [
+        correctOpt,
+        'إلغاء قيود التحقق والاستجابة الفورية دون معايير اتساق',
+        'الاعتماد على عشوائية التخزين المؤقت دون مزامنة موحدة',
+        'تعطيل المراقبة والتحقق من صحة المدخلات'
       ] : [
-        mainPoint,
+        correctOpt,
         'Allows bypassing majority consensus validation checks.',
         'Requires atomic physical clock synchronization between all servers.',
         'Only operates when every single server in the cluster is healthy.'
       ];
-      setOptions(opts);
-      setCorrectAnswer(opts[0]);
-      setExplanation(isAr ? 'هذا الخيار يمثل المفهوم الجوهري المثبت في هذه الشريحة.' : 'This option represents the core concept verified in this slide.');
 
-      const updated = [...pastQuestions, selectedQ].slice(-25);
+      setOptions(opts);
+      setCorrectAnswer(correctOpt);
+      setExplanation(slideLang === 'ar' ? 'هذا الخيار يمثل المفهوم الجوهري المثبت في هذه الشريحة.' : 'This option represents the core concept verified in this slide.');
+
+      const updated = Array.from(new Set([...pastQuestions, selectedQ])).slice(-30);
       try { localStorage.setItem(pastKey, JSON.stringify(updated)); } catch {}
     } finally {
       setLoading(false);
@@ -228,14 +249,28 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
                   {isAr ? 'تحقق من الإجابة' : 'Check Answer'}
                 </button>
               ) : (
-                <button
-                  type="button"
-                  id="done-quick-quiz-btn"
-                  onClick={onClose}
-                  className="text-xs px-5 py-2.5 rounded-xl bg-[#0F172A] dark:bg-blue-600 hover:bg-[#1E293B] dark:hover:bg-blue-700 text-white font-bold transition-all shadow-xs active:scale-[0.98]"
-                >
-                  {isAr ? 'فهمت ذلك، متابعة' : 'Got it, continue'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    id="another-quick-quiz-btn"
+                    onClick={() => {
+                      setSelectedOption(null);
+                      setSubmitted(false);
+                      loadQuiz();
+                    }}
+                    className="text-xs px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold transition-all shadow-xs active:scale-[0.98] flex items-center gap-1.5"
+                  >
+                    <span>{isAr ? 'سؤال آخر على الشريحة 🔄' : 'Another question 🔄'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="done-quick-quiz-btn"
+                    onClick={onClose}
+                    className="text-xs px-5 py-2.5 rounded-xl bg-[#0F172A] dark:bg-blue-600 hover:bg-[#1E293B] dark:hover:bg-blue-700 text-white font-bold transition-all shadow-xs active:scale-[0.98]"
+                  >
+                    {isAr ? 'إنهاء ومتابعة' : 'Done, continue'}
+                  </button>
+                </div>
               )}
             </div>
           </>

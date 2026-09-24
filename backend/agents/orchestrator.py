@@ -5,6 +5,14 @@ from .quiz_agent import QuizAgent
 from .summary_agent import SocraticSummaryAgent
 
 try:
+    from .security import check_sql_injection, get_safe_rejection_response
+except ImportError:
+    try:
+        from security import check_sql_injection, get_safe_rejection_response
+    except ImportError:
+        from backend.agents.security import check_sql_injection, get_safe_rejection_response
+
+try:
     from ..rag_service import SharedRAGService
 except Exception:
     try:
@@ -140,6 +148,8 @@ class OrchestratorAgent:
 
     def retrieve_context(self, query: str, k: int = 5, pdf_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retrieves top-k relevant lecture chunks using Shared RAG."""
+        if check_sql_injection(query):
+            return []
         return self.rag.retrieve_context(query=query, k=k, pdf_name=pdf_name)
 
     def get_rag_status(self) -> Dict[str, Any]:
@@ -156,6 +166,12 @@ class OrchestratorAgent:
         previous_questions: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """Triggers the Quiz Agent using explicit context or Shared RAG with anti-duplication."""
+        if (topic and check_sql_injection(topic)) or (isinstance(context, str) and check_sql_injection(context)):
+            return {
+                "questions": [],
+                "total_questions": 0,
+                "error": get_safe_rejection_response(language)
+            }
         return self.quiz_agent.generate_quiz(
             context=context,
             num_questions=num_questions,
@@ -210,6 +226,8 @@ class OrchestratorAgent:
         language: str = "ar"
     ) -> str:
         """Triggers the Learning Coach explanation without repeating past chat content."""
+        if student_question and check_sql_injection(student_question):
+            return get_safe_rejection_response(language)
         return self.learning_agent.explain_concept(
             topic=topic,
             slide_content=slide_content,
@@ -270,6 +288,17 @@ class OrchestratorAgent:
                 "final_summary": None,
                 "slide_axes": [],
                 "covered_axes": [],
+                "structured_summary": None
+            }
+
+        if check_sql_injection(user_input):
+            lang = getattr(agent, "session_language", getattr(agent, "language", "ar"))
+            return {
+                "reply": get_safe_rejection_response(lang),
+                "is_finished": False,
+                "final_summary": None,
+                "slide_axes": getattr(agent, "slide_axes", []),
+                "covered_axes": getattr(agent, "covered_axes", []),
                 "structured_summary": None
             }
 

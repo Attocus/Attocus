@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Slide } from '../types';
-import { Send, X, BookOpen, ExternalLink, Sparkles, Loader2, Bot } from 'lucide-react';
+import { Send, X, BookOpen, ExternalLink, Sparkles, Loader2, RotateCcw } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface ExplainDrawerProps {
@@ -26,25 +26,67 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
   lectureTitle
 }) => {
   const { isAr, dir } = useLanguage();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'coach',
-      text: isAr
-        ? `أهلاً بك! أنا رفيقك الذكي في المذاكرة. يمكنك سؤالي عن أي مفهوم أو مصطلح في "${slide.title}" وسأشرحه لك مباشرة بالاعتماد على محتوى المحاضرة.`
-        : `Welcome! I am your AI study companion. Ask me anything about "${slide.title}" and I will explain it directly based on the lecture.`,
-      citedPages: [slide.pageNumber]
-    }
-  ]);
+  const storageKey = `attocus_explain_chat_${lectureTitle || 'lecture'}_p${slide.pageNumber || 1}_${slide.id}`;
+
+  const defaultWelcomeMessage: Message = {
+    role: 'coach',
+    text: isAr
+      ? `أهلاً بك! أنا رفيقك الذكي في المذاكرة. يمكنك سؤالي عن أي مفهوم أو مصطلح في "${slide.title}" وسأشرحه لك مباشرة بالاعتماد على محتوى المحاضرة.`
+      : `Welcome! I am your AI study companion. Ask me anything about "${slide.title}" and I will explain it directly based on the lecture.`,
+    citedPages: [slide.pageNumber]
+  };
+
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [defaultWelcomeMessage];
+  });
   const [questionInput, setQuestionInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Sync messages when slide changes
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+          return;
+        }
+      }
+    } catch {}
+    setMessages([defaultWelcomeMessage]);
+  }, [storageKey]);
+
   if (!isOpen) return null;
+
+  const saveMessages = (newMessages: Message[]) => {
+    setMessages(newMessages);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(newMessages));
+    } catch {}
+  };
+
+  const handleClearHistory = () => {
+    const reset = [defaultWelcomeMessage];
+    setMessages(reset);
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {}
+  };
 
   const handleSend = async () => {
     if (!questionInput.trim() || isLoading) return;
     const userQ = questionInput.trim();
     setQuestionInput('');
-    setMessages(prev => [...prev, { role: 'student', text: userQ }]);
+    const updatedWithUser = [...messages, { role: 'student' as const, text: userQ }];
+    saveMessages(updatedWithUser);
     setIsLoading(true);
 
     try {
@@ -66,28 +108,29 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
       }
 
       const data = await response.json();
-      setMessages(prev => [
-        ...prev,
+      const updatedWithCoach = [
+        ...updatedWithUser,
         {
-          role: 'coach',
-          text: data.reply || (isAr ? 'عذراً، لم أستطع العثور على إجابة محددة.' : 'Sorry, could not find a specific answer.'),
-          citedPages: data.citedPages || [slide.pageNumber],
+          role: 'coach' as const,
+          text: data.answer || data.reply || (isAr ? 'عذراً، لم أستطع العثور على إجابة محددة.' : 'Sorry, could not find a specific answer.'),
+          citedPages: data.citedPages || data.citedLecturePages || [slide.pageNumber],
           externalCitation: data.externalCitation
         }
-      ]);
+      ];
+      saveMessages(updatedWithCoach);
     } catch (err: any) {
       console.warn('Explain API error:', err);
-      // Fallback
-      setMessages(prev => [
-        ...prev,
+      const updatedWithFallback = [
+        ...updatedWithUser,
         {
-          role: 'coach',
+          role: 'coach' as const,
           text: isAr
             ? `بالإشارة إلى الشريحة ${slide.pageNumber} ("${slide.title}"): هذا المفهوم يرتبط بالنص الأساسي للمحاضرة ويتم تناوله لتوضيح الخطوات المنطقية.`
             : `Referring to slide ${slide.pageNumber} ("${slide.title}"): This concept relates to the core lecture content and outlines the logical progression.`,
           citedPages: [slide.pageNumber]
         }
-      ]);
+      ];
+      saveMessages(updatedWithFallback);
     } finally {
       setIsLoading(false);
     }
@@ -120,14 +163,24 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            id="close-explain-drawer-btn"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={handleClearHistory}
+              title={isAr ? 'بدء محادثة جديدة' : 'Clear conversation'}
+              className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              id="close-explain-drawer-btn"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* سجل المحادثة (Message History) */}

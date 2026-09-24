@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Slide } from '../types';
-import { BookOpen, Layers, Network, Table as TableIcon, GitBranch, ArrowLeft, ArrowRight, CheckCircle2, Sparkles, Loader2 } from 'lucide-react';
+import { BookOpen, Layers, Network, Table as TableIcon, GitBranch, ArrowLeft, ArrowRight, CheckCircle2, Sparkles, Loader2, Copy, Check } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { runTakeawaysAgent } from '../agents/takeawaysAgent';
 
@@ -8,15 +8,18 @@ interface SlideViewerProps {
   slide: Slide;
   totalSlides: number;
   isDarkMode?: boolean;
+  pureSlideOnly?: boolean;
 }
 
 export const SlideViewer: React.FC<SlideViewerProps> = ({
   slide,
   totalSlides,
-  isDarkMode
+  isDarkMode,
+  pureSlideOnly = false
 }) => {
   const dm = isDarkMode;
   const { isAr, dir, t } = useLanguage();
+  const [isCopied, setIsCopied] = useState(false);
 
   // Check if current points are raw or overly verbose prose
   const isRawPoints = (pts: string[]) => {
@@ -42,6 +45,21 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({
     return slide.keyPoints || [];
   });
   const [isLoadingTakeaways, setIsLoadingTakeaways] = useState<boolean>(false);
+
+  const handleCopySlideContent = () => {
+    const textToCopy = [
+      slide.title || '',
+      slide.subtitle || '',
+      ...(slide.content || []),
+      ...(takeaways || [])
+    ].filter(Boolean).join('\n\n');
+
+    if (textToCopy) {
+      navigator.clipboard.writeText(textToCopy);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    }
+  };
 
   const fetchLLMTakeaways = useCallback(async (force = false) => {
     const slideFullText = [
@@ -114,6 +132,40 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({
     }
   }, [slide.id, fetchLLMTakeaways]);
 
+  // Pure Slide Mode for Full Screen: Only the slide image / content, no title, no borders, no takeaways
+  if (pureSlideOnly) {
+    return (
+      <div
+        dir={dir}
+        className={`w-full h-full flex items-center justify-center select-text font-sans antialiased overflow-hidden p-0 m-0 ${
+          dm ? 'bg-[#0f172a]' : 'bg-[#F8FAFC]'
+        }`}
+      >
+        {slide.pageImageUrl ? (
+          <img
+            src={slide.pageImageUrl}
+            alt={`صفحة ${slide.pageNumber}: ${slide.title}`}
+            className={`w-full h-full object-contain transition-all duration-300 ${
+              dm ? 'filter invert-[0.92] hue-rotate-180 brightness-95 contrast-110 drop-shadow-md' : ''
+            }`}
+            style={{ imageRendering: 'high-quality' }}
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <div className={`w-full h-full p-8 flex flex-col justify-center items-center text-center ${dm ? 'bg-[#0f172a] text-slate-100' : 'bg-white text-slate-900'}`}>
+            <h1 className="text-3xl font-bold mb-4">{slide.title}</h1>
+            {slide.subtitle && <p className="text-lg opacity-80 mb-6">{slide.subtitle}</p>}
+            <div className="space-y-4 max-w-2xl text-left">
+              {slide.content.map((paragraph, idx) => (
+                <p key={idx} className="text-base leading-relaxed">{paragraph}</p>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       dir={dir}
@@ -133,6 +185,21 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({
                 {t('workspace.citation', 'مرجع:')} {slide.externalCitations[0]}
               </span>
             )}
+            <button
+              type="button"
+              onClick={handleCopySlideContent}
+              className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border font-semibold transition-all ${
+                isCopied
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
+                  : dm
+                    ? 'border-slate-700 hover:bg-slate-700/60 text-slate-300'
+                    : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+              }`}
+              title={isAr ? 'نسخ نص الشريحة' : 'Copy slide text'}
+            >
+              {isCopied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3 text-blue-500" />}
+              <span>{isCopied ? (isAr ? 'تم النسخ!' : 'Copied!') : (isAr ? 'نسخ النص' : 'Copy')}</span>
+            </button>
           </div>
 
           <div className={`flex items-center gap-2 text-xs font-medium ${dm ? 'text-slate-400' : 'text-slate-400'}`}>
@@ -145,11 +212,11 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({
         </div>
 
         {/* عنوان الشريحة */}
-        <h1 className={`text-xl sm:text-2xl font-bold tracking-tight leading-snug ${dm ? 'text-white' : 'text-[#0F172A]'}`}>
+        <h1 className={`text-xl sm:text-2xl font-bold tracking-tight leading-snug select-text ${dm ? 'text-white' : 'text-[#0F172A]'}`}>
           {slide.title}
         </h1>
         {slide.subtitle && (
-          <p className={`text-xs sm:text-sm mt-1 font-normal leading-relaxed ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+          <p className={`text-xs sm:text-sm mt-1 font-normal leading-relaxed select-text ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
             {slide.subtitle}
           </p>
         )}
@@ -157,13 +224,15 @@ export const SlideViewer: React.FC<SlideViewerProps> = ({
 
       {/* ─── محتوى الشريحة الرئيسي ─── */}
       <div className="flex-1 min-h-0 flex flex-col justify-center my-3 overflow-hidden">
-        {/* صورة الشريحة */}
+        {/* صورة الشريحة - تدعم النمط الداكن مثل Notability */}
         {slide.pageImageUrl ? (
-          <div className={`h-full max-h-[300px] flex items-center justify-center rounded-2xl overflow-hidden border shadow-xs ${dm ? 'border-slate-700/50 bg-slate-800' : 'border-slate-200/80 bg-slate-50'}`}>
+          <div className={`h-full max-h-[300px] flex items-center justify-center rounded-2xl overflow-hidden border shadow-xs transition-colors duration-300 ${dm ? 'border-slate-700/50 bg-[#141b2d]' : 'border-slate-200/80 bg-slate-50'}`}>
             <img
               src={slide.pageImageUrl}
               alt={`صفحة ${slide.pageNumber}: ${slide.title}`}
-              className="max-h-full w-auto object-contain select-none"
+              className={`max-h-full w-auto object-contain transition-all duration-300 ${
+                dm ? 'filter invert-[0.92] hue-rotate-180 brightness-95 contrast-110 drop-shadow-md' : ''
+              }`}
               style={{ imageRendering: 'high-quality' }}
               referrerPolicy="no-referrer"
             />

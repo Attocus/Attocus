@@ -151,6 +151,41 @@ async function startServer() {
 
   app.use(express.json({ limit: '10mb' }));
 
+  // SQL Injection validation helper
+  const isSqlInjection = (text: string): boolean => {
+    if (!text || typeof text !== 'string') return false;
+    const cleanText = text.trim();
+    if (!cleanText) return false;
+    const sqlPatterns = [
+      /\b(SELECT\s+.+\s+FROM)\b/i,
+      /\b(INSERT\s+INTO\s+.+\s+VALUES)\b/i,
+      /\b(UPDATE\s+.+\s+SET)\b/i,
+      /\b(DELETE\s+FROM)\b/i,
+      /\b(DROP\s+TABLE|DROP\s+DATABASE|DROP\s+VIEW|DROP\s+SCHEMA)\b/i,
+      /\b(ALTER\s+TABLE)\b/i,
+      /\b(UNION\s+(ALL\s+)?SELECT)\b/i,
+      /\b(OR|AND)\s+['"]?1['"]?\s*=\s*['"]?1/i,
+      /\b(OR|AND)\s+TRUE\b/i,
+      /\bINFORMATION_SCHEMA\b/i,
+      /\bXP_CMDSHELL\b/i,
+      /\bEXEC(\s+XP_|\s+SP_)\b/i,
+      /;\s*(DROP|DELETE|UPDATE|INSERT|SELECT)\b/i,
+      /--\s*$/i,
+      /\/\*.*?\*\//i,
+      /\bWAITFOR\s+DELAY\b/i,
+      /\bBENCHMARK\s*\(/i,
+      /\bSLEEP\s*\(/i
+    ];
+    return sqlPatterns.some(pat => pat.test(cleanText));
+  };
+
+  const getSafeRejectionResponse = (language: string = 'ar'): string => {
+    if (language === 'ar') {
+      return "أعتذر منك، لم أتمكن من فهم هذا السؤال أو صياغته غير متوافقة مع محتوى وسلايدات المحاضرة. يرجى التكرم بطرح سؤال أكاديمي متعلق بالمادة وسأكون سعيداً بمساعدتك!";
+    }
+    return "I apologize, but I couldn't understand this input or it is outside the scope of the lecture slides. Please ask an academic question related to the lecture, and I'll be glad to help!";
+  };
+
   // Health check
   app.get('/api/health', async (req, res) => {
     let pythonConnected = false;
@@ -181,6 +216,16 @@ async function startServer() {
   // Shared RAG Context Retrieval Proxy
   app.post('/api/rag/retrieve', async (req, res) => {
     try {
+      const { query } = req.body;
+      if (query && isSqlInjection(query)) {
+        return res.json({
+          query,
+          k: req.body.k || 5,
+          chunks_count: 0,
+          chunks: [],
+          formatted_context: ""
+        });
+      }
       const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/rag/retrieve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -421,6 +466,21 @@ async function startServer() {
     try {
       const { lectureTitle, currentSlide, allSlides, question, chatHistory } = req.body;
 
+      // 1. Check for SQL Injection
+      if (isSqlInjection(question)) {
+        const isArQ = (question.match(/[\u0600-\u06FF]/g) || []).length > 0;
+        return res.json({
+          answer: getSafeRejectionResponse(isArQ ? 'ar' : 'en'),
+          citedLecturePages: [currentSlide?.pageNumber || 1]
+        });
+      }
+
+      // Normalize chat history for multi-turn memory
+      const cleanHistory = (chatHistory || []).map((m: any) => ({
+        role: m.role === 'coach' || m.role === 'assistant' ? 'assistant' : 'user',
+        content: String(m.text || m.content || '').trim()
+      })).filter((m: any) => m.content.length > 0);
+
       // Try Python Backend (OpenAI Learning Coach)
       try {
         const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/learning/explain`, {
@@ -434,7 +494,7 @@ async function startServer() {
               `Key Points: ${(currentSlide?.keyPoints || []).join('\n')}`
             ].join('\n'),
             student_question: question,
-            chat_history: chatHistory
+            chat_history: cleanHistory
           })
         });
         if (pyRes.ok) {
@@ -461,17 +521,36 @@ Other Slides in this lecture:
 ${(allSlides || []).map((s: any) => `Page ${s.pageNumber}: ${s.title} (${s.topic})`).join('\n')}
 `;
 
+      const historyContext = cleanHistory.length > 0
+        ? `\nPrior Conversation History:\n` +
+          cleanHistory.slice(-8).map((m: any) => `${m.role === 'user' ? 'Student' : 'Coach'}: ${m.content}`).join('\n') + '\n'
+        : '';
+
       const systemPrompt = `You are a calm, academic, highly supportive human tutor sitting right next to a university student.
-Rules:
-1. Explain warmly, clearly, and concisely in 2-3 brief paragraphs.
-2. Ground your answer FIRST in the provided lecture notes and cite "Slide ${currentSlide?.pageNumber || 1}".
-3. If the answer is not found directly in the lecture, you may use external knowledge, but you MUST explicitly cite the external source (e.g., "[Source: Standard Distributed Systems Theory]").
-4. Maintain a supportive, encouraging, conversational teacher tone. Do not use robotic boilerplate.
-5. If the student asks in Arabic, respond in fluent, academic, warm Arabic. If in English, respond in English.`;
+
+CRITICAL INSTRUCTIONS & STRICT BOUNDARIES:
+1. MULTI-TURN MEMORY & STUDENT DETAILS:
+   - You MUST remember the student's name and details if mentioned in the chat history (e.g. if the student previously said "مرحبا اسمي بارقه", and now asks "وش اسمي؟", answer directly and warmly: "اسمك بارقه!").
+   - Maintain continuity across the conversation turns.
+
+2. STRICT ACADEMIC & LECTURE SCOPE (REJECT OFF-TOPIC QUERIES):
+   - You are STRICTLY an academic tutor dedicated to THIS specific lecture and its slides.
+   - If the student asks about anything completely UNRELATED to the lecture, the slide, or the academic material (for example: cooking/food recipes, sports/football matches, movies, video games, unrelated coding projects, personal chit-chat, or general non-academic trivia), you MUST POLITELY REFUSE to answer!
+   - In Arabic, refuse with:
+     "أعتذر منك، أنا مخصص فقط لمساعدتك وشرح محتوى هذه المحاضرة والسلايدات. لا يمكنني الإجابة عن مواضيع خارج سياق المادة، لكن يسعدني جداً أن تسألني عن أي مفهوم أو نقطة في المحاضرة!"
+   - In English, refuse with:
+     "I apologize, but I am specifically designed to assist you with the concepts and content of this lecture and slides. I cannot answer questions unrelated to the study material, but I would be glad to help you with any concept from the lecture!"
+   - (Exception: polite greetings like "مرحبا" or introducing oneself like "اسمي فلان" are warmly accepted, then gently orient them towards the lecture).
+
+3. EXPLANATION QUALITY:
+   - Explain warmly, clearly, and concisely in 2-3 brief paragraphs.
+   - Ground your answer FIRST in the provided lecture notes and cite "Slide ${currentSlide?.pageNumber || 1}".
+   - Maintain a supportive, encouraging, conversational teacher tone. Do not use robotic boilerplate.
+   - If the student asks in Arabic, respond in fluent, academic, warm Arabic. If in English, respond in English.`;
 
       const prompt = `Context:
 ${lectureContext}
-
+${historyContext}
 Student's question: "${question}"`;
 
       const llmAnswer = await generateTextWithLLM(prompt, systemPrompt);
@@ -602,7 +681,7 @@ Extract 2-4 ultra-concise bullet headlines (رؤوس أقلام) now in the exac
   // 2. Understanding Agent - Start Socratic Session (calls Python SocraticSummaryAgent)
   app.post('/api/coach/understanding/start', async (req, res) => {
     try {
-      const { slide, lectureTitle } = req.body;
+      const { slide, lectureTitle, language } = req.body;
 
       const rawContentList = (slide?.content || []).filter(
         (c: string) => !c.includes('Visual presentation content') && !c.includes('Section notes and key lecture points')
@@ -618,6 +697,11 @@ Extract 2-4 ultra-concise bullet headlines (رؤوس أقلام) now in the exac
         `Key Points: ${rawKeyPointsList.join(', ')}`,
         `Slide Notes:\n${rawContentList.join('\n')}`
       ].join('\n');
+
+      // Auto-detect language from content if not explicitly provided
+      const arCount = (slideContext.match(/[\u0600-\u06FF]/g) || []).length;
+      const enCount = (slideContext.match(/[a-zA-Z]/g) || []).length;
+      const targetLang = (language === 'ar' || language === 'en') ? language : (arCount > enCount ? 'ar' : 'en');
 
       // If slide text is empty or placeholder, retrieve real chunks from RAG
       if (rawContentList.length === 0 && rawKeyPointsList.length === 0) {
@@ -652,7 +736,8 @@ Extract 2-4 ultra-concise bullet headlines (رؤوس أقلام) now in the exac
           body: JSON.stringify({
             session_id: `slide-${slide?.id || slide?.pageNumber || 1}`,
             topic: slide?.topic || slide?.title || lectureTitle || 'Study Concept',
-            context: slideContext
+            context: slideContext,
+            language: targetLang
           })
         });
 
@@ -670,7 +755,8 @@ Extract 2-4 ultra-concise bullet headlines (رؤوس أقلام) now in the exac
         console.warn('Python backend summary start failed, falling back:', err);
       }
 
-      const cleanTopic = slide?.topic || slide?.title || lectureTitle || 'this concept';
+      const cleanTopic = slide?.topic || slide?.title || lectureTitle || (targetLang === 'ar' ? 'هذا المفهوم' : 'this concept');
+      const langRule = targetLang === 'ar' ? 'Generate your welcoming question strictly in Arabic.' : 'Generate your welcoming question strictly in English.';
       const prompt = `You are an attentive academic tutor initiating a conceptual comprehension check for a university student.
 Lecture: "${lectureTitle || ''}"
 Topic: "${cleanTopic}"
@@ -678,6 +764,7 @@ Slide Content:
 ${slideContext}
 
 CRITICAL RULES:
+- ${langRule}
 - Ask ONE warm, open-ended question assessing the student's genuine mental model of the academic subject matter or concept.
 - NEVER ask questions about slide numbers, file titles, presentation outlines, or placeholders (e.g. NEVER ask "What did you understand about Slide 1?").
 - Keep it under 25 words.`;
@@ -691,7 +778,9 @@ CRITICAL RULES:
       }
 
       res.json({
-        question: `In your own words, what did you understand about ${cleanTopic}?`,
+        question: targetLang === 'ar'
+          ? `بأسلوبك الخاص، ما الذي فهمته من "${cleanTopic}"؟`
+          : `In your own words, what did you understand about "${cleanTopic}"?`,
         topic: cleanTopic
       });
     } catch (err: any) {
@@ -702,7 +791,30 @@ CRITICAL RULES:
   // 3. Understanding Agent - Multi-turn Step (calls Python SocraticSummaryAgent)
   app.post('/api/coach/understanding/step', async (req, res) => {
     try {
-      const { slide, question, studentAnswer, history, isIDontKnow } = req.body;
+      const { slide, question, studentAnswer, history, isIDontKnow, language } = req.body;
+
+      const slideText = [
+        slide?.title || '',
+        slide?.topic || '',
+        ...(slide?.keyPoints || []),
+        ...(slide?.content || [])
+      ].join(' ');
+      const arCount = (slideText.match(/[\u0600-\u06FF]/g) || []).length;
+      const enCount = (slideText.match(/[a-zA-Z]/g) || []).length;
+      const targetLang = (language === 'ar' || language === 'en') ? language : (arCount > enCount ? 'ar' : 'en');
+
+      // Check for SQL injection in student answer
+      if (studentAnswer && isSqlInjection(studentAnswer)) {
+        return res.json({
+          analysis: {
+            covered: [],
+            missing: [],
+            incorrect: []
+          },
+          followUpQuestion: getSafeRejectionResponse(targetLang),
+          isFinished: false
+        });
+      }
 
       // Try Python Backend (Socratic Summary Agent)
       try {
@@ -711,7 +823,7 @@ CRITICAL RULES:
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             session_id: `slide-${slide?.id || slide?.pageNumber || 1}`,
-            user_input: isIDontKnow ? "I don't know / I am stuck" : (studentAnswer || '')
+            user_input: isIDontKnow ? (targetLang === 'ar' ? "لا أعلم شيئاً عن هذا المفهوم حتى الآن / أحتاج مساعدة" : "I don't know / I am stuck") : (studentAnswer || '')
           })
         });
 
@@ -720,7 +832,7 @@ CRITICAL RULES:
           if (data.reply) {
             return res.json({
               analysis: {
-                covered: [slide?.topic || 'Concept'],
+                covered: [slide?.topic || (targetLang === 'ar' ? 'المفهوم الأساسي' : 'Concept')],
                 missing: [],
                 incorrect: []
               },
@@ -737,16 +849,20 @@ CRITICAL RULES:
 
       if (isIDontKnow) {
         // Student clicked "I don't know anything about this"
-        const nextPrompt = (slide.keyPoints && slide.keyPoints[1])
-          ? `No problem at all — that's why we're studying! Let's break it down: Can you recall what role ${slide.keyPoints[1]} plays?`
-          : `That's completely fine! Let's take it one step at a time: What is the main purpose of ${slide.title}?`;
+        const nextPrompt = targetLang === 'ar'
+          ? ((slide.keyPoints && slide.keyPoints[1])
+              ? `لا مشكلة أبداً — هذا هو هدف دراستنا معاً! دعنا نبسط الأمر: هل يمكنك تذكر ما هو دور ${slide.keyPoints[1]}؟`
+              : `هذا أمر طبيعي تماماً! دعنا نأخذها خطوة بخطوة: ما هو الهدف الأساسي من ${slide.title}؟`)
+          : ((slide.keyPoints && slide.keyPoints[1])
+              ? `No problem at all — that's why we're studying! Let's break it down: Can you recall what role ${slide.keyPoints[1]} plays?`
+              : `That's completely fine! Let's take it one step at a time: What is the main purpose of ${slide.title}?`);
 
         res.json({
           analysis: {
             covered: [],
-            missing: slide.keyPoints || ['Core concept'],
+            missing: slide.keyPoints || (targetLang === 'ar' ? ['المفهوم الأساسي'] : ['Core concept']),
             incorrect: [],
-            feedback: "Acknowledged — let's scaffold this gently."
+            feedback: targetLang === 'ar' ? "تم الاستيعاب — دعنا نتدرج في هذا المفهوم خطوة بخطوة." : "Acknowledged — let's scaffold this gently."
           },
           followUpQuestion: nextPrompt,
           isFinished: false
@@ -755,6 +871,10 @@ CRITICAL RULES:
       }
 
       if (ai) {
+        const langRule = targetLang === 'ar'
+          ? 'LANGUAGE REQUIREMENT: Respond strictly in ARABIC (اللغة العربية). The feedback and followUpQuestion MUST be in Arabic.'
+          : 'LANGUAGE REQUIREMENT: Respond strictly in ENGLISH. The feedback and followUpQuestion MUST be in English.';
+
         const prompt = `You are a real human tutor running a multi-turn comprehension loop.
 Slide Title: ${slide.title}
 Key Points required by lecture:
@@ -770,6 +890,8 @@ Task:
 1. Analyze what the student covered, what is missing, and what is incorrect.
 2. If the student has covered most key points or if 3 turns have elapsed, mark isFinished as true.
 3. If not finished, formulate ONE targeted follow-up question specifically aimed at the missing gap or misconception (do NOT ask a generic question).
+4. ${langRule}
+
 Respond in valid JSON with schema:
 {
   "covered": ["point1"],
@@ -784,12 +906,14 @@ Respond in valid JSON with schema:
         if (parsed) {
           res.json({
             analysis: {
-              covered: parsed.covered || ['Initial conceptual understanding'],
+              covered: parsed.covered || (targetLang === 'ar' ? ['استيعاب أولي للمفهوم'] : ['Initial conceptual understanding']),
               missing: parsed.missing || [],
               incorrect: parsed.incorrect || [],
-              feedback: parsed.feedback || 'Good effort on that explanation.'
+              feedback: parsed.feedback || (targetLang === 'ar' ? 'محاولة جيدة في الشرح.' : 'Good effort on that explanation.')
             },
-            followUpQuestion: parsed.followUpQuestion || `How does this relate to ${(slide.keyPoints || [])[1] || 'the overall mechanism'}?`,
+            followUpQuestion: parsed.followUpQuestion || (targetLang === 'ar'
+              ? `كيف يرتبط هذا بـ ${(slide.keyPoints || [])[1] || 'الآلية الكلية'}؟`
+              : `How does this relate to ${(slide.keyPoints || [])[1] || 'the overall mechanism'}?`),
             isFinished: parsed.isFinished || (parsed.missing?.length === 0)
           });
           return;
@@ -804,11 +928,15 @@ Respond in valid JSON with schema:
       res.json({
         analysis: {
           covered: hasKeywords ? [(slide.keyPoints || [])[0]] : [],
-          missing: [(slide.keyPoints || [])[1] || 'Detailed causality'],
+          missing: [(slide.keyPoints || [])[1] || (targetLang === 'ar' ? 'التفاصيل السببية والآليات' : 'Detailed causality')],
           incorrect: [],
-          feedback: 'You captured the main idea! There is just one key detail to solidify.'
+          feedback: targetLang === 'ar'
+            ? 'لقد استوعبت الفكرة الأساسية! بقيت نقطة تفصيلية واحدة لترسيخ الفهم.'
+            : 'You captured the main idea! There is just one key detail to solidify.'
         },
-        followUpQuestion: `What specific condition triggers ${(slide.keyPoints || [])[1] || 'the next phase'}?`,
+        followUpQuestion: targetLang === 'ar'
+          ? `ما هو الشرط الدقيق الذي يحفز ${(slide.keyPoints || [])[1] || 'المرحلة التالية'}؟`
+          : `What specific condition triggers ${(slide.keyPoints || [])[1] || 'the next phase'}?`,
         isFinished: (history || []).length >= 2
       });
     } catch (err: any) {
@@ -816,42 +944,44 @@ Respond in valid JSON with schema:
     }
   });
 
-  // Helper to parse sections from Socratic Summary text
+  // Helper to parse sections from Socratic Summary text (Bilingual Arabic/English)
   function parseSocraticSummary(raw: string) {
     let summaryText = '';
     const corrections: string[] = [];
     const strengths: string[] = [];
 
-    // Match summary section
-    const summaryMatch = raw.match(/(?:(?:📝\s*)?(?:Your Summary in Your Own Words|الملخص في كلماتك|الملخص))[\s:]*([\s\S]*?)(?=(?:[🔍\s]*(?:Corrections|التصحيحات)|[✨\s]*(?:Your Strengths|نقاط القوة)|$))/i);
+    // Robust regex matching for summary, corrections, and strengths headers
+    const summaryHeader = /(?:(?:📝\s*)?(?:Your Summary in Your Own Words|الملخص في كلماتك|ملخصك بأسلوبك(?: الخاص)?|الملخص|ملخصك))[\s:]*/i;
+    const correctionsHeader = /(?:(?:🔍\s*)?(?:Corrections|التصحيحات|التصويبات|تصويبات وملاحظات|تصويبات))[\s:]*/i;
+    const strengthsHeader = /(?:(?:✨\s*)?(?:Your Strengths|نقاط القوة|نقاط قوتك))[\s:]*/i;
+
+    const summaryMatch = raw.match(new RegExp(`${summaryHeader.source}([\\s\\S]*?)(?=(?:${correctionsHeader.source}|${strengthsHeader.source}|$))`, 'i'));
     if (summaryMatch && summaryMatch[1].trim()) {
       summaryText = summaryMatch[1].trim();
     } else {
-      const parts = raw.split(/(?:[🔍\s]*(?:Corrections|التصحيحات))[\s:]*/i);
-      summaryText = parts[0].replace(/^📝\s*(?:Your Summary in Your Own Words|الملخص)[\s:]*/i, '').trim();
+      const parts = raw.split(correctionsHeader);
+      summaryText = parts[0].replace(summaryHeader, '').trim();
     }
 
-    // Match corrections section
-    const correctionsMatch = raw.match(/(?:(?:🔍\s*)?(?:Corrections|التصحيحات))[\s:]*([\s\S]*?)(?=(?:(?:✨\s*)?(?:Your Strengths|نقاط القوة)|$))/i);
+    const correctionsMatch = raw.match(new RegExp(`${correctionsHeader.source}([\\s\\S]*?)(?=(?:${strengthsHeader.source}|$))`, 'i'));
     if (correctionsMatch && correctionsMatch[1].trim()) {
       const lines = correctionsMatch[1].split('\n').map(l => l.trim()).filter(Boolean);
       for (const line of lines) {
         if (/^[-*•\d.]/.test(line)) {
           corrections.push(line.replace(/^[-*•\d.]+\s*/, '').trim());
-        } else if (line.length > 5 && !line.toLowerCase().includes('corrections:')) {
+        } else if (line.length > 5 && !line.toLowerCase().includes('corrections:') && !line.includes('تصحيحات:') && !line.includes('تصويبات:')) {
           corrections.push(line);
         }
       }
     }
 
-    // Match strengths section
-    const strengthsMatch = raw.match(/(?:(?:✨\s*)?(?:Your Strengths|نقاط القوة))[\s:]*([\s\S]*?)$/i);
+    const strengthsMatch = raw.match(new RegExp(`${strengthsHeader.source}([\\s\\S]*?)$`, 'i'));
     if (strengthsMatch && strengthsMatch[1].trim()) {
       const lines = strengthsMatch[1].split('\n').map(l => l.trim()).filter(Boolean);
       for (const line of lines) {
         if (/^[-*•\d.]/.test(line)) {
           strengths.push(line.replace(/^[-*•\d.]+\s*/, '').trim());
-        } else if (line.length > 5 && !line.toLowerCase().includes('strengths:')) {
+        } else if (line.length > 5 && !line.toLowerCase().includes('strengths:') && !line.includes('نقاط القوة:') && !line.includes('نقاط قوتك:')) {
           strengths.push(line);
         }
       }
@@ -863,7 +993,17 @@ Respond in valid JSON with schema:
   // 4. Understanding Agent - Summarize Loop (calls Python SocraticSummaryAgent.force_summary)
   app.post('/api/coach/understanding/summarize', async (req, res) => {
     try {
-      const { slide, history } = req.body;
+      const { slide, history, language } = req.body;
+
+      const slideText = [
+        slide?.title || '',
+        slide?.topic || '',
+        ...(slide?.keyPoints || []),
+        ...(slide?.content || [])
+      ].join(' ');
+      const arCount = (slideText.match(/[\u0600-\u06FF]/g) || []).length;
+      const enCount = (slideText.match(/[a-zA-Z]/g) || []).length;
+      const targetLang = (language === 'ar' || language === 'en') ? language : (arCount > enCount ? 'ar' : 'en');
 
       // Try Python Backend (Socratic Final Summary in student's own words)
       try {
@@ -884,7 +1024,7 @@ Respond in valid JSON with schema:
               corrections: parsed.corrections,
               strengths: parsed.strengths,
               inlineCorrections: [],
-              lectureTakeaways: data.slide_axes || slide?.keyPoints || ['Core concept solidified']
+              lectureTakeaways: data.slide_axes || slide?.keyPoints || (targetLang === 'ar' ? ['تم استيعاب المبدأ الجوهري'] : ['Core concept solidified'])
             });
           }
         }
@@ -897,6 +1037,10 @@ Respond in valid JSON with schema:
       const dialogue = (history || []).map((h: any, i: number) => `Q${i+1}: ${h.question}\nA${i+1}: ${h.studentAnswer}`).join('\n\n');
 
       if (ai && dialogue.trim().length > 0) {
+        const langRule = targetLang === 'ar'
+          ? 'LANGUAGE REQUIREMENT: Respond strictly in ARABIC (اللغة العربية). All paragraphs, corrections, strengths, and lectureTakeaways MUST be written in Arabic.'
+          : 'LANGUAGE REQUIREMENT: Respond strictly in ENGLISH. All paragraphs, corrections, strengths, and lectureTakeaways MUST be written in English.';
+
         const prompt = `You are an attentive study coach compiling a student's study notes.
 The student answered these Socratic questions about "${slide.title}":
 ${dialogue}
@@ -909,6 +1053,7 @@ Task:
 2. If the student had any misconceptions, inaccuracies, or missing nuances, provide corrections strictly as an array of bullet point strings (corrections).
 3. List the student's key conceptual strengths strictly as an array of bullet point strings (strengths).
 4. List 2-3 clear lecture takeaways.
+5. ${langRule}
 
 Respond in JSON:
 {
@@ -930,7 +1075,7 @@ Respond in JSON:
         const parsed = await generateJsonWithLLM<any>(prompt);
         if (parsed) {
           res.json({
-            studentWordsSummary: parsed.studentWordsSummary || 'Here is what you articulated during our session.',
+            studentWordsSummary: parsed.studentWordsSummary || (targetLang === 'ar' ? 'إليك ما عبرت عنه خلال جلستنا الدراسية.' : 'Here is what you articulated during our session.'),
             corrections: parsed.corrections || [],
             strengths: parsed.strengths || [],
             inlineCorrections: parsed.inlineCorrections || [],
@@ -940,35 +1085,56 @@ Respond in JSON:
         }
       }
 
-      // Fallback
-      const validAnswers = (history || []).map((h: any) => h.studentAnswer).filter((a: string) => a && !a.includes("don't know"));
-      const fallbackParagraphs = validAnswers.length > 1
-        ? [
-            validAnswers.slice(0, Math.ceil(validAnswers.length / 2)).join('. ') + '.',
-            validAnswers.slice(Math.ceil(validAnswers.length / 2)).join('. ') + '.'
-          ].join('\n\n')
-        : (validAnswers[0]
-            ? `${validAnswers[0]}.\n\nYour explanations demonstrated direct engagement with the core conceptual mechanisms.`
-            : `You explored the fundamentals of ${slide.title}.\n\nYour explanations focused on the primary operational characteristics.`);
+      // Bilingual Fallback
+      const validAnswers = (history || []).map((h: any) => h.studentAnswer).filter((a: string) => a && !a.includes("don't know") && !a.includes("لا أعلم"));
+      const fallbackParagraphs = targetLang === 'ar'
+        ? (validAnswers.length > 1
+            ? [
+                validAnswers.slice(0, Math.ceil(validAnswers.length / 2)).join('. ') + '.',
+                validAnswers.slice(Math.ceil(validAnswers.length / 2)).join('. ') + '.'
+              ].join('\n\n')
+            : (validAnswers[0]
+                ? `${validAnswers[0]}.\n\nأظهرت إجابتك استيعاباً مباشراً للآليات والمفاهيم الأساسية المشروحة في الشريحة.`
+                : `تم استكشاف المبادئ الأساسية لـ ${slide.title}.\n\nركزت شروحاتك على المفاهيم الجوهرية والخصائص التشغيلية.`))
+        : (validAnswers.length > 1
+            ? [
+                validAnswers.slice(0, Math.ceil(validAnswers.length / 2)).join('. ') + '.',
+                validAnswers.slice(Math.ceil(validAnswers.length / 2)).join('. ') + '.'
+              ].join('\n\n')
+            : (validAnswers[0]
+                ? `${validAnswers[0]}.\n\nYour explanations demonstrated direct engagement with the core conceptual mechanisms.`
+                : `You explored the fundamentals of ${slide.title}.\n\nYour explanations focused on the primary operational characteristics.`));
 
       res.json({
         studentWordsSummary: fallbackParagraphs,
-        corrections: [
+        corrections: targetLang === 'ar' ? [
+          'احرص دائماً على مراجعة الشروط الحدية والقيود التشغيلية المفروضة على هذا المفهوم.',
+          'تأكد من التمييز الدقيق بين المبادئ العامة وآليات التطبيق العملي.'
+        ] : [
           'Remember that quorums require a strict majority of all configured nodes, not just active ones.',
           'Double check failover boundary conditions when network partitions occur.'
         ],
-        strengths: [
+        strengths: targetLang === 'ar' ? [
+          'التعريف الأولي الواضح لمتطلبات المفهوم.',
+          'شرح العلاقات والمحددات بأسلوبك الخاص بدقة.'
+        ] : [
           'Clear initial definition of system requirements.',
           'Articulated trade-offs in your own words accurately.'
         ],
-        inlineCorrections: [
+        inlineCorrections: targetLang === 'ar' ? [
+          {
+            original: 'فهم مبسط',
+            correction: 'صياغة أكاديمية دقيقة',
+            explanation: 'التعبير الدقيق يمنع الخلط بين الشروط الأساسية والحالات الاستثنائية.'
+          }
+        ] : [
           {
             original: 'simplified view',
             correction: 'rigorous condition',
             explanation: 'Remember that quorums require a strict majority of all configured nodes, not just active ones.'
           }
         ],
-        lectureTakeaways: slide.keyPoints || ['Core principle mastered']
+        lectureTakeaways: slide.keyPoints || (targetLang === 'ar' ? ['تم استيعاب المبدأ الجوهري'] : ['Core principle mastered'])
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -978,7 +1144,7 @@ Respond in JSON:
   // 5. Quick Quiz (calls Python QuizAgent)
   app.post('/api/coach/quiz/quick', async (req, res) => {
     try {
-      const { slide, lectureTitle, pdfName, previousQuestions = [], language = 'ar' } = req.body;
+      const { slide, lectureTitle, pdfName, previousQuestions = [], language } = req.body;
 
       const rawContentList = (slide?.content || []).filter(
         (c: string) => !c.includes('Visual presentation content') && !c.includes('Section notes and key lecture points')
@@ -996,6 +1162,11 @@ Respond in JSON:
         `Key Points: ${rawKeyPointsList.join(', ')}`,
         `Content:\n${rawContentList.join('\n')}`
       ].join('\n');
+
+      // Auto-detect language strictly from content if not explicitly provided
+      const arCount = (slideContext.match(/[\u0600-\u06FF]/g) || []).length;
+      const enCount = (slideContext.match(/[a-zA-Z]/g) || []).length;
+      const targetLang = (language === 'ar' || language === 'en') ? language : (arCount > enCount ? 'ar' : 'en');
 
       // If slide text is placeholder or minimal, retrieve real chunks from RAG
       if (isPlaceholder) {
@@ -1022,7 +1193,7 @@ Respond in JSON:
         }
       }
 
-      // Try Python Backend (QuizAgent) with anti-duplication
+      // Try Python Backend (QuizAgent) with anti-duplication and strict language
       try {
         const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/quiz/generate`, {
           method: 'POST',
@@ -1032,20 +1203,29 @@ Respond in JSON:
             num_questions: 1,
             topic: slide?.topic || slide?.title,
             pdf_name: pdfName || lectureTitle,
-            language: language,
+            language: targetLang,
             previous_questions: previousQuestions
           })
         });
 
         if (pyRes.ok) {
           const quizData = await pyRes.json();
-          const firstQ = quizData.questions?.[0];
-          if (firstQ && firstQ.options) {
+          const cleanPrev = (previousQuestions || []).map((q: string) => q.trim().toLowerCase());
+          
+          // Select first question that is NOT in previousQuestions
+          const candidateQuestions = quizData.questions || [];
+          const validQ = candidateQuestions.find((q: any) => {
+            if (!q || !q.question || !q.options || q.options.length < 2) return false;
+            const normQ = q.question.trim().toLowerCase();
+            return !cleanPrev.some((p: string) => p === normQ || p.includes(normQ.slice(0, 20)) || normQ.includes(p.slice(0, 20)));
+          }) || candidateQuestions[0];
+
+          if (validQ && validQ.options && validQ.options.length >= 2) {
             return res.json({
-              question: firstQ.question,
-              options: firstQ.options,
-              correctAnswer: firstQ.answer,
-              explanation: firstQ.explanation || 'Verified from slide content.'
+              question: validQ.question,
+              options: validQ.options,
+              correctAnswer: validQ.answer,
+              explanation: validQ.explanation || (targetLang === 'ar' ? 'تم التحقق من محتوى شريحة المحاضرة.' : 'Verified from slide content.')
             });
           }
         }
@@ -1062,6 +1242,10 @@ STRICT ANTI-DUPLICATION RULE:
 - You MUST generate a COMPLETELY NEW, different question testing another angle, definition, mechanism, or detail of the slide.
 ` : '';
 
+      const langMandate = targetLang === 'ar'
+        ? 'LANGUAGE REQUIREMENT: Generate the question, all 4 options, and the explanation strictly in ARABIC (اللغة العربية).'
+        : 'LANGUAGE REQUIREMENT: Generate the question, all 4 options, and the explanation strictly in ENGLISH.';
+
       const prompt = `Create ONE clean, high-quality multiple choice question testing genuine conceptual understanding of:
 Lecture: "${lectureTitle || ''}"
 Slide: "${slide?.title || ''}"
@@ -1075,6 +1259,7 @@ CRITICAL RULES:
 - Test academic knowledge of principles, definitions, or algorithms.
 - NEVER ask questions about slide numbers, file names, or presentation formatting.
 - The question must be distinct from any previously asked questions.
+- ${langMandate}
 
 Return JSON:
 {
@@ -1085,52 +1270,119 @@ Return JSON:
 }`;
 
       const parsed = await generateJsonWithLLM<any>(prompt);
+      const cleanPrev = (previousQuestions || []).map((q: string) => q.trim().toLowerCase());
       if (parsed && parsed.options && parsed.options.length >= 2) {
-        res.json(parsed);
-        return;
+        const normQ = (parsed.question || '').trim().toLowerCase();
+        const isDup = cleanPrev.some((p: string) => p === normQ || p.includes(normQ.slice(0, 20)) || normQ.includes(p.slice(0, 20)));
+        if (!isDup) {
+          res.json(parsed);
+          return;
+        }
       }
 
-      // Safe Rotating Fallback Quiz Questions (Never repeat identical question)
-      const topicName = slide?.topic || slide?.title || 'هذا المفهوم';
-      const fallbackPool = [
+      // Safe Rotating Fallback Quiz Questions (Bilingual Arabic/English)
+      const topicName = slide?.topic || slide?.title || (targetLang === 'ar' ? 'هذا المفهوم' : 'this concept');
+      const availablePoints = rawKeyPointsList.length > 0 ? rawKeyPointsList : rawContentList;
+      const pointIndex = (previousQuestions.length) % Math.max(availablePoints.length, 1);
+      const chosenPoint = availablePoints[pointIndex] || (targetLang === 'ar' ? 'تحقيق اتساق ومزامنة البيانات عبر النظام' : 'Ensuring data consistency and synchronization across the system');
+
+      const fallbackPool = targetLang === 'ar' ? [
         {
           question: `ما هو المبدأ المحوري الذي يقوم عليه ${topicName}؟`,
           options: [
-            rawKeyPointsList[0] || 'تحقيق اتساق ومزامنة البيانات عبر النظام',
-            'إلغاء قيود التحقق والاستجابة الفورية',
+            chosenPoint,
+            'إلغاء قيود التحقق والاستجابة الفورية دون معايير',
             'الاعتماد الحصري على التخزين المؤقت العشوائي',
             'تعطيل المراقبة والتحليل الدوري'
           ],
-          correctAnswer: rawKeyPointsList[0] || 'تحقيق اتساق ومزامنة البيانات عبر النظام',
-          explanation: `يرتكز ${topicName} على ضمان اتساق وحماية البيانات المشروحة.`
+          correctAnswer: chosenPoint,
+          explanation: `يرتكز ${topicName} على ضمان المبادئ المشروحة في الشريحة.`
         },
         {
-          question: `أي من الشروط التالية يعتبر أساسياً لتطبيق ${topicName} بنجاح؟`,
+          question: `وفقاً للمحاضرة، أي من الشروط التالية يعتبر أساسياً لضمان سلامة ${topicName}؟`,
           options: [
-            rawKeyPointsList[1] || 'مراعاة القيود والمعايير المحددة في المحاضرة',
+            availablePoints[(pointIndex + 1) % Math.max(availablePoints.length, 1)] || 'مراعاة القيود والمعايير المحددة في المحاضرة',
             'تجاهل حالات الفشل الجزئي في النظام',
             'تقليل عدد الاختبارات والتحققات',
             'تطبيق المفاهيم دون الرجوع للمرجع الأكاديمي'
           ],
-          correctAnswer: rawKeyPointsList[1] || 'مراعاة القيود والمعايير المحددة في المحاضرة',
+          correctAnswer: availablePoints[(pointIndex + 1) % Math.max(availablePoints.length, 1)] || 'مراعاة القيود والمعايير المحددة في المحاضرة',
           explanation: `التطبيق الناجح لـ ${topicName} يتطلب الالتزام بالشروط والحدود المعرفية.`
         },
         {
           question: `ما هي الفائدة الأكاديمية الأهم من استيعاب ${topicName}؟`,
           options: [
-            rawKeyPointsList[2] || 'القدرة على حل المسائل المعقدة وربط الأفكار بنموذج تحليلي دقيق',
+            availablePoints[(pointIndex + 2) % Math.max(availablePoints.length, 1)] || 'القدرة على حل المسائل المعقدة وربط الأفكار بنموذج تحليلي دقيق',
             'حفظ النصوص حرفياً دون فهم الميكانيزم',
             'تجاوز مراحل الاختبار والتدقيق',
             'الاكتفاء بالتعريفات السطحية فقط'
           ],
-          correctAnswer: rawKeyPointsList[2] || 'القدرة على حل المسائل المعقدة وربط الأفكار بنموذج تحليلي دقيق',
+          correctAnswer: availablePoints[(pointIndex + 2) % Math.max(availablePoints.length, 1)] || 'القدرة على حل المسائل المعقدة وربط الأفكار بنموذج تحليلي دقيق',
           explanation: `الفهم العميق لـ ${topicName} يمنحك القدرة على التحليل المنهجي والتطبيق العملي.`
+        },
+        {
+          question: `كيف يعالج ${topicName} حالات عدم الاتساق أو الفشل؟`,
+          options: [
+            'بتطبيق شروط التحقق الصارمة وضمان توافق أغلبية العقد',
+            'بتجاهل الأخطاء والمتابعة الفورية',
+            'بحذف البيانات المتضاربة دون توثيق',
+            'بإعادة ضبط النظام إلى الصفر عشوائياً'
+          ],
+          correctAnswer: 'بتطبيق شروط التحقق الصارمة وضمان توافق أغلبية العقد',
+          explanation: 'يعتمد النظام على التحقق المنهجي لضمان عدم حدوث تضارب في البيانات.'
+        }
+      ] : [
+        {
+          question: `What is the core principle underlying ${topicName}?`,
+          options: [
+            chosenPoint,
+            'Bypassing validation constraints and responding arbitrarily',
+            'Relying solely on unbounded unverified caching',
+            'Disabling periodic validation and monitoring'
+          ],
+          correctAnswer: chosenPoint,
+          explanation: `${topicName} is fundamentally built on verifying the core properties presented in the lecture.`
+        },
+        {
+          question: `According to the lecture, which condition is essential for the correctness of ${topicName}?`,
+          options: [
+            availablePoints[(pointIndex + 1) % Math.max(availablePoints.length, 1)] || 'Satisfying the operational constraints and boundary conditions',
+            'Ignoring partial failure states in the system',
+            'Minimizing verification checks to speed up throughput',
+            'Applying state transitions without consensus'
+          ],
+          correctAnswer: availablePoints[(pointIndex + 1) % Math.max(availablePoints.length, 1)] || 'Satisfying the operational constraints and boundary conditions',
+          explanation: `Proper execution of ${topicName} requires adhering to foundational invariants.`
+        },
+        {
+          question: `What is the primary academic insight gained from understanding ${topicName}?`,
+          options: [
+            availablePoints[(pointIndex + 2) % Math.max(availablePoints.length, 1)] || 'The ability to analyze complex architectural trade-offs systematically',
+            'Rote memorization without understanding underlying mechanisms',
+            'Skipping verification and formal testing phases',
+            'Focusing exclusively on superficial definitions'
+          ],
+          correctAnswer: availablePoints[(pointIndex + 2) % Math.max(availablePoints.length, 1)] || 'The ability to analyze complex architectural trade-offs systematically',
+          explanation: `Deep understanding of ${topicName} empowers rigorous analytical problem solving.`
+        },
+        {
+          question: `How does ${topicName} maintain state consistency during edge cases or failures?`,
+          options: [
+            'By enforcing strict verification conditions and quorum/invariance agreement',
+            'By suppressing errors and proceeding without guarantees',
+            'By dropping conflicting records without logging',
+            'By resetting system state arbitrarily'
+          ],
+          correctAnswer: 'By enforcing strict verification conditions and quorum/invariance agreement',
+          explanation: 'The system relies on methodical verification to prevent inconsistent or split-brain states.'
         }
       ];
 
-      // Pick one that is not in previousQuestions
-      const filteredFallbacks = fallbackPool.filter(fb => !previousQuestions.some((pq: string) => pq.includes(fb.question.slice(0, 15))));
-      const selectedFallback = filteredFallbacks.length > 0 ? filteredFallbacks[0] : fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+      // Pick one that is strictly not in previousQuestions
+      const filteredFallbacks = fallbackPool.filter(fb => !cleanPrev.some((pq: string) => pq === fb.question.toLowerCase() || pq.includes(fb.question.slice(0, 15).toLowerCase())));
+      const selectedFallback = filteredFallbacks.length > 0
+        ? filteredFallbacks[0]
+        : fallbackPool[previousQuestions.length % fallbackPool.length];
 
       res.json(selectedFallback);
     } catch (err: any) {
@@ -1142,6 +1394,14 @@ Return JSON:
   app.post('/api/coach/wrapup/analyze', async (req, res) => {
     try {
       const { lectureTitle, allSlides, studentSummary, sessionStats } = req.body;
+
+      if (studentSummary && isSqlInjection(studentSummary)) {
+        return res.json({
+          coveredPoints: [],
+          missingGaps: [getSafeRejectionResponse('ar')],
+          gapQuestions: []
+        });
+      }
 
       const allKeyPoints = (allSlides || []).flatMap((s: any) => 
         (s.keyPoints || []).map((kp: string) => `[Slide ${s.pageNumber}: ${s.topic || s.title || ''}] ${kp}`)
@@ -1247,6 +1507,14 @@ Respond strictly in valid JSON with this schema:
   app.post('/api/coach/wrapup/report', async (req, res) => {
     try {
       const { lectureId, lectureTitle, allSlides, studentSummary, gapQuestions, sessionStats } = req.body;
+
+      if (studentSummary && isSqlInjection(studentSummary)) {
+        return res.json({
+          conceptMap: [],
+          primaryRecommendation: getSafeRejectionResponse('ar'),
+          spacedRepetitionQueue: []
+        });
+      }
 
       const questionsList = (gapQuestions || []).map((q: any) => 
         `- Concept: ${q.concept} | Correct: ${q.isCorrect ? 'YES' : 'NO'} (Student selected: "${q.studentAnswer}")`

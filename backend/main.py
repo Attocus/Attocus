@@ -19,6 +19,14 @@ except ImportError:
     from backend.agents.orchestrator import OrchestratorAgent
 
 try:
+    from agents.security import check_sql_injection, get_safe_rejection_response
+except ImportError:
+    try:
+        from security import check_sql_injection, get_safe_rejection_response
+    except ImportError:
+        from backend.agents.security import check_sql_injection, get_safe_rejection_response
+
+try:
     from services.observability import get_langsmith_status
 except Exception:
     try:
@@ -111,7 +119,7 @@ class ExplainRequest(BaseModel):
     topic: str
     slide_content: str
     student_question: Optional[str] = None
-    chat_history: Optional[List[Dict[str, str]]] = None
+    chat_history: Optional[List[Dict[str, Any]]] = None
     language: Optional[str] = "ar"
 
 class SpacedRepetitionReviewRequest(BaseModel):
@@ -200,6 +208,14 @@ def retrieve_rag_context(payload: RAGRetrieveRequest):
     Vector search query against the Shared Firestore RAG.
     Returns nearest chunks and LLM-ready formatted context.
     """
+    if check_sql_injection(payload.query):
+        return {
+            "query": payload.query,
+            "k": payload.k,
+            "chunks_count": 0,
+            "chunks": [],
+            "formatted_context": ""
+        }
     chunks = orchestrator.retrieve_context(
         query=payload.query,
         k=payload.k,
@@ -235,6 +251,12 @@ def process_telemetry(payload: TelemetryRequest):
 @app.post("/api/quiz/generate")
 def generate_quiz(payload: QuizGenerateRequest):
     """Generates quiz questions strictly grounded in the slide context or Shared RAG with anti-duplication."""
+    if (payload.topic and check_sql_injection(payload.topic)) or (isinstance(payload.context, str) and check_sql_injection(payload.context)):
+        return {
+            "questions": [],
+            "total_questions": 0,
+            "error": get_safe_rejection_response(payload.language or "ar")
+        }
     quiz_data = orchestrator.run_quiz(
         context=payload.context,
         num_questions=payload.num_questions,
@@ -263,6 +285,8 @@ def submit_quiz(payload: QuizSubmitRequest):
 @app.post("/api/coach/explain")
 def explain_concept(payload: ExplainRequest):
     """Socratic / tutor explanation for difficult slide concepts without repeating past chat content."""
+    if payload.student_question and check_sql_injection(payload.student_question):
+        return {"explanation": get_safe_rejection_response(payload.language or "ar")}
     explanation = orchestrator.explain_slide(
         topic=payload.topic,
         slide_content=payload.slide_content,

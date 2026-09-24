@@ -405,7 +405,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
           cursor: getCursorStyle(),
           pointerEvents: activeTool === 'none' ? 'none' : 'auto'
         }}
-        className="absolute inset-0 touch-none pointer-events-auto"
+        className={`absolute inset-0 touch-none ${activeTool === 'none' ? 'pointer-events-none' : 'pointer-events-auto'}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

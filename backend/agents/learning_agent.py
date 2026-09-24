@@ -16,6 +16,14 @@ except Exception:
         wrap_client = lambda c: c 
         traceable_agent = lambda *a, **k: (lambda f: f)  
 
+try:
+    from agents.security import check_sql_injection, get_safe_rejection_response
+except ImportError:
+    try:
+        from backend.agents.security import check_sql_injection, get_safe_rejection_response
+    except ImportError:
+        from security import check_sql_injection, get_safe_rejection_response
+
 
 class LearningCoachAgent:
     def __init__(
@@ -150,18 +158,22 @@ Return ONLY valid JSON with this exact schema:
         topic: str,
         slide_content: str,
         student_question: Optional[str] = None,
-        chat_history: Optional[List[Dict[str, str]]] = None,
+        chat_history: Optional[List[Dict[str, Any]]] = None,
         language: str = "ar"
     ) -> str:
         """
         Explains a difficult concept warmly, concisely, and builds upon chat history
-        without repeating prior questions or basic introductions.
+        with multi-turn memory, SQL injection protection, and strict slide relevance.
         """
         user_query = student_question or (
             f"اشرح لي الفكرة المحورية لموضوع {topic} ببساطة وبشكل تطبيقي."
             if language == "ar"
             else f"Can you explain the main idea of {topic} simply with a real-world analogy?"
         )
+
+        # 1. SQL Injection Protection
+        if check_sql_injection(user_query):
+            return get_safe_rejection_response(language)
 
         rag_context_str = ""
         if self.rag:
@@ -177,36 +189,54 @@ Return ONLY valid JSON with this exact schema:
         history_instruction = ""
         if chat_history and len(chat_history) > 0:
             history_instruction = """
-ANTI-REPETITION DIRECTIVE:
+ANTI-REPETITION & CONTEXT DIRECTIVE:
 - Review the previous turns in the chat history carefully.
-- DO NOT re-introduce the concept from scratch or repeat analogies already shared.
+- Remember all previous points discussed, and if the student asks about something said earlier (e.g. their name or previous topic), answer accurately based on the history.
 - Directly address the student's immediate doubt or next question and build deeper intuition."""
 
         lang_rule = "Respond in Arabic." if language == "ar" else "Respond in English."
 
-        messages: List[Dict[str, Any]] = [
-            {
-                "role": "system",
-                "content": f"""You are a warm, calm, academic tutor sitting right next to a university student.
-Rules:
-1. Explain warmly, clearly, and concisely in 2-3 brief, digestible paragraphs.
-2. Ground your explanation first in the provided slide notes and lecture RAG context.
-3. If citing facts, mention the relevant slide/page number if available.
-4. Use a vivid real-world analogy to make abstract mechanisms tangible.
-5. Conclude with a quick friendly check: 'هل الفكرة واضحة الآن، أم تحب نأخذ مثالاً إضافياً؟' (or English equivalent).
-6. {lang_rule}
+        system_prompt = f"""You are a warm, calm, academic tutor sitting right next to a university student.
+
+CRITICAL INSTRUCTIONS & STRICT BOUNDARIES:
+1. MULTI-TURN MEMORY & STUDENT DETAILS:
+   - You MUST remember the student's name and details if mentioned in the chat history (e.g. if the student previously said "مرحبا اسمي بارقه", and now asks "وش اسمي؟", answer directly and warmly: "اسمك بارقه!").
+   - Maintain continuity across the conversation turns.
+
+2. STRICT ACADEMIC & LECTURE SCOPE (REJECT OFF-TOPIC QUERIES):
+   - You are STRICTLY an academic tutor dedicated to THIS specific lecture and its slides.
+   - If the student asks about anything completely UNRELATED to the lecture, the slide, or the academic material (for example: cooking/food recipes, sports/football matches, movies, video games, unrelated coding projects, personal chit-chat, or general non-academic trivia), you MUST POLITELY REFUSE to answer!
+   - In Arabic, refuse with:
+     "أعتذر منك، أنا مخصص فقط لمساعدتك وشرح محتوى هذه المحاضرة والسلايدات. لا يمكنني الإجابة عن مواضيع خارج سياق المادة، لكن يسعدني جداً أن تسألني عن أي مفهوم أو نقطة في المحاضرة!"
+   - In English, refuse with:
+     "I apologize, but I am specifically designed to assist you with the concepts and content of this lecture and slides. I cannot answer questions unrelated to the study material, but I would be glad to help you with any concept from the lecture!"
+   - (Exception: polite greetings like "مرحبا" or introducing oneself like "اسمي فلان" are warmly accepted, then gently orient them towards the lecture).
+
+3. EXPLANATION QUALITY:
+   - When explaining lecture topics, explain warmly, clearly, and concisely in 2-3 brief, digestible paragraphs.
+   - Ground your explanation first in the provided slide notes and lecture RAG context.
+   - If citing facts, mention the relevant slide/page number if available.
+   - Use a vivid real-world analogy to make abstract mechanisms tangible.
+   - Conclude with a quick friendly check: 'هل الفكرة واضحة الآن، أم تحب نأخذ مثالاً إضافياً؟' (or English equivalent).
+   - {lang_rule}
 {history_instruction}
 
 SLIDE CONTENT:
 {slide_content}
 {rag_context_str}
 """
-            }
+
+        messages: List[Dict[str, Any]] = [
+            {"role": "system", "content": system_prompt}
         ]
 
         if chat_history:
-            for msg in chat_history[-6:]:
-                messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+            for msg in chat_history[-10:]:
+                raw_role = msg.get("role", "user")
+                role = "assistant" if raw_role in ["coach", "assistant"] else "user"
+                content = msg.get("text") or msg.get("content") or ""
+                if isinstance(content, str) and content.strip():
+                    messages.append({"role": role, "content": content.strip()})
         messages.append({"role": "user", "content": user_query})
 
         try:
