@@ -204,6 +204,10 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
 
   // Modals & Panels
   const [wrapUpModalOpen, setWrapUpModalOpen] = useState(false);
+  const wrapUpModalOpenRef = useRef(false);
+  useEffect(() => {
+    wrapUpModalOpenRef.current = wrapUpModalOpen;
+  }, [wrapUpModalOpen]);
   const [understandingModalOpen, setUnderstandingModalOpen] = useState(false);
   const [savedSummariesModalOpen, setSavedSummariesModalOpen] = useState(false);
   const [explainDrawerOpen, setExplainDrawerOpen] = useState(false);
@@ -309,7 +313,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         const nextTime = prev + 1;
 
         setStuckState(stuck => {
-          if (wrapUpModalOpen) return stuck;
+          if (wrapUpModalOpenRef.current) return stuck;
           const isSnoozed = (snoozedUntilRef.current[currentPage] || 0) > Date.now();
           if (isSnoozed || stuck.interventionActive) {
             return { ...stuck, timeSpentSeconds: nextTime };
@@ -342,7 +346,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       });
 
       setAttentionState(att => {
-        if (!att.cameraActive || wrapUpModalOpen) return att;
+        if (!att.cameraActive || wrapUpModalOpenRef.current) return att;
         if (att.attentionDrifted) {
           const nextDrift = att.driftSeconds + 1;
           let pulse = false;
@@ -371,6 +375,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
 
   useEffect(() => {
     const handleVisibilityChange = async () => {
+      if (wrapUpModalOpenRef.current) return;
       if (document.hidden) {
         tabHiddenTimestampRef.current = Date.now();
         tabSwitchesCountRef.current += 1;
@@ -512,7 +517,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   };
 
   const handleTriggerPhoneDetected = (reason?: string) => {
-    if (wrapUpModalOpen) return;
+    if (wrapUpModalOpenRef.current) return;
     const defaultReason = isAr ? 'تم رصد استخدام الهاتف أثناء المذاكرة.' : 'Phone usage detected while studying.';
     setAttentionState(prev => ({
       ...prev,
@@ -535,7 +540,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   };
 
   const handleTriggerSleepingDetected = (reason?: string) => {
-    if (wrapUpModalOpen) return;
+    if (wrapUpModalOpenRef.current) return;
     const defaultReason = isAr ? 'تم رصد إغلاق العينين أو انحناء الرأس.' : 'Drowsiness or eye closure detected.';
     setAttentionState(prev => ({
       ...prev,
@@ -558,7 +563,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   };
 
   const handleTriggerAwayDetected = (reason?: string) => {
-    if (wrapUpModalOpen) return;
+    if (wrapUpModalOpenRef.current) return;
     const defaultReason = isAr ? 'تم رصد مغادرة مكان المذاكرة.' : 'Stepped away from study desk.';
     setAttentionState(prev => ({
       ...prev,
@@ -581,6 +586,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   };
 
   const handleTriggerGazeDrift = () => {
+    if (wrapUpModalOpenRef.current) return;
     setAttentionState(prev => ({
       ...prev,
       detectedState: 'distracted',
@@ -606,6 +612,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   };
 
   const handleAnalyzeFrameSnapshot = async (imageBase64: string) => {
+    if (wrapUpModalOpenRef.current) return;
     setAttentionState(prev => ({ ...prev, isAnalyzingFrame: true }));
     try {
       const res = await fetch('/api/coach/attention/analyze-frame', {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lecture, Slide, GapQuizQuestion, WrapUpReport, ConceptMastery } from '../types';
 import { CheckCircle, AlertCircle, ArrowLeft, Sparkles, BookOpen, Clock, Award, RotateCcw, Brain, Check, Cloud, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -35,6 +35,16 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
   const [answerSubmitted, setAnswerSubmitted] = useState(false);
   const [finalReport, setFinalReport] = useState<WrapUpReport | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [canNavigateHome, setCanNavigateHome] = useState(false);
+
+  useEffect(() => {
+    if (step === 'final_report') {
+      const timer = setTimeout(() => setCanNavigateHome(true), 1000);
+      return () => clearTimeout(timer);
+    } else {
+      setCanNavigateHome(false);
+    }
+  }, [step]);
 
   if (!isOpen) return null;
 
@@ -529,9 +539,20 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
                 ? String((finalReport.primaryRecommendation as any).recommendation || (finalReport.primaryRecommendation as any).message || 'جلسة مذاكرة ممتازة! ركّز على مراجعة المفاهيم الأساسية قبل الاختبار.')
                 : 'جلسة مذاكرة ممتازة! ركّز على مراجعة المفاهيم الأساسية قبل الاختبار.');
 
+          const studyMins = typeof finalReport.studyTimeMinutes === 'number'
+            ? finalReport.studyTimeMinutes
+            : (Number(finalReport.studyTimeMinutes) || 1);
+          const focusEff = typeof finalReport.focusEfficiencyPercentage === 'number'
+            ? finalReport.focusEfficiencyPercentage
+            : (Number(finalReport.focusEfficiencyPercentage) || 90);
+
           const srQueue = Array.isArray(finalReport.spacedRepetitionQueue) ? finalReport.spacedRepetitionQueue : [];
           const firstSr = srQueue.length > 0 ? srQueue[0] : null;
-          const firstSrConcept = firstSr ? (typeof firstSr.concept === 'string' ? firstSr.concept : (firstSr.question || 'المفهوم الأساسي')) : null;
+          const firstSrConcept = firstSr
+            ? (typeof firstSr.concept === 'string'
+                ? firstSr.concept
+                : (typeof firstSr.question === 'string' ? firstSr.question : 'المفهوم الأساسي'))
+            : null;
 
           return (
             <div className="p-6 sm:p-8 space-y-6 max-h-[75vh] overflow-y-auto">
@@ -546,8 +567,8 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
                   </h3>
                   <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                     {isAr
-                      ? <>قضيت <span className="font-bold text-[#0F172A] dark:text-white">{finalReport.studyTimeMinutes || 1} دقيقة</span> مذاكرة بفاعلية تركيز بلغت <span className="font-bold text-[#0F172A] dark:text-white">{finalReport.focusEfficiencyPercentage || 90}%</span>.</>
-                      : <>You spent <span className="font-bold text-[#0F172A] dark:text-white">{finalReport.studyTimeMinutes || 1} minutes</span> studying with <span className="font-bold text-[#0F172A] dark:text-white">{finalReport.focusEfficiencyPercentage || 90}%</span> focus efficiency.</>}
+                      ? <>قضيت <span className="font-bold text-[#0F172A] dark:text-white">{studyMins} دقيقة</span> مذاكرة بفاعلية تركيز بلغت <span className="font-bold text-[#0F172A] dark:text-white">{focusEff}%</span>.</>
+                      : <>You spent <span className="font-bold text-[#0F172A] dark:text-white">{studyMins} minutes</span> studying with <span className="font-bold text-[#0F172A] dark:text-white">{focusEff}%</span> focus efficiency.</>}
                   </p>
                   {isSavedToCloud && (
                     <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-blue-600 dark:text-blue-400 text-[10px] font-bold w-fit mt-1.5 shadow-2xs">
@@ -649,8 +670,15 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
                 <button
                   type="button"
                   id="wrapup-return-home-btn"
-                  onClick={onReturnHome}
-                  className="text-xs px-5 py-2.5 rounded-xl bg-[#0F172A] dark:bg-blue-600 hover:bg-[#1E293B] dark:hover:bg-blue-700 text-white font-bold transition-all shadow-xs active:scale-[0.98]"
+                  onClick={() => {
+                    if (canNavigateHome) onReturnHome();
+                  }}
+                  disabled={!canNavigateHome}
+                  className={`text-xs px-5 py-2.5 rounded-xl font-bold transition-all shadow-xs active:scale-[0.98] ${
+                    canNavigateHome
+                      ? 'bg-[#0F172A] dark:bg-blue-600 hover:bg-[#1E293B] dark:hover:bg-blue-700 text-white cursor-pointer'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-70'
+                  }`}
                 >
                   {isAr ? 'إنهاء والعودة للرئيسية' : 'Finish & Return Home'}
                 </button>
