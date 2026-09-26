@@ -272,6 +272,7 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
     >
       <div
         id="wrapup-session-card"
+        onClick={e => e.stopPropagation()}
         className="bg-white dark:bg-[#111827] rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-2xl w-full max-w-2xl overflow-hidden text-slate-900 dark:text-slate-100 transition-all animate-in zoom-in-95 duration-150"
       >
         {/* ─── الرأس (Header) ─── */}
@@ -290,11 +291,22 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
             </div>
           </div>
 
-          <div className="text-xs font-mono font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3.5 py-1.5 rounded-full flex items-center gap-2 border border-slate-200/60 dark:border-slate-700">
-            <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-            <span>
-              {Math.max(1, Math.round(sessionSeconds / 60))} {isAr ? 'دقيقة تركيز' : 'focus mins'}
-            </span>
+          <div className="flex items-center gap-2.5">
+            <div className="text-xs font-mono font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3.5 py-1.5 rounded-full flex items-center gap-2 border border-slate-200/60 dark:border-slate-700">
+              <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>
+                {Math.max(1, Math.round(sessionSeconds / 60))} {isAr ? 'دقيقة تركيز' : 'focus mins'}
+              </span>
+            </div>
+            <button
+              type="button"
+              id="close-wrapup-top-btn"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+              title={isAr ? 'إغلاق ومتابعة المذاكرة' : 'Close and resume'}
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -491,128 +503,161 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
         )}
 
         {/* ─── الخطوة 4: التقرير التعليمي الشامل ─── */}
-        {step === 'final_report' && finalReport && (
-          <div className="p-6 sm:p-8 space-y-6 max-h-[75vh] overflow-y-auto">
-            {/* بطاقة الإنجاز */}
-            <div className="p-5 rounded-3xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 flex items-start gap-4">
-              <div className="w-11 h-11 rounded-2xl bg-[#0F172A] dark:bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                <Award className="w-5 h-5 text-blue-400 dark:text-white" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-[#0F172A] dark:text-white">
-                  {isAr ? 'اكتملت الجلسة بنجاح · تقرير التعلم' : 'Session Completed Successfully · Learning Report'}
-                </h3>
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {isAr
-                    ? <>قضيت <span className="font-bold text-[#0F172A] dark:text-white">{finalReport.studyTimeMinutes} دقيقة</span> مذاكرة بفاعلية تركيز بلغت <span className="font-bold text-[#0F172A] dark:text-white">{finalReport.focusEfficiencyPercentage}%</span>.</>
-                    : <>You spent <span className="font-bold text-[#0F172A] dark:text-white">{finalReport.studyTimeMinutes} minutes</span> studying with <span className="font-bold text-[#0F172A] dark:text-white">{finalReport.focusEfficiencyPercentage}%</span> focus efficiency.</>}
-                </p>
-                {isSavedToCloud && (
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-blue-600 dark:text-blue-400 text-[10px] font-bold w-fit mt-1.5 shadow-2xs">
-                    <Cloud className="w-3 h-3" />
-                    <span>{isAr ? 'تم حفظ الجلسة والتقرير في Cloud Firestore' : 'Saved to Cloud Firestore'}</span>
-                  </div>
-                )}
-              </div>
-            </div>
+        {step === 'final_report' && finalReport && (() => {
+          const concepts = Array.isArray(finalReport.conceptMap)
+            ? finalReport.conceptMap.map(c => {
+                if (typeof c === 'object' && c !== null) {
+                  return {
+                    concept: typeof c.concept === 'string' ? c.concept : String((c as any).name || (c as any).topic || 'مفهوم أساسي'),
+                    status: (c.status === 'mastered' || c.status === 'developing' || c.status === 'needs_review') ? c.status : 'developing',
+                    score: typeof c.score === 'number' ? c.score : 70,
+                    note: typeof c.note === 'string' ? c.note : 'تم تحليل مستوى الاستيعاب لهذا المفهوم.'
+                  };
+                }
+                return {
+                  concept: String(c),
+                  status: 'developing' as const,
+                  score: 70,
+                  note: 'تمت مراجعة المفهوم.'
+                };
+              })
+            : [];
 
-            {/* التوصية المحورية للمدرب */}
-            <div className="p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 shadow-2xs space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#0F172A] dark:text-white uppercase tracking-wider">
-                <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <span>{isAr ? 'التوصية الأساسية للمدرب الذكي' : 'Primary AI Coach Recommendation'}</span>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                {finalReport.primaryRecommendation}
-              </p>
-            </div>
+          const recText = typeof finalReport.primaryRecommendation === 'string'
+            ? finalReport.primaryRecommendation
+            : (typeof finalReport.primaryRecommendation === 'object' && finalReport.primaryRecommendation !== null
+                ? String((finalReport.primaryRecommendation as any).recommendation || (finalReport.primaryRecommendation as any).message || 'جلسة مذاكرة ممتازة! ركّز على مراجعة المفاهيم الأساسية قبل الاختبار.')
+                : 'جلسة مذاكرة ممتازة! ركّز على مراجعة المفاهيم الأساسية قبل الاختبار.');
 
-            {/* خريطة إتقان المفاهيم */}
-            <div className="space-y-2.5">
-              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                {isAr ? 'خريطة استيعاب المفاهيم' : 'Concept Mastery Map'}
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {finalReport.conceptMap.map((concept, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700 text-xs flex flex-col justify-between"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-slate-800 dark:text-slate-100 truncate pl-2">
-                        {concept.concept}
-                      </span>
-                      <span
-                        className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold shrink-0 ${
-                          concept.status === 'mastered'
-                            ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/50'
-                            : concept.status === 'developing'
-                            ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/50'
-                            : 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800/50'
-                        }`}
-                      >
-                        {concept.status === 'mastered'
-                          ? (isAr ? 'متقن' : 'Mastered')
-                          : concept.status === 'developing'
-                          ? (isAr ? 'قيد التطوير' : 'Developing')
-                          : (isAr ? 'يتطلب مراجعة' : 'Needs Review')}
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden mb-2">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          concept.status === 'mastered'
-                            ? 'bg-emerald-500'
-                            : concept.status === 'developing'
-                            ? 'bg-amber-500'
-                            : 'bg-rose-500'
-                        }`}
-                        style={{ width: `${concept.score}%` }}
-                      />
-                    </div>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-400 leading-relaxed">{concept.note}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+          const srQueue = Array.isArray(finalReport.spacedRepetitionQueue) ? finalReport.spacedRepetitionQueue : [];
+          const firstSr = srQueue.length > 0 ? srQueue[0] : null;
+          const firstSrConcept = firstSr ? (typeof firstSr.concept === 'string' ? firstSr.concept : (firstSr.question || 'المفهوم الأساسي')) : null;
 
-            {/* جدول التكرار المتباعد */}
-            {finalReport.spacedRepetitionQueue && finalReport.spacedRepetitionQueue.length > 0 && (
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700 text-xs space-y-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-[#0F172A] dark:text-white">
-                  <RotateCcw className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                  <span>{isAr ? 'مجدول للتكرار المتباعد (Spaced Repetition)' : 'Scheduled for Spaced Repetition'}</span>
+          return (
+            <div className="p-6 sm:p-8 space-y-6 max-h-[75vh] overflow-y-auto">
+              {/* بطاقة الإنجاز */}
+              <div className="p-5 rounded-3xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 flex items-start gap-4">
+                <div className="w-11 h-11 rounded-2xl bg-[#0F172A] dark:bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Award className="w-5 h-5 text-blue-400 dark:text-white" />
                 </div>
-                <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-                  {isAr
-                    ? <>سيتم عرض المفهوم <span className="font-bold text-slate-800 dark:text-slate-200">"{finalReport.spacedRepetitionQueue[0].concept}"</span> بصياغة جديدة وتحدٍ مختلف بعد 3 أيام لتثبيته في الذاكرة طويلة المدى.</>
-                    : <>The concept <span className="font-bold text-slate-800 dark:text-slate-200">"{finalReport.spacedRepetitionQueue[0].concept}"</span> will be tested again in 3 days with a fresh prompt for long-term retention.</>}
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-[#0F172A] dark:text-white">
+                    {isAr ? 'اكتملت الجلسة بنجاح · تقرير التعلم' : 'Session Completed Successfully · Learning Report'}
+                  </h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {isAr
+                      ? <>قضيت <span className="font-bold text-[#0F172A] dark:text-white">{finalReport.studyTimeMinutes || 1} دقيقة</span> مذاكرة بفاعلية تركيز بلغت <span className="font-bold text-[#0F172A] dark:text-white">{finalReport.focusEfficiencyPercentage || 90}%</span>.</>
+                      : <>You spent <span className="font-bold text-[#0F172A] dark:text-white">{finalReport.studyTimeMinutes || 1} minutes</span> studying with <span className="font-bold text-[#0F172A] dark:text-white">{finalReport.focusEfficiencyPercentage || 90}%</span> focus efficiency.</>}
+                  </p>
+                  {isSavedToCloud && (
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-blue-600 dark:text-blue-400 text-[10px] font-bold w-fit mt-1.5 shadow-2xs">
+                      <Cloud className="w-3 h-3" />
+                      <span>{isAr ? 'تم حفظ الجلسة والتقرير في Cloud Firestore' : 'Saved to Cloud Firestore'}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* التوصية المحورية للمدرب */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 shadow-2xs space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#0F172A] dark:text-white uppercase tracking-wider">
+                  <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span>{isAr ? 'التوصية الأساسية للمدرب الذكي' : 'Primary AI Coach Recommendation'}</span>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                  {recText}
                 </p>
               </div>
-            )}
 
-            {/* أزرار الإجراءات */}
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-              <button
-                type="button"
-                id="review-document-again-btn"
-                onClick={onClose}
-                className="text-xs px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold transition-all"
-              >
-                العودة للشرائح
-              </button>
+              {/* خريطة إتقان المفاهيم */}
+              {concepts.length > 0 && (
+                <div className="space-y-2.5">
+                  <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    {isAr ? 'خريطة استيعاب المفاهيم ونقاط القوة والضعف' : 'Concept Mastery Map & Strengths/Weaknesses'}
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {concepts.map((concept, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700 text-xs flex flex-col justify-between"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-bold text-slate-800 dark:text-slate-100 truncate pl-2">
+                            {concept.concept}
+                          </span>
+                          <span
+                            className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold shrink-0 ${
+                              concept.status === 'mastered'
+                                ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/50'
+                                : concept.status === 'developing'
+                                ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/50'
+                                : 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800/50'
+                            }`}
+                          >
+                            {concept.status === 'mastered'
+                              ? (isAr ? 'متقن ✓' : 'Mastered ✓')
+                              : concept.status === 'developing'
+                              ? (isAr ? 'قيد التطوير' : 'Developing')
+                              : (isAr ? 'يتطلب مراجعة (نقطة ضعف)' : 'Needs Review (Weakness)')}
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden mb-2">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              concept.status === 'mastered'
+                                ? 'bg-emerald-500'
+                                : concept.status === 'developing'
+                                ? 'bg-amber-500'
+                                : 'bg-rose-500'
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(10, concept.score))}%` }}
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-400 dark:text-slate-400 leading-relaxed">{concept.note}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-              <button
-                type="button"
-                id="wrapup-return-home-btn"
-                onClick={onReturnHome}
-                className="text-xs px-5 py-2.5 rounded-xl bg-[#0F172A] hover:bg-[#1E293B] text-white font-bold transition-all shadow-xs active:scale-[0.98]"
-              >
-                إنهاء والعودة للرئيسية
-              </button>
+              {/* جدول التكرار المتباعد */}
+              {firstSrConcept && (
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700 text-xs space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-bold text-[#0F172A] dark:text-white">
+                    <RotateCcw className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span>{isAr ? 'مجدول للتكرار المتباعد (Spaced Repetition)' : 'Scheduled for Spaced Repetition'}</span>
+                  </div>
+                  <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
+                    {isAr
+                      ? <>تمت جدولة المفهوم <span className="font-bold text-slate-800 dark:text-slate-200">"{firstSrConcept}"</span> للمراجعة بعد 3 أيام لتثبيته في الذاكرة طويلة المدى.</>
+                      : <>The concept <span className="font-bold text-slate-800 dark:text-slate-200">"{firstSrConcept}"</span> is scheduled for review in 3 days for long-term retention.</>}
+                  </p>
+                </div>
+              )}
+
+              {/* أزرار الإجراءات */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  id="review-document-again-btn"
+                  onClick={onClose}
+                  className="text-xs px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-semibold transition-all"
+                >
+                  {isAr ? 'العودة للشرائح والمتابعة' : 'Back to Slides'}
+                </button>
+
+                <button
+                  type="button"
+                  id="wrapup-return-home-btn"
+                  onClick={onReturnHome}
+                  className="text-xs px-5 py-2.5 rounded-xl bg-[#0F172A] dark:bg-blue-600 hover:bg-[#1E293B] dark:hover:bg-blue-700 text-white font-bold transition-all shadow-xs active:scale-[0.98]"
+                >
+                  {isAr ? 'إنهاء والعودة للرئيسية' : 'Finish & Return Home'}
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

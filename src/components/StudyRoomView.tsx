@@ -309,6 +309,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         const nextTime = prev + 1;
 
         setStuckState(stuck => {
+          if (wrapUpModalOpen) return stuck;
           const isSnoozed = (snoozedUntilRef.current[currentPage] || 0) > Date.now();
           if (isSnoozed || stuck.interventionActive) {
             return { ...stuck, timeSpentSeconds: nextTime };
@@ -341,7 +342,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       });
 
       setAttentionState(att => {
-        if (!att.cameraActive) return att;
+        if (!att.cameraActive || wrapUpModalOpen) return att;
         if (att.attentionDrifted) {
           const nextDrift = att.driftSeconds + 1;
           let pulse = false;
@@ -511,6 +512,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   };
 
   const handleTriggerPhoneDetected = (reason?: string) => {
+    if (wrapUpModalOpen) return;
     const defaultReason = isAr ? 'تم رصد استخدام الهاتف أثناء المذاكرة.' : 'Phone usage detected while studying.';
     setAttentionState(prev => ({
       ...prev,
@@ -533,6 +535,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   };
 
   const handleTriggerSleepingDetected = (reason?: string) => {
+    if (wrapUpModalOpen) return;
     const defaultReason = isAr ? 'تم رصد إغلاق العينين أو انحناء الرأس.' : 'Drowsiness or eye closure detected.';
     setAttentionState(prev => ({
       ...prev,
@@ -555,6 +558,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   };
 
   const handleTriggerAwayDetected = (reason?: string) => {
+    if (wrapUpModalOpen) return;
     const defaultReason = isAr ? 'تم رصد مغادرة مكان المذاكرة.' : 'Stepped away from study desk.';
     setAttentionState(prev => ({
       ...prev,
