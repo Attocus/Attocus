@@ -26,6 +26,7 @@ interface HomeViewProps {
   onDeleteLecture: (lectureId: string) => void;
   totalFocusPoints: number;
   todayMinutesStudied: number;
+  onOpenAbout?: (section?: 'about' | 'developers' | 'contact' | 'tech') => void;
 }
 
 interface FolderItem {
@@ -63,6 +64,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onDeleteLecture,
   totalFocusPoints,
   todayMinutesStudied,
+  onOpenAbout,
 }) => {
   const { currentUser, userProfile, logout } = useAuth();
   const { t, isAr, dir } = useLanguage();
@@ -662,9 +664,33 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 {t('footer.aboutAttocus', 'عن Attocus')}
               </h4>
               <ul className="space-y-2.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
-                <li><a href="#about" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('footer.aboutTitle', 'من نحن (About Us)')}</a></li>
-                <li><a href="#developers" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('footer.developersTitle', 'المطورون')}</a></li>
-                <li><a href="#contact" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('footer.contactTitle', 'تواصل معنا والدعم الفني')}</a></li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onOpenAbout?.('about')}
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors inline-flex items-center gap-1 text-right"
+                  >
+                    {isAr ? 'من نحن ورؤيتنا' : 'About Us & Vision'}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onOpenAbout?.('developers')}
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors inline-flex items-center gap-1 text-right"
+                  >
+                    {isAr ? 'فريق التأسيس' : 'Co-Founders & Team'}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onOpenAbout?.('contact')}
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors inline-flex items-center gap-1 text-right"
+                  >
+                    {t('footer.contactTitle', 'تواصل معنا والدعم الفني')}
+                  </button>
+                </li>
               </ul>
             </div>
 

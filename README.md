@@ -1,7 +1,8 @@
 <div align="center">
   
-# 🦉 Attocus ( أتـوكـس)
-### Intelligent Multi-Agent Socratic Study Companion & Cognitive Focus Platform
+# 🦉 Attocus (أتـوكـس)
+### Intelligent Multi-Agent Interactive Study Companion & Cognitive Focus Platform
+**Flagship Graduate Project · Saudi Digital Academy (SDA Agentic AI Bootcamp)**
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
@@ -12,35 +13,41 @@
 [![DeepEval](https://img.shields.io/badge/DeepEval-Evaluation-8A2BE2?style=for-the-badge)](https://confident-ai.com)
 
 <p align="center">
-  <b>Attocus</b> is a next-generation AI study room designed to elevate deep comprehension, active recall, and sustained attention. Powered by an orchestrated multi-agent network, native Cloud Firestore Vector Search (RAG), and real-time computer vision attention telemetry.
+  <b>Attocus</b> is an intelligent, privacy-first study room designed to turn passive reading into deep mastery, active recall, and sustained attention. Powered by an orchestrated network of 4 specialized AI agents, native Cloud Firestore Vector Search (RAG), and client-side on-device computer vision attention telemetry.
 </p>
 
 </div>
 
 ---
 
+## 🇸🇦 SDA Agentic AI Bootcamp Accreditation | اعتماد معسكر الأكاديمية السعودية الرقمية
+
+تم بناء وتطوير منصة **Attocus** كأحد مشاريع التخرج المتميزة ضمن **معسكر الذكاء الاصطناعي للوكلاء الأذكياء (SDA Agentic AI Bootcamp)** المقدم من **الأكاديمية السعودية الرقمية (Saudi Digital Academy)**، بتعاون تكاملي كامل بين مهندسات فريق التأسيس عبر أحدث معايير هندسة الأنظمة الذكية متعددة الوكلاء (Multi-Agent Systems).
+
+---
+
 ## 🌟 Key Features | أهم المميزات
 
-### 1. 🧠 Multi-Agent Socratic Architecture (منظومة الوكلاء الأذكياء)
-- **🎯 Orchestrator Agent (`OrchestratorAgent`)**: The central brain managing real-time student telemetry, cognitive fatigue, agent delegation, and session persistence.
-- **💬 Socratic Summary Agent (`SocraticSummaryAgent`)**: Conducts multi-turn Socratic questioning to assess authentic understanding, handles "I don't know" moments with scaffolded hints, and compiles unified summaries in the student's own words.
-- **📝 Retention & Quiz Agent (`QuizAgent`)**: Automatically formulates grounded True/False and 4-option multiple-choice quizzes strictly anchored in retrieved lecture chunks (zero hallucinations or superficial questions).
-- **💡 Adaptive Learning Coach (`LearningCoachAgent`)**: Diagnoses student misconceptions in real-time, adjusts explanation depth (analogies, technical proofs, real-world examples), and identifies knowledge gaps.
-- **👁️ Vision & Distraction Agent (`AttentionAgent`)**: Edge computer vision tracking distraction (YOLO11n phone detection) and drowsiness (MediaPipe FaceMesh Eye Aspect Ratio) with gentle intervention alerts.
+### 1. 🧠 Multi-Agent Architecture (منظومة الوكلاء الأذكياء)
+- **🎯 Orchestrator Agent (`OrchestratorAgent`)**: العقل المنسق لإدارة تدفق الجلسة، تفويض المهام المعرفية، وتنسيق استجابات الوكلاء في الوقت الحقيقي.
+- **💬 Interactive Summary Agent (`SummaryAgent`)**: يقود حواراً تفاعلياً يقيس الاستيعاب الحقيقي للدرس، ويجمع الملخص المكتوب بأسلوب الطالب الخاص لترسيخ الذاكرة بعيدة المدى.
+- **📝 Retention & Quiz Agent (`QuizAgent`)**: يولد تلقائياً أسئلة صح/خطأ واختيار من متعدد مرتبطة بشكل موثق بشرائح المحاضرة (Strict Grounding بدون أي هلوسة).
+- **💡 Adaptive Learning Coach (`LearningCoachAgent`)**: يشخص المفاهيم الخاطئة لدى الطالب، ويقدم شروحاً تفاعلية تكيفية وتشبيهات تبسيطية متدرجة.
+- **👁️ Attention & Distraction Agent (`AttentionAgent`)**: رصد فوري للتركيز والتشتت بالهاتف وإغلاق العينين (YOLO11n + MediaPipe FaceMesh) معالجة 100% على جهاز الطالب وبخصوصية تامة.
 
 ### 2. ⚡ Shared Vector RAG Engine (محرك الاسترجاع الشعاعي المشترك)
-- **Cloud Firestore Vector Search**: Native vector search using Firestore `find_nearest` with `COSINE` distance metric and in-memory similarity fallback.
-- **Multi-Format Ingestion**: Supports high-res PDF rendering & parsing alongside PowerPoint (`.pptx`) XML slide decomposition.
-- **Semantic Chunking**: Powered by `RecursiveCharacterTextSplitter` and embedded via OpenAI `text-embedding-3-small` (1536 dimensions).
+- **Cloud Firestore Vector Search**: بحث شعاعي مباشر باستخدام `find_nearest` مع مقياس جيب التمام `COSINE` مع فولباك محلي ذكي.
+- **Multi-Format Ingestion**: دعم عالي الدقة لتحليل وتقطيع ملفات الـ PDF وعروض البوربوينت (`.pptx`).
+- **Semantic Chunking**: تقطيع معرفي ذكي مدمج عبر OpenAI `text-embedding-3-small` (1536 أبعاد).
 
 ### 3. 🛡️ Enterprise Evaluation & Observability (المراقبة والتقييم الآلي)
-- **LangSmith Tracing**: Full real-time observability across all agent execution chains, token consumption, and latency graphs (`@traceable_agent`).
-- **DeepEval CI/CD Validation**: Automated evaluation suite testing `Faithfulness` (hallucination prevention), `AnswerRelevancy`, and `ContextualRelevancy`.
+- **LangSmith Tracing**: مراقبة حية لجميع سلاسل التنفيذ، استهلاك التوكنز، ومعدل الاستجابة (`@traceable_agent`).
+- **DeepEval CI/CD Validation**: 72 فحصاً مؤتمتاً لضمان الموثوقية (`Faithfulness`)، دقة الإجابات، وخلو المخرجات من الهلوسة.
 
 ### 4. 🎨 Modern Interactive Study Room (غرفة المذاكرة التفاعلية)
-- Ultra-sharp slide presentation canvas with high-DPI rendering and annotation tools.
-- Integrated Pomodoro focus timer with gamified focus points.
-- Instant concept explanations drawer and end-of-session knowledge gap heatmaps.
+- كانفاس رسم وملاحظات تفاعلي عالي الدقة (High-DPI Canvas Engine) مستوحى من Notability بدون أي تشويه للخطوط.
+- مؤقت بومودورو ذكي مع نظام مكافآت ونقاط تركيز ومتجر لفتح الشخصيات.
+- ثنائية لغوية كاملة (العربية والإنجليزية) مع دعم فوري للوضعين الفاتح والداكن.
 
 ---
 
@@ -53,22 +60,22 @@ graph TD
     
     subgraph "Python Multi-Agent Backend (FastAPI)"
         Express <--> API[FastAPI Endpoints]
-        API <--> Orch[Orchestrator Agent]
+        API <--> Orch[Orchestrator Agent - بارقة الجارالله]
         
-        Orch --> RAG[Shared RAG Service]
-        Orch --> Quiz[Quiz Agent]
-        Orch --> Soc[Socratic Summary Agent]
-        Orch --> Coach[Learning Coach Agent]
-        Orch --> Vision[Attention Vision Agent]
+        Orch --> RAG[Shared Vector RAG Service]
+        Orch --> Quiz[Quiz Agent - رنا العصيمي]
+        Orch --> Sum[Interactive Summary Agent]
+        Orch --> Coach[Learning Coach Agent - سكينة الرمضان]
+        Orch --> Vision[Attention Engine - طيف العنزي]
         
         RAG <--> FS[(Google Cloud Firestore\nVector Search)]
         RAG <--> Embed[OpenAI text-embedding-3-small]
         
         Quiz <--> LLM[GPT-4o-mini]
-        Soc <--> LLM
+        Sum <--> LLM
         Coach <--> LLM
         
-        Vision <--> YOLO[YOLO11n + MediaPipe EAR]
+        Vision <--> YOLO[Edge YOLO11n + MediaPipe EAR]
         
         Orch -.-> LS[LangSmith Observability]
         API -.-> DE[DeepEval Test Suite]
@@ -77,51 +84,28 @@ graph TD
 
 ---
 
-## 📁 Repository Structure | هيكل المستودع
+## 👥 Co-Founders & Core Engineering Team | فريق التأسيس
 
-```text
-attocus/
-├── backend/                        # Python FastAPI Multi-Agent AI Backend
-│   ├── agents/                     # Specialized AI Agents
-│   │   ├── orchestrator.py         # Central Orchestrator & Session Coordinator
-│   │   ├── quiz_agent.py           # Grounded Quiz & Retention Assessment Agent
-│   │   ├── summary_agent.py        # Socratic Dialogue & Active Recall Agent
-│   │   ├── learning_agent.py       # Concept Explainer & Misconception Coach
-│   │   └── attention_agent.py      # Fatigue, Phone & Distraction Telemetry Agent
-│   ├── routers/
-│   │   └── detection.py            # WebSocket YOLO11n + MediaPipe Vision Router
-│   ├── services/
-│   │   ├── observability.py        # LangSmith Tracing & Client Wrappers
-│   │   └── eval_service.py         # DeepEval Metrics (Faithfulness, Relevancy)
-│   ├── tests/
-│   │   └── test_eval.py            # Automated Pytest Evaluation Suite
-│   ├── models/                     # Vision weights (yolo11n.pt)
-│   ├── rag_service.py              # Firestore Vector RAG & PDF/PPTX Parser
-│   ├── main.py                     # FastAPI Application & API Routes
-│   └── requirements.txt            # Complete Python Dependencies
-│
-├── src/                            # Frontend (React 19 + TypeScript + Vite)
-│   ├── components/                 # UI Modals, Canvas, Study Room & Sidebar
-│   │   ├── StudyRoomView.tsx       # Main Lecture & Study Room Experience
-│   │   ├── UploadModal.tsx         # Lecture Upload with Automatic RAG Sync
-│   │   ├── QuickQuizModal.tsx      # RAG-Grounded Slide Quiz Modal
-│   │   ├── UnderstandingModal.tsx  # Socratic Dialogue Modal
-│   │   ├── ExplainDrawer.tsx       # Real-time Concept Explainer Drawer
-│   │   ├── PomodoroTimer.tsx       # Focus Timer & Productivity Tracker
-│   │   └── SlideViewer.tsx         # High-DPI Slide Viewer & Annotator
-│   ├── utils/                      # PDF parsing & text extraction utilities
-│   ├── types.ts                    # Strongly Typed Data Models & Interfaces
-│   └── App.tsx                     # Main Application Entrypoint
-│
-├── public/                         # Static Assets & pdf.worker.min.mjs
-├── server.ts                       # Node.js API Proxy Server
-├── package.json                    # Frontend Dependencies & Scripts
-└── .env.example                    # Environment Template Configuration
-```
+جميع أعضاء الفريق يحملن مسمى **مؤسسة مشاركة ومهندسة ذكاء اصطناعي للوكلاء (Co-Founder & Agentic AI Engineer)**، وقد ساهمن جماعياً في بناء واجهات المنصة وبنيتها التفاعلية، مع تخصص كل مؤسسة في الركائز التالية:
+
+| الاسم (Name) | التخصص الأكاديمي (Academic Background) | الركيزة والمسؤولية التقنية (Technical Core) | حساب LinkedIn الرسمي |
+| :--- | :--- | :--- | :--- |
+| **طيف العنزي**<br>(Taif Alanzi) | نظم معلومات<br>(Information Systems) | • هندسة منظومة تتبع التركيز (Attention Tracking Engine)<br>• تصميم وتكامل قواعد البيانات (Databases Architecture)<br>• المساهمة في بناء الواجهات التفاعلية وتجربة المستخدم | [LinkedIn Profile](http://www.linkedin.com/in/taif-alanzi-is) |
+| **بارقة الجارالله**<br>(Bariqa Aljarallah) | علوم حاسب<br>(Computer Science) | • هندسة وكيل التنسيق الرئيسي (Orchestrator Agent)<br>• تصميم وتكامل قواعد البيانات (Databases Architecture)<br>• المساهمة في بناء الواجهات التفاعلية والعمل التكاملي | [LinkedIn Profile](https://www.linkedin.com/in/bariqa-aljarallah?utm_source=share_via&utm_content=profile&utm_medium=member_ios) |
+| **سكينة الرمضان**<br>(Sukainah Alramadhan) | ذكاء اصطناعي<br>(Artificial Intelligence) | • هندسة وكيل التعلم والشرح التفاعلي (Learning Coach Agent)<br>• صياغة النماذج التوجيهية والاستيعاب التكيفي<br>• المساهمة في بناء الواجهات التفاعلية والعمل التكاملي | [LinkedIn Profile](https://sa.linkedin.com/in/sukainah-alramadhan/ar) |
+| **رنا العصيمي**<br>(Rana Alosami) | هندسة حاسب<br>(Computer Engineering) | • هندسة وكيل الاختبارات والتقييم (Quiz Agent)<br>• بناء منطق أسئلة الاستدعاء النشط والتقييم الموضوعي<br>• المساهمة في بناء الواجهات التفاعلية والعمل التكاملي | [LinkedIn Profile](https://www.linkedin.com/in/rana-alosaimi-7a81ab24a?utm_source=share_via&utm_content=profile&utm_medium=member_ios) |
 
 ---
 
-## 🚀 Getting Started | طريقة التشغيل
+## 📞 Direct Communication Channels | قنوات التواصل المباشرة
+
+- 📧 **البريد الرسمي (Official Email):** [Attocus.startup@gmail.com](mailto:Attocus.startup@gmail.com)
+- 📱 **رقم الجوال والتواصل (Direct Mobile):** `+966 556270712`
+- 🌐 **حساب منصة إكس الرسمية (X / Twitter):** [@Attocusksa](https://x.com/Attocusksa)
+
+---
+
+## 🚀 Getting Started | طريقة التشغيل السريعة
 
 ### 1. Prerequisites (المتطلبات الأساسية)
 - **Node.js**: v18.0 or higher
@@ -132,111 +116,81 @@ attocus/
 
 ### 2. Backend Setup (تهيئة الواجهة الخلفية)
 
-1. Navigate to the backend directory:
+1. الانتقال لمجلد الواجهة الخلفية:
    ```bash
    cd backend
    ```
 
-2. Create and activate a Python virtual environment:
+2. إنشاء وتفعيل البيئة الافتراضية:
    ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate       # On macOS / Linux
-   # .venv\Scripts\activate      # On Windows
+   python -m venv .venv
+   # Windows:
+   .venv\Scripts\activate
+   # macOS / Linux:
+   source .venv/bin/activate
    ```
 
-3. Install all dependencies from `requirements.txt`:
+3. تثبيت المكتبات:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. Configure environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` and fill in your keys:
+4. إعداد المتغيرات البيئية في `backend/.env`:
    ```env
    OPENAI_API_KEY="sk-..."
-   FIREBASE_SERVICE_ACCOUNT_KEY="serviceAccountKey.json"  # Optional: for Cloud Firestore
-   LANGCHAIN_TRACING_V2="true"                          # Optional: for LangSmith
+   FIREBASE_SERVICE_ACCOUNT_KEY="serviceAccountKey.json"  # اختياري
+   LANGCHAIN_TRACING_V2="true"                          # اختياري لمراقبة LangSmith
    LANGCHAIN_API_KEY="lsv2_pt_..."
    LANGCHAIN_PROJECT="Attocus-Platform"
    ```
 
-5. Start the FastAPI backend server:
+5. تشغيل خادم FastAPI:
    ```bash
    uvicorn main:app --host 127.0.0.1 --port 8000 --reload
    ```
-   The backend will be live at `http://127.0.0.1:8000` (API Docs: `http://127.0.0.1:8000/docs`).
+   الخادم يعمل على `http://127.0.0.1:8000` وتوثيق الـ API على `http://127.0.0.1:8000/docs`.
 
 ---
 
 ### 3. Frontend Setup (تهيئة واجهة المستخدم)
 
-1. Return to the root directory:
+1. العودة للمجلد الرئيسي:
    ```bash
    cd ..
    ```
 
-2. Install Node dependencies:
+2. تثبيت الحزم:
    ```bash
    npm install
    ```
 
-3. Configure your frontend `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Start the development server:
+3. تشغيل واجهة التطوير:
    ```bash
    npm run dev
    ```
-   Open your browser at `http://localhost:3000`.
+   تفتح المنصة مباشرة على `http://localhost:3000`.
 
 ---
 
-## 🧪 Running Automated Tests (فحص واختبار المنظومة)
+## 🧪 Testing & Evaluation | فحص واختبار الجودة
 
-### 1. Frontend TypeScript Validation
-```bash
-npm run lint
-```
+- **فحص واجهات React و TypeScript:**
+  ```bash
+  npx tsc --noEmit
+  ```
+- **بناء حزمة الإنتاج الكاملة:**
+  ```bash
+  npm run build
+  ```
+- **فحوصات DeepEval للوكلاء الأذكياء:**
+  ```bash
+  cd backend
+  pytest tests/test_eval.py -v
+  ```
 
-### 2. Python Static Typing Check
-```bash
-cd backend
-.venv/bin/pyright rag_service.py agents/quiz_agent.py agents/summary_agent.py
-```
-
-### 3. DeepEval Evaluation & Groundedness Tests
-```bash
-cd backend
-pytest tests/test_eval.py -v
-```
-Verifies that:
-- Quiz generation has 100% groundedness against lecture slides.
-- Learning coach explanations maintain strict faithfulness to RAG source material without hallucinations.
-
----
-
-## 🔑 Firebase Cloud Firestore Vector Setup (إعداد فايربيس)
-
-1. In your Firebase Console, open **Project Settings** -> **Service Accounts**.
-2. Click **Generate New Private Key** to download your credentials JSON file.
-3. Place the file inside `backend/` as `serviceAccountKey.json` (it is automatically ignored by `.gitignore`).
-4. In Firestore, create the collection `pdf_embeddings` or let Attocus auto-initialize it.
-5. In Cloud Firestore, vector queries utilize native vector indexing with `COSINE` distance.
-
----
-
-## 👥 Contributors | المساهمون
-
-- **Sukainah Alramadhan** ([@sukainahAlramadhan](https://github.com/sukainahAlramadhan))
-- **Bariqa aljarallah** ([@Bariqa1](https://github.com/Bariqa1))
-- **Rana Alosaimi** ([@Rana-21](https://github.com/Rana-21))
-- **Taif Alanzi** ([@taifl2](https://github.com/taifl2))
 ---
 
 <div align="center">
-  <sub>Built with ❤️ for empowered learning, sustained cognitive focus, and academic excellence.</sub>
+  <sub>صُمم بكل فخر في المملكة العربية السعودية 🇸🇦 لدعم الطلاب والباحثين وتحقيق التميز الأكاديمي.</sub><br>
+  <sub>Attocus &copy; 2026 · All Rights Reserved</sub>
 </div>

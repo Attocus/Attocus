@@ -128,8 +128,8 @@ export const SavedSummariesModal: React.FC<SavedSummariesModalProps> = ({
                 </h3>
                 <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
                   {isAr
-                    ? 'عندما تشرح المفاهيم في جلسة الاستيعاب السقراطية، سيتم تجميع وتوليد التلخيص وحفظه هنا تلقائياً لترجع له في أي وقت.'
-                    : 'When you explain concepts during Socratic understanding sessions, summaries will be saved here automatically for future review.'}
+                    ? 'عندما تشرح المفاهيم في جلسة الاستيعاب التفاعلية، سيتم تجميع وتوليد التلخيص وحفظه هنا تلقائياً لترجع له في أي وقت.'
+                    : 'When you explain concepts during interactive understanding sessions, summaries will be saved here automatically for future review.'}
                 </p>
               </div>
             </div>

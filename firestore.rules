@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. استفسارات ورسائل التواصل (متاحة للإرسال من قبل جميع زوار الموقع)
+    match /contact_messages/{messageId} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // 2. بيانات وجلسات الطلاب المسجلين
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      match /{subcollection=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // 3. المحاضرات والمكتبة الأكاديمية
+    match /lectures/{lectureId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+
+      match /{subcollection=**} {
+        allow read, write: if request.auth != null;
+      }
+    }
+  }
+}

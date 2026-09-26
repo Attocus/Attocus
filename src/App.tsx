@@ -3,6 +3,7 @@ import { Lecture } from './types';
 import { SAMPLE_LECTURES } from './data/sampleLectures';
 import { HomeView } from './components/HomeView';
 import { StudyRoomView } from './components/StudyRoomView';
+import { AboutView } from './components/AboutView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
@@ -22,7 +23,8 @@ import {
 
 function AppContent() {
   const { currentUser, userProfile } = useAuth();
-  const [currentScreen, setCurrentScreen] = useState<'home' | 'study_room'>('home');
+  const [currentScreen, setCurrentScreen] = useState<'home' | 'study_room' | 'about'>('home');
+  const [aboutInitialSection, setAboutInitialSection] = useState<'about' | 'developers' | 'tech' | 'contact'>('about');
   const [lectures, setLectures] = useState<Lecture[]>(SAMPLE_LECTURES);
 
   const [activeLectureId, setActiveLectureId] = useState<string>(() => {
@@ -65,9 +67,14 @@ function AppContent() {
             setActiveLectureId(savedActiveId);
             if (savedScreen === 'study_room') {
               setCurrentScreen('study_room');
+            } else if (savedScreen === 'about') {
+              setCurrentScreen('about');
             }
           } else {
             setActiveLectureId(storedLectures[0].id);
+            if (savedScreen === 'about') {
+              setCurrentScreen('about');
+            }
           }
         } else {
           // Seed IndexedDB with sample lectures on first run
@@ -130,6 +137,20 @@ function AppContent() {
 
   const activeLecture = lectures.find(l => l.id === activeLectureId) || lectures[0];
 
+  // Handle URL hash changes (#about, #developers, #contact, #tech)
+  useEffect(() => {
+    const handleHash = () => {
+      const raw = window.location.hash.replace('#', '').toLowerCase();
+      if (raw === 'about' || raw === 'developers' || raw === 'tech' || raw === 'contact') {
+        setAboutInitialSection(raw as 'about' | 'developers' | 'tech' | 'contact');
+        setCurrentScreen('about');
+      }
+    };
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
   const handleSelectLecture = (lectureId: string) => {
     setActiveLectureId(lectureId);
     setCurrentScreen('study_room');
@@ -139,8 +160,23 @@ function AppContent() {
     } catch {}
   };
 
+  const handleOpenAbout = (section?: 'about' | 'developers' | 'tech' | 'contact') => {
+    const target = section || 'about';
+    setAboutInitialSection(target);
+    setCurrentScreen('about');
+    window.location.hash = target;
+    try {
+      localStorage.setItem('study_coach_active_screen', 'about');
+    } catch {}
+  };
+
   const handleReturnHome = () => {
     setCurrentScreen('home');
+    if (window.location.hash) {
+      try {
+        history.replaceState(null, '', window.location.pathname);
+      } catch {}
+    }
     try {
       localStorage.setItem('study_coach_active_screen', 'home');
     } catch {}
@@ -208,7 +244,20 @@ function AppContent() {
 
   return (
     <div dir={dir} className="w-full h-full min-h-screen bg-[#FAFAF8] dark:bg-[#121417] font-sans antialiased text-[#1E2124] dark:text-[#F3F4F6] transition-colors duration-200">
-      {currentScreen === 'home' ? (
+      {currentScreen === 'about' ? (
+        <AboutView
+          onReturnHome={handleReturnHome}
+          initialSection={aboutInitialSection}
+        />
+      ) : currentScreen === 'study_room' ? (
+        <StudyRoomView
+          lecture={activeLecture}
+          onReturnHome={handleReturnHome}
+          onUpdateLecture={handleUpdateLecture}
+          onUploadLecture={handleUploadLecture}
+          onAddFocusPoints={handleAddFocusPoints}
+        />
+      ) : (
         <HomeView
           lectures={lectures}
           activeLectureId={activeLectureId}
@@ -217,14 +266,7 @@ function AppContent() {
           onDeleteLecture={handleDeleteLecture}
           totalFocusPoints={totalFocusPoints}
           todayMinutesStudied={todayMinutesStudied}
-        />
-      ) : (
-        <StudyRoomView
-          lecture={activeLecture}
-          onReturnHome={handleReturnHome}
-          onUpdateLecture={handleUpdateLecture}
-          onUploadLecture={handleUploadLecture}
-          onAddFocusPoints={handleAddFocusPoints}
+          onOpenAbout={handleOpenAbout}
         />
       )}
     </div>

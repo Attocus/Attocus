@@ -290,3 +290,38 @@ export async function logAttentionEventToFirestore(
     console.warn('[Firestore] logAttentionEvent error:', err);
   }
 }
+
+// ==========================================
+// 6. Contact Inquiries & Support Messages
+// ==========================================
+
+export interface ContactMessagePayload {
+  name: string;
+  email: string;
+  category: 'academic' | 'feature' | 'support';
+  message: string;
+  userId?: string | null;
+}
+
+export async function saveContactMessageToFirestore(
+  payload: ContactMessagePayload
+): Promise<{ success: boolean; id?: string; error?: string }> {
+  try {
+    const contactCol = collection(db, 'contact_messages');
+    const docRef = await addDoc(contactCol, {
+      name: payload.name,
+      email: payload.email,
+      category: payload.category,
+      message: payload.message,
+      userId: payload.userId || null,
+      status: 'unread',
+      source: 'portfolio_contact_form',
+      createdAt: serverTimestamp(),
+      clientTimestamp: new Date().toISOString()
+    });
+    return { success: true, id: docRef.id };
+  } catch (err: any) {
+    console.error('[Firestore] saveContactMessage error:', err);
+    return { success: false, error: err?.message || 'Failed to save message' };
+  }
+}

@@ -218,10 +218,10 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
         ],
         strengths: slideLang === 'ar' ? [
           'التعبير عن الفكرة الجوهرية بأسلوبك وكلماتك الخاصة.',
-          'المشاركة النشطة والتفاعل خلال الحوار السقراطي.'
+          'المشاركة النشطة والتفاعل خلال الحوار التفاعلي.'
         ] : [
           'Articulating the core intuition using your own authentic words.',
-          'Active analytical engagement during the Socratic dialogue.'
+          'Active analytical engagement during the interactive dialogue.'
         ],
         lectureTakeaways: slideAxes.length > 0 ? slideAxes : (slide.keyPoints || [slide.title])
       };
@@ -331,7 +331,7 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
                 ))}
               </div>
               <p className="text-[10px] text-indigo-500 dark:text-indigo-400 pt-1">
-                {isAr ? 'سيتم توجيه الحوار السقراطي لتغطية هذه المحاور تدريجياً.' : 'The Socratic dialogue will guide you through these axes step by step.'}
+                {isAr ? 'سيتم توجيه الحوار التفاعلي لتغطية هذه المحاور تدريجياً.' : 'The interactive dialogue will guide you through these axes step by step.'}
               </p>
             </div>
           )}
@@ -431,8 +431,8 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
 
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   {isAr
-                    ? 'تمت صياغة هذا الملخص من إجاباتك السقراطية لترتيب الفهم في فقرات مترابطة.'
-                    : 'This summary was synthesized from your Socratic answers to organize understanding.'}
+                    ? 'تمت صياغة هذا الملخص من إجاباتك التفاعلية لترتيب الفهم في فقرات مترابطة.'
+                    : 'This summary was synthesized from your interactive answers to organize understanding.'}
                 </p>
               </div>
 
