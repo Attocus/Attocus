@@ -458,13 +458,13 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
                 <span className="font-mono text-blue-600 dark:text-blue-400">{tempStudy} {isAr ? "دقيقة" : "mins"}</span>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setTempStudy(v => Math.max(5, v - 5))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:text-slate-300">
+                <button type="button" onClick={() => setTempStudy(v => Math.max(5, v - 5))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title={isAr ? "إنقاص 5 دقائق" : "Decrease 5 mins"}>
                   <Minus className="w-3.5 h-3.5" />
                 </button>
                 <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div className="h-full bg-blue-600 rounded-full" style={{ width: `${(tempStudy / 60) * 100}%` }} />
                 </div>
-                <button type="button" onClick={() => setTempStudy(v => Math.min(60, v + 5))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:text-slate-300">
+                <button type="button" onClick={() => setTempStudy(v => Math.min(60, v + 5))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title={isAr ? "زيادة 5 دقائق" : "Increase 5 mins"}>
                   <Plus className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -476,13 +476,13 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
                 <span className="font-mono text-emerald-600 dark:text-emerald-400">{tempBreak} {isAr ? "دقيقة" : "mins"}</span>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setTempBreak(v => Math.max(1, v - 1))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:text-slate-300">
+                <button type="button" onClick={() => setTempBreak(v => Math.max(1, v - 1))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title={isAr ? "إنقاص دقيقة" : "Decrease 1 min"}>
                   <Minus className="w-3.5 h-3.5" />
                 </button>
                 <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${(tempBreak / 30) * 100}%` }} />
                 </div>
-                <button type="button" onClick={() => setTempBreak(v => Math.min(30, v + 1))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:text-slate-300">
+                <button type="button" onClick={() => setTempBreak(v => Math.min(30, v + 1))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title={isAr ? "زيادة دقيقة" : "Increase 1 min"}>
                   <Plus className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -497,13 +497,13 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setTargetCycles(v => Math.max(0, v - 1))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:text-slate-300">
+                <button type="button" onClick={() => setTargetCycles(v => Math.max(0, v - 1))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title={isAr ? "إنقاص جولة" : "Decrease cycle"}>
                   <Minus className="w-3.5 h-3.5" />
                 </button>
                 <div className="flex-1 text-center text-xs text-slate-500">
                   {targetCycles === 0 ? (isAr ? "تكرار مستمر بدون توقف" : "Non-stop continuous") : `${targetCycles} ${isAr ? "جولات مبرمجة" : "preset cycles"}`}
                 </div>
-                <button type="button" onClick={() => setTargetCycles(v => Math.min(10, v + 1))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:text-slate-300">
+                <button type="button" onClick={() => setTargetCycles(v => Math.min(10, v + 1))} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title={isAr ? "زيادة جولة" : "Increase cycle"}>
                   <Plus className="w-3.5 h-3.5" />
                 </button>
               </div>
