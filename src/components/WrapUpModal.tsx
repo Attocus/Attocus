@@ -147,6 +147,48 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
       setFinalReport(reportData);
       setStep('final_report');
 
+      // Automatically schedule missed gap quiz questions and recommended repetition questions
+      const missedQuestions = questions.filter(q => q.isCorrect === false);
+      const scheduledItems = missedQuestions.map((q, idx) => ({
+        id: q.id || `gap_missed_${lecture.id}_${Date.now()}_${idx}`,
+        question: q.question,
+        topic: q.concept || lecture.title,
+        page: 1,
+        options: q.options || [],
+        correct_answer: q.correctAnswer,
+        explanation: q.explanation || '',
+        days_interval: 3
+      }));
+
+      if (reportData.spacedRepetitionQueue && Array.isArray(reportData.spacedRepetitionQueue)) {
+        for (const sr of reportData.spacedRepetitionQueue) {
+          if (!scheduledItems.some(item => item.question === sr.question)) {
+            scheduledItems.push({
+              id: sr.id || `sr_wrap_${Date.now()}_${Math.random()}`,
+              question: sr.question,
+              topic: sr.concept || lecture.title,
+              page: 1,
+              options: sr.options || [],
+              correct_answer: sr.correctAnswer || '',
+              explanation: sr.explanation || '',
+              days_interval: sr.daysUntilReview || 3
+            });
+          }
+        }
+      }
+
+      if (scheduledItems.length > 0) {
+        fetch('/api/spaced-repetition/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_id: currentUser?.uid || 'STU_101',
+            questions: scheduledItems,
+            days_interval: 3
+          })
+        }).catch(err => console.warn('Could not schedule missed questions:', err));
+      }
+
       saveSessionReportToFirestore(
         currentUser?.uid || 'dev_123',
         lecture.id,
@@ -181,6 +223,28 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
       };
       setFinalReport(fallbackReport);
       setStep('final_report');
+
+      const missedFallback = questions.filter(q => q.isCorrect === false);
+      if (missedFallback.length > 0) {
+        fetch('/api/spaced-repetition/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_id: currentUser?.uid || 'STU_101',
+            questions: missedFallback.map((q, idx) => ({
+              id: q.id || `gap_missed_${lecture.id}_${Date.now()}_${idx}`,
+              question: q.question,
+              topic: q.concept || lecture.title,
+              page: 1,
+              options: q.options || [],
+              correct_answer: q.correctAnswer,
+              explanation: q.explanation || '',
+              days_interval: 3
+            })),
+            days_interval: 3
+          })
+        }).catch(err => console.warn('Could not schedule fallback missed questions:', err));
+      }
 
       saveSessionReportToFirestore(
         currentUser?.uid || 'dev_123',

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Slide } from '../types';
 import { CheckCircle2, X, HelpCircle, Loader2, Sparkles } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 import { getSlideLanguage } from '../utils/slideLanguage';
 
 interface QuickQuizModalProps {
@@ -18,6 +19,7 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
   lectureTitle
 }) => {
   const { isAr, dir } = useLanguage();
+  const { currentUser } = useAuth();
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>([]);
   const [correctAnswer, setCorrectAnswer] = useState('');
@@ -237,7 +239,31 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
                   type="button"
                   id="submit-quick-quiz-btn"
                   onClick={() => {
-                    if (selectedOption) setSubmitted(true);
+                    if (selectedOption) {
+                      setSubmitted(true);
+                      if (selectedOption !== correctAnswer) {
+                        fetch('/api/spaced-repetition/schedule', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            student_id: currentUser?.uid || 'STU_101',
+                            questions: [
+                              {
+                                id: `quick_missed_${slide.id}_${Date.now()}`,
+                                question,
+                                topic: slide.topic || slide.title || lectureTitle || (isAr ? 'مفهوم رئيسي' : 'Core Concept'),
+                                page: slide.pageNumber || 1,
+                                options,
+                                correct_answer: correctAnswer,
+                                explanation,
+                                days_interval: 3
+                              }
+                            ],
+                            days_interval: 3
+                          })
+                        }).catch(e => console.warn('Could not schedule missed quick quiz:', e));
+                      }
+                    }
                   }}
                   disabled={!selectedOption}
                   className={`text-xs px-5 py-2.5 rounded-xl font-bold transition-all shadow-xs active:scale-[0.98] ${

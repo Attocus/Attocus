@@ -1,6 +1,7 @@
 import os
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 import sys
+import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -154,6 +155,11 @@ class ExplainRequest(BaseModel):
 class SpacedRepetitionReviewRequest(BaseModel):
     item_id: str
     is_correct: bool
+
+class ScheduleMissedQuestionsRequest(BaseModel):
+    student_id: Optional[str] = "STU_101"
+    questions: List[Dict[str, Any]]
+    days_interval: Optional[int] = 3
 
 class SummaryStartRequest(BaseModel):
     session_id: str
@@ -374,6 +380,29 @@ def review_spaced_repetition(payload: SpacedRepetitionReviewRequest):
         is_correct=payload.is_correct
     )
     return {"success": success}
+
+@app.post("/api/spaced-repetition/schedule")
+def schedule_missed_questions(payload: ScheduleMissedQuestionsRequest):
+    """Directly schedules missed questions into the 3-day spaced repetition Leitner queue."""
+    student_id = payload.student_id or "STU_101"
+    results = []
+    for q in payload.questions:
+        results.append({
+            "correct": False,
+            "question_id": q.get("id") or f"q_{int(time.time()*1000)}",
+            "question": q.get("question", ""),
+            "topic": q.get("topic") or q.get("concept") or "المحاضرة",
+            "page": q.get("page") or q.get("pageNumber") or 1,
+            "options": q.get("options", []),
+            "correct_answer": q.get("correct_answer") or q.get("correctAnswer") or "",
+            "explanation": q.get("explanation", "")
+        })
+    success = orchestrator.learning_agent.save_spaced_repetition(
+        quiz_results=results,
+        student_id=student_id,
+        days_interval=payload.days_interval or 3
+    )
+    return {"success": success, "scheduled_count": len(results)}
 
 @app.post("/api/summary/start")
 def start_summary(payload: SummaryStartRequest):

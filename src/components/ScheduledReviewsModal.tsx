@@ -15,6 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export interface ScheduledQuestion {
   id: string;
@@ -46,6 +47,7 @@ export const ScheduledReviewsModal: React.FC<ScheduledReviewsModalProps> = ({
   onRewardPoints
 }) => {
   const { isAr, t } = useLanguage();
+  const { currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'due' | 'queue'>('due');
   const [queue, setQueue] = useState<ScheduledQuestion[]>([]);
   const [dueQuestions, setDueQuestions] = useState<ScheduledQuestion[]>([]);
@@ -71,7 +73,8 @@ export const ScheduledReviewsModal: React.FC<ScheduledReviewsModalProps> = ({
     const fetchScheduledReviews = async () => {
       setIsLoading(true);
       try {
-        const queueRes = await fetch('/api/spaced-repetition/queue?student_id=STU_101');
+        const studentId = currentUser?.uid || 'STU_101';
+        const queueRes = await fetch(`/api/spaced-repetition/queue?student_id=${studentId}`);
         if (queueRes.ok) {
           const queueData = await queueRes.json();
           const items: ScheduledQuestion[] = queueData.queue || [];
@@ -409,12 +412,18 @@ export const ScheduledReviewsModal: React.FC<ScheduledReviewsModalProps> = ({
               </div>
               <div className="space-y-1">
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                  {isAr ? 'رائع! لا توجد أسئلة مستحقة للمراجعة حالياً 🎉' : 'Awesome! No review questions due right now 🎉'}
+                  {activeTab === 'due'
+                    ? (isAr ? 'رائع! لا توجد أسئلة مستحقة للمراجعة اليوم 🎉' : 'Awesome! No review questions due today 🎉')
+                    : (isAr ? 'لا توجد أسئلة مجدولة في القائمة حالياً' : 'No scheduled questions in the queue right now')}
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                  {isAr
-                    ? 'جميع مفاهيمك مُثبتة في الذاكرة طويلة المدى. ستتم جدولة أسئلة جديدة تلقائياً عند حل الكويزات.'
-                    : 'All concepts are locked in your long-term memory. Missed questions from future quizzes will appear here.'}
+                  {activeTab === 'due'
+                    ? (isAr
+                      ? 'جميع مفاهيمك مُثبتة في الذاكرة طويلة المدى. يمكنك تصفح تبويب "جميع الأسئلة المجدولة" للاطلاع على الأسئلة القادمة ومراجعتها مبكراً.'
+                      : 'All concepts are locked in your long-term memory. You can check the "All Scheduled" tab for upcoming reviews.')
+                    : (isAr
+                      ? 'أي سؤال تخطئ في إجابته أثناء الكويزات أو اختبارات سد الفجوات عند إنهاء الجلسة ستتم جدولته هنا تلقائياً بنظام لايتنر للتكرار المتباعد.'
+                      : 'Any questions you answer incorrectly during quizzes or wrap-up gap reviews will automatically appear here under the Leitner spaced repetition system.')}
                 </p>
               </div>
             </div>

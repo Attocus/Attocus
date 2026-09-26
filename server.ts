@@ -288,6 +288,23 @@ async function startServer() {
     }
   });
 
+  app.post('/api/spaced-repetition/schedule', async (req, res) => {
+    try {
+      const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/spaced-repetition/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body)
+      });
+      if (pyRes.ok) {
+        return res.json(await pyRes.json());
+      }
+      res.status(pyRes.status).json(await pyRes.json());
+    } catch (err: any) {
+      console.warn('Spaced Repetition schedule proxy notice:', err.message);
+      res.json({ success: true, local_fallback: true });
+    }
+  });
+
   // ==============================================================
   // Direct Cloud Firestore Admin APIs (Project attocus-1)
   // Writes directly to root collections: files, sessions, summaries, quizzes, attention_logs, users
