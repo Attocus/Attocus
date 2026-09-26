@@ -30,7 +30,7 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     // Home Page
     'home.welcome': 'مرحباً بك، {name} 👋',
     'home.welcomeStudent': 'طالب متميز',
-    'home.bannerDesc': 'استأنف جلساتك واستمر في مراكمة ساعات التركيز والتقدم الأكاديمي.',
+    'home.bannerDesc': 'استأنف جلساتك وحافظ على الستريك وتقدمك الأكاديمي.',
     'home.streak': 'الاستمرار اليومي',
     'home.streakDays': '{count} أيام',
     'home.streakActive': 'ستريك مشتعل 🔥',
@@ -172,7 +172,7 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     // Home Page
     'home.welcome': 'Welcome, {name} 👋',
     'home.welcomeStudent': 'Distinguished Student',
-    'home.bannerDesc': 'Resume your study sessions and accumulate focus hours and academic progress.',
+    'home.bannerDesc': 'Resume your study sessions and maintain your streak and academic progress.',
     'home.streak': 'Daily Streak',
     'home.streakDays': '{count} Days',
     'home.streakActive': 'Streak on fire 🔥',

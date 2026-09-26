@@ -224,6 +224,216 @@
       "days_interval": 3,
       "status": "pending",
       "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_gap-q-1_1790457487",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "gap-q-1",
+      "question": "What is the primary goal of the Agentic AI Bootcamp?",
+      "topic": "Understanding Agentic AI Bootcamp",
+      "page": 1,
+      "options": [
+        "To learn how to build AI that thinks, plans, and acts.",
+        "To understand the limitations of a single agent.",
+        "To explore different programming languages.",
+        "To develop hardware for AI systems."
+      ],
+      "correct_answer": "Option A",
+      "explanation": "The primary goal of the Agentic AI Bootcamp is to teach participants how to build AI that can think, plan, and act, as stated in the first slide of the lecture.",
+      "created_at": "2026-09-26T21:18:07.791765+00:00",
+      "review_date": "2026-09-29T21:18:07.791765+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_gap-q-2_1790457487",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "gap-q-2",
+      "question": "Why is orchestration important in multi-agent systems?",
+      "topic": "Importance of Orchestration",
+      "page": 1,
+      "options": [
+        "It allows a single agent to handle all tasks.",
+        "It enhances efficiency by defining roles and shared goals.",
+        "It simplifies the programming process.",
+        "It eliminates the need for communication between agents."
+      ],
+      "correct_answer": "Option B",
+      "explanation": "Orchestration is important because it enhances efficiency by defining roles and shared goals among agents, as discussed in the lecture.",
+      "created_at": "2026-09-26T21:18:07.791765+00:00",
+      "review_date": "2026-09-29T21:18:07.791765+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_gap-q-3_1790457487",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "gap-q-3",
+      "question": "What is a key advantage of using graph-based workflows over linear pipelines?",
+      "topic": "Graph-Based Workflows",
+      "page": 1,
+      "options": [
+        "They are easier to implement.",
+        "They can model branching, parallelism, and loops.",
+        "They require less computational power.",
+        "They are always faster."
+      ],
+      "correct_answer": "Option B",
+      "explanation": "Graph-based workflows can model branching, parallelism, and loops, which are limitations of linear pipelines, as highlighted in the lecture.",
+      "created_at": "2026-09-26T21:18:07.791765+00:00",
+      "review_date": "2026-09-29T21:18:07.791765+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_gap-q-2_1790457515",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "gap-q-2",
+      "question": "Why is orchestration important in multi-agent systems?",
+      "topic": "Importance of Orchestration",
+      "page": 1,
+      "options": [
+        "It allows for the execution of tasks in a linear fashion",
+        "It ensures that all agents work independently without any coordination",
+        "It enhances efficiency by defining roles and shared goals among agents",
+        "It reduces the need for specialized agents"
+      ],
+      "correct_answer": "It enhances efficiency by defining roles and shared goals among agents",
+      "explanation": "Orchestration is crucial because it allows a team of agents to work together efficiently by having defined roles and shared goals, which improves overall task execution.",
+      "created_at": "2026-09-26T21:18:35.202936+00:00",
+      "review_date": "2026-09-29T21:18:35.202936+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_gap-q-3_1790457515",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "gap-q-3",
+      "question": "What is a key advantage of using graph-based workflows over linear pipelines?",
+      "topic": "Graph-Based Workflows",
+      "page": 1,
+      "options": [
+        "They are simpler to implement",
+        "They can model branching, parallelism, and loops",
+        "They require less computational power",
+        "They are easier to visualize"
+      ],
+      "correct_answer": "They can model branching, parallelism, and loops",
+      "explanation": "Graph-based workflows provide the ability to model complex task structures, including branching, parallelism, and loops, which linear pipelines cannot accommodate.",
+      "created_at": "2026-09-26T21:18:35.202936+00:00",
+      "review_date": "2026-09-29T21:18:35.202936+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_sr-1_1790457515",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "sr-1",
+      "question": "Why is orchestration important in agentic frameworks?",
+      "topic": "Importance of Orchestration",
+      "page": 1,
+      "options": [
+        "It allows agents to work independently",
+        "It ensures agents collaborate effectively",
+        "It simplifies the implementation process",
+        "It eliminates the need for communication"
+      ],
+      "correct_answer": "It ensures agents collaborate effectively",
+      "explanation": "Orchestration is vital for ensuring that multiple agents can work together seamlessly, enhancing overall system performance.",
+      "created_at": "2026-09-26T21:18:35.202936+00:00",
+      "review_date": "2026-09-29T21:18:35.202936+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_gap-q-1_1790457570",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "gap-q-1",
+      "question": "Why is orchestration important in multi-agent systems?",
+      "topic": "Importance of Orchestration",
+      "page": 1,
+      "options": [
+        "It allows for parallel task execution.",
+        "It ensures that all agents work independently.",
+        "It simplifies the overall system architecture.",
+        "It eliminates the need for specialized agents."
+      ],
+      "correct_answer": "Option A",
+      "explanation": "Orchestration is crucial because it allows multiple agents to work together efficiently, enabling parallel task execution and improving overall system performance.",
+      "created_at": "2026-09-26T21:19:30.456031+00:00",
+      "review_date": "2026-09-29T21:19:30.456031+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_gap-q-2_1790457570",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "gap-q-2",
+      "question": "What is a key advantage of using graph-based workflows over linear pipelines?",
+      "topic": "Graph-Based Workflows",
+      "page": 1,
+      "options": [
+        "They can only model sequential tasks.",
+        "They can accommodate complex task structures.",
+        "They require less computational power.",
+        "They are easier to implement."
+      ],
+      "correct_answer": "Option B",
+      "explanation": "Graph-based workflows are advantageous because they can effectively accommodate complex task structures, allowing for branching, parallelism, and loops that linear pipelines cannot model.",
+      "created_at": "2026-09-26T21:19:30.456031+00:00",
+      "review_date": "2026-09-29T21:19:30.456031+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_gap-q-3_1790457570",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "gap-q-3",
+      "question": "What role does the orchestrator play in agent coordination?",
+      "topic": "Agent Coordination Patterns",
+      "page": 1,
+      "options": [
+        "It executes tasks directly.",
+        "It holds the big picture and overall goal.",
+        "It monitors agent performance.",
+        "It only handles failures."
+      ],
+      "correct_answer": "Option B",
+      "explanation": "The orchestrator is responsible for holding the big picture and overall goal, coordinating the actions of agents to prevent conflicts and duplication of effort.",
+      "created_at": "2026-09-26T21:19:30.456031+00:00",
+      "review_date": "2026-09-29T21:19:30.456031+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_sr-1_1790457570",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "sr-1",
+      "question": "What is the primary role of orchestration in agentic frameworks?",
+      "topic": "Importance of Orchestration",
+      "page": 1,
+      "options": [
+        "It ensures that all agents work independently.",
+        "It coordinates the actions of multiple agents.",
+        "It reduces the need for communication.",
+        "It executes tasks directly."
+      ],
+      "correct_answer": "It coordinates the actions of multiple agents.",
+      "explanation": "Orchestration is crucial for ensuring that agents work together effectively rather than in isolation.",
+      "created_at": "2026-09-26T21:19:30.456031+00:00",
+      "review_date": "2026-09-29T21:19:30.456031+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
     }
   ]
 }

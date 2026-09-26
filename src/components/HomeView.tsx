@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Lecture } from '../types';
 import {
   Plus, Trash2, LogIn, LogOut, Search,
-  FileText, Clock, Sparkles, Flame, GraduationCap,
+  FileText, Sparkles, Flame, GraduationCap,
   Folder, Layers, Calculator, Laptop, Compass, Dna,
   Languages, ChevronRight, X, ArrowUpRight, Upload
 } from 'lucide-react';
@@ -94,17 +94,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
     }
   };
 
-  const formatTime = (totalMins: number) => {
-    if (totalMins < 60) {
-      return t('time.minutes', `${totalMins} دقيقة`).replace('{m}', String(totalMins));
-    }
-    const hrs = Math.floor(totalMins / 60);
-    const mins = totalMins % 60;
-    if (mins > 0) {
-      return t('time.hoursMins', `${hrs} س ${mins} د`).replace('{h}', String(hrs)).replace('{m}', String(mins));
-    }
-    return t('time.hours', `${hrs} ساعة`).replace('{h}', String(hrs));
-  };
 
   const getLectureCountForFolder = (folderId: string) => {
     if (folderId === 'all') return lectures.length;
@@ -248,7 +237,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               {t('home.welcome', 'مرحباً بك، {name} 👋').replace('{name}', displayName.split(' ')[0])}
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-normal max-w-xl">
-              {t('home.bannerDesc', 'استأنف جلساتك واستمر في مراكمة ساعات التركيز والتقدم الأكاديمي.')}
+              {t('home.bannerDesc', 'استأنف جلساتك وحافظ على الستريك وتقدمك الأكاديمي.')}
             </p>
           </div>
 
@@ -334,20 +323,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
               </div>
             </button>
 
-            {/* بطاقة ساعات المذاكرة */}
-            <div className="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-slate-100/80 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">
-              <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center shrink-0">
-                <Clock className="w-4 h-4" />
-              </div>
-              <div className={isAr ? 'text-right' : 'text-left'}>
-                <span className="block text-xs font-bold text-slate-900 dark:text-white font-mono leading-tight">
-                  {formatTime(todayMinutesStudied)}
-                </span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                  {t('home.studyHours', 'ساعات المذاكرة')}
-                </span>
-              </div>
-            </div>
           </div>
         </section>
 
