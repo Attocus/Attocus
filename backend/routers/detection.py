@@ -68,7 +68,6 @@ except Exception as err:
 
 LEFT_EYE = [362, 385, 387, 263, 373, 380]
 RIGHT_EYE = [33, 160, 158, 133, 153, 144]
-SLEEPY_CONSECUTIVE_FRAMES = 6
 
 
 def calculate_ear(landmarks, eye_points, img_w, img_h):
@@ -123,13 +122,16 @@ async def websocket_detect(websocket: WebSocket):
             is_away = False
 
             # 1. Phone detection using YOLO (class 67 is cell phone in COCO)
+            # Raised threshold to 0.55 (55%) to prevent false positives from holding a cup/mug, drinking, or resting hand
             if yolo_model:
                 try:
-                    results: Any = yolo_model.predict(source=frame, classes=[67], conf=0.25, verbose=False)
+                    results: Any = yolo_model.predict(source=frame, classes=[67], conf=0.55, verbose=False)
                     if results and len(results[0].boxes) > 0:
-                        phone_detected = True
-                        confidence = float(results[0].boxes.conf[0]) * 100
-                        logger.info(f"[Detection] 📱 Phone spotted! Confidence: {confidence:.1f}%")
+                        conf_val = float(results[0].boxes.conf[0]) * 100
+                        if conf_val >= 55.0:
+                            phone_detected = True
+                            confidence = conf_val
+                            logger.info(f"[Detection] 📱 Phone spotted! Confidence: {confidence:.1f}%")
                 except Exception as yolo_err:
                     logger.warning(f"[Detection] YOLO inference error: {yolo_err}")
 

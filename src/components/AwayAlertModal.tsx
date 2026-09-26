@@ -19,6 +19,12 @@ export const AwayAlertModal: React.FC<AwayAlertModalProps> = ({
   if (!isOpen) return null;
 
   const isAr = language === 'ar';
+  const defaultArabic = 'لاحظنا مغادرتك للمكتب. تم إيقاف جلسة المذاكرة مؤقتاً لحفظ تركيزك حتى تعود.';
+  const defaultEnglish = 'We noticed you left your desk. Study session paused to preserve focus until you return.';
+
+  const displayMessage = !isAr && coachMessage && /[\u0600-\u06FF]/.test(coachMessage)
+    ? defaultEnglish
+    : (coachMessage || (isAr ? defaultArabic : defaultEnglish));
 
   return (
     <div
@@ -41,7 +47,7 @@ export const AwayAlertModal: React.FC<AwayAlertModalProps> = ({
             {isAr ? 'ابتعدت عن مكان المذاكرة؟ 🚶‍♂️' : 'Stepped away from your desk? 🚶‍♂️'}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
-            {coachMessage || (isAr ? 'لاحظنا مغادرتك للمكتب. تم إيقاف جلسة المذاكرة مؤقتاً لحفظ تركيزك حتى تعود.' : 'We noticed you left your desk. Study session paused to preserve focus until you return.')}
+            {displayMessage}
           </p>
         </div>
 

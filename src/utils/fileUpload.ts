@@ -5,12 +5,13 @@ export async function parseUploadedFile(file: File, onProgress?: (pct: number) =
   const fileExt = fileName.split('.').pop()?.toLowerCase() || '';
   const title = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
 
-  if (fileExt === 'pdf') {
-    return parsePdfFile(file, title, onProgress);
-  } else {
-    return parseTextOrPptxFile(file, title);
+  if (fileExt !== 'pdf') {
+    throw new Error('عذراً، لا يقبل النظام إلا ملفات PDF فقط. يرجى إرفاق المحاضرة بصيغة PDF.');
   }
+
+  return parsePdfFile(file, title, onProgress);
 }
+
 
 async function parsePdfFile(file: File, title: string, onProgress?: (pct: number) => void): Promise<Lecture> {
   try {

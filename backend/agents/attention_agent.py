@@ -71,67 +71,6 @@ class AttentionAgent:
                                else "Put the phone aside for a moment 📱 Let's wrap up this topic strong!"
             }
 
-        # C: Eating / Food (Mild distraction - يحسب شوي من التشتت مع تنبيه لطيف)
-        food_triggers = {"eating", "food", "snack", "sandwich", "pizza", "dining"}
-        if (detected_signals & food_triggers) and cv_confidence >= 0.5:
-            return {
-                "state": "eating",
-                "urgency": "low",
-                "should_alert": True,
-                "alert_type": "toast",
-                "recommended_action": "refocus_nudge",
-                "is_study_time": False,
-                "is_distraction": True,
-                "distraction_level": "mild",
-                "coach_nudge": "صحة وعافية! 🥪 الأكل بيُحسب كفترة تشتت خفيفة، خذ لك لقمة سريعة ونرجع نركز عشان ما يطير حماس الجلسة." if language == "ar"
-                               else "Enjoy your snack! 🥪 Eating is counted as a brief distraction—take a quick bite and let's get back in the zone."
-            }
-
-        # D: Drinking Coffee / Cup (استراحة صحية + تشجيع على الكويز بعد القهوة)
-        coffee_triggers = {"cup", "coffee", "drinking", "mug", "tea"}
-        if (detected_signals & coffee_triggers) and cv_confidence >= 0.5:
-            return {
-                "state": "drinking_coffee",
-                "urgency": "low",
-                "should_alert": True,
-                "alert_type": "toast",
-                "recommended_action": "quick_quiz",
-                "is_study_time": True,
-                "is_distraction": False,
-                "coach_nudge": "بالعافية وصحة وهنا! ☕️ روّق برشفة القهوة.. وبعدها عندنا كويز خفيف نثبّت به معلومات اليوم! 🎯" if language == "ar"
-                               else "Enjoy your coffee! ☕️ Savor the sip.. Right after your coffee break, we have a quick quiz ready to test your knowledge! 🎯"
-            }
-
-        # E: Studying with Book (يحسب من وقت المذاكرة والتركيز)
-        book_triggers = {"book", "reading_book", "reading", "notebook"}
-        if (detected_signals & book_triggers) and cv_confidence >= 0.4:
-            return {
-                "state": "reading_book",
-                "urgency": "none",
-                "should_alert": False,
-                "alert_type": "none",
-                "recommended_action": "continue_study",
-                "is_study_time": True,
-                "is_distraction": False,
-                "coach_nudge": "تركيز رائع في قراءة الكتاب وتدوين الملاحظات! 📖 وقت قراءتك محسوب بالكامل من جلسة المذاكرة." if language == "ar"
-                               else "Great deep focus reading your book! 📖 Your reading time is actively counted towards your study session."
-            }
-
-        # F: Studying on Laptop (يحسب من وقت المذاكرة والتركيز)
-        laptop_triggers = {"laptop", "using_laptop", "computer"}
-        if (detected_signals & laptop_triggers) and cv_confidence >= 0.4:
-            return {
-                "state": "using_laptop",
-                "urgency": "none",
-                "should_alert": False,
-                "alert_type": "none",
-                "recommended_action": "continue_study",
-                "is_study_time": True,
-                "is_distraction": False,
-                "coach_nudge": "جلسة عمل ومذاكرة مركزة على اللابتوب! 💻 أحسنت في استغلال الوقت ومتابعة المادة." if language == "ar"
-                               else "Focused study on your laptop! 💻 Your digital study time is actively counted."
-            }
-
         # C: Browser Tab Switching Analysis
         # 1) User was away for a long time (> 40 seconds)
         if last_away_duration_seconds >= 40:

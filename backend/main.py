@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from dotenv import load_dotenv
 
 # Ensure backend directory is in python search path
@@ -19,12 +19,21 @@ except ImportError:
     from backend.agents.orchestrator import OrchestratorAgent
 
 try:
-    from agents.security import check_sql_injection, get_safe_rejection_response
+    from agents.security import check_sql_injection, get_safe_rejection_response, validate_zero_data_leakage
 except ImportError:
     try:
-        from security import check_sql_injection, get_safe_rejection_response
+        from security import check_sql_injection, get_safe_rejection_response, validate_zero_data_leakage
     except ImportError:
-        from backend.agents.security import check_sql_injection, get_safe_rejection_response
+        from backend.agents.security import check_sql_injection, get_safe_rejection_response, validate_zero_data_leakage
+
+try:
+    from services.streak_service import streak_service
+except ImportError:
+    try:
+        from streak_service import streak_service
+    except ImportError:
+        from backend.services.streak_service import streak_service
+
 
 try:
     from services.observability import get_langsmith_status
@@ -95,6 +104,26 @@ class TelemetryRequest(BaseModel):
     time_since_interaction: float = 0.0
     cv_data: Optional[Dict[str, Any]] = None
     language: str = "ar"
+
+    @model_validator(mode="after")
+    def reject_pixel_data_leakage(self) -> "TelemetryRequest":
+        """
+        Zero Data Leakage Guardrail:
+        Strictly rejects any telemetry payload containing base64 images or raw pixel buffers.
+        Enforces purely abstract numerical scalars (e.g. drowsiness_detected, ear_ratio).
+        """
+        if not validate_zero_data_leakage(self.model_dump()):
+            raise ValueError(
+                "Zero Data Leakage Guardrail Violation: Telemetry endpoints reject raw images, "
+                "pixel matrices, or base64 frame buffers. Only abstract numerical metadata is permitted."
+            )
+        return self
+
+class RecordPointsRequest(BaseModel):
+    student_id: str = "STU_101"
+    points: int = 5
+    reason: Optional[str] = "Focus Session"
+    language: Optional[str] = "ar"
 
 class QuizGenerateRequest(BaseModel):
     context: Optional[Any] = None
@@ -179,14 +208,24 @@ def health_check():
 @app.post("/api/rag/upload")
 async def upload_pdf_lecture(
     file: UploadFile = File(...),
-    session_id: Optional[str] = Form("default")
+    session_id: Optional[str] = Form("default"),
+    language: Optional[str] = Form("ar")
 ):
     """
     Uploads a PDF lecture document, extracts pages, chunks text,
     generates OpenAI embeddings, and stores them in Cloud Firestore 'pdf_embeddings'.
     """
-    if not file.filename or not (file.filename.lower().endswith(".pdf") or file.filename.lower().endswith(".pptx")):
-        raise HTTPException(status_code=400, detail="Only PDF and PPTX files are supported.")
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        error_msg = (
+            "عذراً، النظام لا يقبل إلا ملفات PDF فقط. يرجى إرفاق المحاضرة بصيغة PDF."
+            if (language or "ar") == "ar"
+            else "Sorry, only PDF files are accepted. Please attach your lecture as a PDF file."
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=error_msg
+        )
+
     
     content = await file.read()
     if len(content) == 0:
@@ -433,6 +472,31 @@ def run_quick_benchmark():
         "benchmark_name": "RAG_LearningRate_Golden_Sample",
         "result": benchmark_result
     }
+
+
+# -------------------------------------------------------------
+# Gamification & Score Clamping Guardrail Endpoints
+# -------------------------------------------------------------
+@app.post("/api/gamification/record-points")
+def record_gamification_points(payload: RecordPointsRequest):
+    """
+    Awards focus or quiz points protected by the Score Clamping Guardrail.
+    Enforces a strict sliding-window cap (Max 20 points per 30 minutes).
+    """
+    result = streak_service.record_points(
+        student_id=payload.student_id,
+        requested_points=payload.points,
+        reason=payload.reason or "Focus Session",
+        language=payload.language or "ar"
+    )
+    return result
+
+@app.get("/api/gamification/status")
+def get_gamification_status(student_id: str = "STU_101"):
+    """
+    Returns student points, current streak, and remaining 30-min window allowance.
+    """
+    return streak_service.get_student_gamification(student_id=student_id)
 
 
 if __name__ == "__main__":

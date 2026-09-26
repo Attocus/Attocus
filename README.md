@@ -7,7 +7,6 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com)
-[![Google Gemini](https://img.shields.io/badge/Gemini-3.8--Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
 [![Firestore Vector](https://img.shields.io/badge/Firestore-Vector_RAG-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com)
 [![LangSmith](https://img.shields.io/badge/LangSmith-Observability-000000?style=for-the-badge&logo=langchain&logoColor=white)](https://smith.langchain.com)
 [![DeepEval](https://img.shields.io/badge/DeepEval-Evaluation-8A2BE2?style=for-the-badge)](https://confident-ai.com)
@@ -65,7 +64,7 @@ graph TD
         RAG <--> FS[(Google Cloud Firestore\nVector Search)]
         RAG <--> Embed[OpenAI text-embedding-3-small]
         
-        Quiz <--> LLM[GPT-4o-mini / Gemini 3.8]
+        Quiz <--> LLM[GPT-4o-mini]
         Soc <--> LLM
         Coach <--> LLM
         
@@ -157,7 +156,6 @@ attocus/
    Edit `.env` and fill in your keys:
    ```env
    OPENAI_API_KEY="sk-..."
-   GEMINI_API_KEY="..."
    FIREBASE_SERVICE_ACCOUNT_KEY="serviceAccountKey.json"  # Optional: for Cloud Firestore
    LANGCHAIN_TRACING_V2="true"                          # Optional: for LangSmith
    LANGCHAIN_API_KEY="lsv2_pt_..."

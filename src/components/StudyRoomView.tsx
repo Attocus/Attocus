@@ -250,12 +250,6 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   const tabSwitchesCountRef = useRef<number>(0);
   const totalAwaySecondsRef = useRef<number>(0);
 
-  // Cooldown لمنع تكرار تنبيهات القهوة والأكل مع كل رشفة أو لقمة
-  const lastCoffeeAlertTimestampRef = useRef<number>(0);
-  const lastEatingAlertTimestampRef = useRef<number>(0);
-  const COFFEE_ALERT_COOLDOWN_MS = 10 * 60 * 1000; // 10 دقائق تهدئة
-  const EATING_ALERT_COOLDOWN_MS = 6 * 60 * 1000;  // 6 دقائق تهدئة
-
   const currentSlide: Slide = lecture.slides.find(s => s.pageNumber === currentPage) || lecture.slides[0];
 
   useEffect(() => {
@@ -385,7 +379,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         totalAwaySecondsRef.current += awaySeconds;
         tabHiddenTimestampRef.current = null;
 
-        let coachMsg = "أهلاً بعودتك! 👋 لنكمل التركيز معاً";
+        let coachMsg = isAr ? "أهلاً بعودتك! 👋 لنكمل التركيز معاً" : "Welcome back! 👋 Let's continue focusing together";
         setAttentionState(prev => ({
           ...prev,
           tabSwitchToast: {
@@ -410,7 +404,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               last_away_duration_seconds: awaySeconds,
               total_away_seconds: totalAwaySecondsRef.current,
               time_since_interaction: (Date.now() - lastActivityTimestampRef.current) / 1000,
-              language: 'ar'
+              language: isAr ? 'ar' : 'en'
             })
           });
 
@@ -442,7 +436,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [currentPage, currentSlide, lecture.id, pageTimeSeconds, stuckState.expectedSeconds]);
+  }, [currentPage, currentSlide, lecture.id, pageTimeSeconds, stuckState.expectedSeconds, isAr]);
 
   const handleToggleCamera = async () => {
     if (attentionState.cameraActive) {
@@ -510,19 +504,21 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           total_away_seconds: totalAwaySecondsRef.current,
           time_since_interaction: (Date.now() - lastActivityTimestampRef.current) / 1000,
           cv_data: cvPayload,
-          language: 'ar'
+          language: isAr ? 'ar' : 'en'
         })
       });
     } catch (e) { }
   };
 
   const handleTriggerPhoneDetected = (reason?: string) => {
+    const defaultReason = isAr ? 'تم رصد استخدام الهاتف أثناء المذاكرة.' : 'Phone usage detected while studying.';
     setAttentionState(prev => ({
       ...prev,
       detectedState: 'using_phone',
-      detectionReason: reason || 'تم رصد استخدام الهاتف أثناء المذاكرة.',
+      detectionReason: reason || defaultReason,
       phoneAlertOpen: true,
       sleepingAlertOpen: false,
+      awayAlertOpen: false,
       attentionDrifted: true
     }));
     sendAttentionTelemetry({ state: 'using_phone', confidence: 0.95 });
@@ -537,10 +533,11 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   };
 
   const handleTriggerSleepingDetected = (reason?: string) => {
+    const defaultReason = isAr ? 'تم رصد إغلاق العينين أو انحناء الرأس.' : 'Drowsiness or eye closure detected.';
     setAttentionState(prev => ({
       ...prev,
       detectedState: 'sleeping',
-      detectionReason: reason || 'تم رصد إغلاق العينين أو انحناء الرأس.',
+      detectionReason: reason || defaultReason,
       sleepingAlertOpen: true,
       phoneAlertOpen: false,
       awayAlertOpen: false,
@@ -558,10 +555,11 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   };
 
   const handleTriggerAwayDetected = (reason?: string) => {
+    const defaultReason = isAr ? 'تم رصد مغادرة مكان المذاكرة.' : 'Stepped away from study desk.';
     setAttentionState(prev => ({
       ...prev,
       detectedState: 'away',
-      detectionReason: reason || 'تم رصد مغادرة مكان المذاكرة.',
+      detectionReason: reason || defaultReason,
       awayAlertOpen: true,
       phoneAlertOpen: false,
       sleepingAlertOpen: false,
@@ -603,109 +601,13 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
     }));
   };
 
-  const handleTriggerCoffeeDetected = (reason?: string) => {
-    const now = Date.now();
-    const shouldShowToast = (now - lastCoffeeAlertTimestampRef.current) > COFFEE_ALERT_COOLDOWN_MS;
-    const msg = reason || 'بالعافية وصحة وهنا! ☕️ روّق برشفة القهوة.. وبعدها عندنا كويز خفيف نثبّت به معلومات اليوم! 🎯';
-
-    setAttentionState(prev => ({
-      ...prev,
-      detectedState: 'coffee',
-      detectionReason: msg,
-      phoneAlertOpen: false,
-      sleepingAlertOpen: false,
-      awayAlertOpen: false,
-      attentionDrifted: false,
-      tabSwitchToast: shouldShowToast ? {
-        show: true,
-        timestamp: now,
-        message: msg
-      } : prev.tabSwitchToast
-    }));
-
-    if (shouldShowToast) {
-      lastCoffeeAlertTimestampRef.current = now;
-      sendAttentionTelemetry({ state: 'coffee', confidence: 0.9 });
-      setTimeout(() => {
-        setAttentionState(p => ({
-          ...p,
-          tabSwitchToast: p.tabSwitchToast?.message === msg ? null : p.tabSwitchToast
-        }));
-      }, 6000);
-    }
-  };
-
-  const handleTriggerEatingDetected = (reason?: string) => {
-    const now = Date.now();
-    const shouldShowToast = (now - lastEatingAlertTimestampRef.current) > EATING_ALERT_COOLDOWN_MS;
-    const msg = reason || 'صحة وعافية! 🥪 الأكل بيُحسب كفترة تشتت خفيفة، خذ لك لقمة سريعة ونرجع نركز عشان ما يطير حماس الجلسة.';
-
-    setAttentionState(prev => ({
-      ...prev,
-      detectedState: 'eating',
-      detectionReason: msg,
-      phoneAlertOpen: false,
-      sleepingAlertOpen: false,
-      awayAlertOpen: false,
-      attentionDrifted: true,
-      tabSwitchToast: shouldShowToast ? {
-        show: true,
-        timestamp: now,
-        message: msg
-      } : prev.tabSwitchToast
-    }));
-
-    if (shouldShowToast) {
-      lastEatingAlertTimestampRef.current = now;
-      sendAttentionTelemetry({ state: 'eating', confidence: 0.85 });
-      setTimeout(() => {
-        setAttentionState(p => ({
-          ...p,
-          tabSwitchToast: p.tabSwitchToast?.message === msg ? null : p.tabSwitchToast
-        }));
-      }, 6000);
-    }
-  };
-
-  const handleTriggerBookDetected = (reason?: string) => {
-    const msg = reason || 'تركيز رائع في قراءة الكتاب وتدوين الملاحظات! 📖 وقت قراءتك محسوب بالكامل من جلسة المذاكرة.';
-    setAttentionState(prev => ({
-      ...prev,
-      detectedState: 'book',
-      detectionReason: msg,
-      attentionDrifted: false,
-      driftSeconds: 0,
-      visualPulseActive: false,
-      phoneAlertOpen: false,
-      sleepingAlertOpen: false,
-      awayAlertOpen: false
-    }));
-    sendAttentionTelemetry({ state: 'book', confidence: 0.9 });
-  };
-
-  const handleTriggerLaptopDetected = (reason?: string) => {
-    const msg = reason || 'جلسة عمل ومذاكرة مركزة على اللابتوب! 💻 أحسنت في استغلال الوقت ومتابعة المادة.';
-    setAttentionState(prev => ({
-      ...prev,
-      detectedState: 'laptop',
-      detectionReason: msg,
-      attentionDrifted: false,
-      driftSeconds: 0,
-      visualPulseActive: false,
-      phoneAlertOpen: false,
-      sleepingAlertOpen: false,
-      awayAlertOpen: false
-    }));
-    sendAttentionTelemetry({ state: 'laptop', confidence: 0.9 });
-  };
-
   const handleAnalyzeFrameSnapshot = async (imageBase64: string) => {
     setAttentionState(prev => ({ ...prev, isAnalyzingFrame: true }));
     try {
       const res = await fetch('/api/coach/attention/analyze-frame', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64 })
+        body: JSON.stringify({ imageBase64, language: isAr ? 'ar' : 'en' })
       });
       if (res.ok) {
         const data = await res.json();
@@ -714,14 +616,6 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           handleTriggerPhoneDetected(data.coachMessage || data.reason);
         } else if (state === 'sleeping') {
           handleTriggerSleepingDetected(data.coachMessage || data.reason);
-        } else if (state === 'coffee' || state === 'drinking_coffee') {
-          handleTriggerCoffeeDetected(data.coachMessage || data.reason);
-        } else if (state === 'eating') {
-          handleTriggerEatingDetected(data.coachMessage || data.reason);
-        } else if (state === 'book' || state === 'reading_book') {
-          handleTriggerBookDetected(data.coachMessage || data.reason);
-        } else if (state === 'laptop' || state === 'using_laptop') {
-          handleTriggerLaptopDetected(data.coachMessage || data.reason);
         } else if (state === 'away') {
           handleTriggerAwayDetected(data.coachMessage || data.reason);
         } else if (state === 'distracted') {
@@ -1199,13 +1093,8 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
           onTriggerPhoneDetected={handleTriggerPhoneDetected}
           onTriggerSleepingDetected={handleTriggerSleepingDetected}
           onTriggerAwayDetected={handleTriggerAwayDetected}
-          onTriggerBookDetected={handleTriggerBookDetected}
-          onTriggerLaptopDetected={handleTriggerLaptopDetected}
-          onTriggerCoffeeDetected={handleTriggerCoffeeDetected}
-          onTriggerEatingDetected={handleTriggerEatingDetected}
           onTriggerGazeDrift={handleTriggerGazeDrift}
           onTriggerFocused={handleTriggerFocused}
-          onAnalyzeFrameSnapshot={handleAnalyzeFrameSnapshot}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
         />

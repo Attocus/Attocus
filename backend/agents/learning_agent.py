@@ -17,12 +17,39 @@ except Exception:
         traceable_agent = lambda *a, **k: (lambda f: f)  
 
 try:
-    from agents.security import check_sql_injection, get_safe_rejection_response
+    from agents.security import (
+        check_sql_injection,
+        check_prompt_injection,
+        check_student_distress,
+        check_topic_boundary,
+        get_safe_rejection_response,
+        get_prompt_injection_rejection,
+        get_distress_intervention_response,
+        get_topic_boundary_rejection,
+    )
 except ImportError:
     try:
-        from backend.agents.security import check_sql_injection, get_safe_rejection_response
+        from backend.agents.security import (
+            check_sql_injection,
+            check_prompt_injection,
+            check_student_distress,
+            check_topic_boundary,
+            get_safe_rejection_response,
+            get_prompt_injection_rejection,
+            get_distress_intervention_response,
+            get_topic_boundary_rejection,
+        )
     except ImportError:
-        from security import check_sql_injection, get_safe_rejection_response
+        from security import (
+            check_sql_injection,
+            check_prompt_injection,
+            check_student_distress,
+            check_topic_boundary,
+            get_safe_rejection_response,
+            get_prompt_injection_rejection,
+            get_distress_intervention_response,
+            get_topic_boundary_rejection,
+        )
 
 
 class LearningCoachAgent:
@@ -171,19 +198,47 @@ Return ONLY valid JSON with this exact schema:
             else f"Can you explain the main idea of {topic} simply with a real-world analogy?"
         )
 
-        # 1. SQL Injection Protection
+        # 1. SQL Injection Protection Guardrail
         if check_sql_injection(user_query):
             return get_safe_rejection_response(language)
 
+        # 2. Prompt Injection & Jailbreak Guardrail
+        if check_prompt_injection(user_query):
+            return get_prompt_injection_rejection(language)
+
+        # 3. Student Distress & Burnout Guardrail
+        if check_student_distress(user_query):
+            return get_distress_intervention_response(language)
+
+        # 4. Academic Topic Boundary Guardrail
+        if check_topic_boundary(user_query):
+            return get_topic_boundary_rejection(topic, language)
+
+        # 5. RAG Grounding & Relevance Threshold (< 0.65)
         rag_context_str = ""
+        top_similarity = 1.0
+        chunks: List[Dict[str, Any]] = []
         if self.rag:
             try:
                 search_query = f"{topic}: {user_query}"
                 chunks = self.rag.retrieve_context(search_query, k=3)
                 if chunks:
+                    top_similarity = max((c.get("similarity", 0.0) for c in chunks), default=0.0)
                     rag_context_str = "\n\nRELEVANT LECTURE CONTEXT (From Shared RAG):\n" + self.rag.format_context(chunks)
             except Exception as rag_err:
                 logging.getLogger("LearningCoach").warning(f"RAG retrieval error: {rag_err}")
+
+        # If the student's question has low semantic similarity to lecture (< 0.65) and isn't on the slide:
+        if student_question and student_question.strip():
+            has_slide_overlap = any(
+                w.lower() in (slide_content or "").lower()
+                for w in user_query.split()
+                if len(w) > 3 and w.lower() not in {"what", "when", "where", "how", "explain", "ماذا", "كيف", "اشرح", "ماهو", "ماهي", "عن"}
+            )
+            if chunks and top_similarity < 0.65 and not has_slide_overlap:
+                if language == "ar":
+                    return "هذه النقطة غير مغطاة في المحاضرة الحالية، هل ترغب في ربطها بمفهوم آخر؟"
+                return "This point is not covered in the current lecture slides. Would you like to connect it to another concept?"
 
         # Formulate non-duplication instruction based on previous chat
         history_instruction = ""
@@ -212,9 +267,9 @@ CRITICAL INSTRUCTIONS & STRICT BOUNDARIES:
      "I apologize, but I am specifically designed to assist you with the concepts and content of this lecture and slides. I cannot answer questions unrelated to the study material, but I would be glad to help you with any concept from the lecture!"
    - (Exception: polite greetings like "مرحبا" or introducing oneself like "اسمي فلان" are warmly accepted, then gently orient them towards the lecture).
 
-3. EXPLANATION QUALITY:
+3. EXPLANATION QUALITY & GROUNDING:
+   - Ground your explanation strictly in the provided slide notes and lecture RAG context.
    - When explaining lecture topics, explain warmly, clearly, and concisely in 2-3 brief, digestible paragraphs.
-   - Ground your explanation first in the provided slide notes and lecture RAG context.
    - If citing facts, mention the relevant slide/page number if available.
    - Use a vivid real-world analogy to make abstract mechanisms tangible.
    - Conclude with a quick friendly check: 'هل الفكرة واضحة الآن، أم تحب نأخذ مثالاً إضافياً؟' (or English equivalent).
@@ -247,13 +302,71 @@ SLIDE CONTENT:
                 stream=False
             )
             if isinstance(response, ChatCompletion) and response.choices:
-                return response.choices[0].message.content or ""
+                raw_answer = response.choices[0].message.content or ""
+                # 6. Post-Generation Faithfulness & Hallucination Check
+                return self._verify_faithfulness(
+                    answer=raw_answer,
+                    slide_content=slide_content,
+                    rag_context=rag_context_str,
+                    language=language
+                )
             return ""
         except Exception as e:
             logging.getLogger("LearningCoach").error(f"Error explaining concept: {e}", exc_info=True)
             if language == "ar":
                 return f"أهلاً بك! واجه المعلم مشكلة مؤقتة في الاتصال: {str(e)}. يرجى إعادة إرسال سؤالك."
-            return f"Error explaining concept: {str(e)}"
+            return f"Hello! The tutor encountered a temporary connection issue: {str(e)}. Please retry."
+
+    def _verify_faithfulness(
+        self,
+        answer: str,
+        slide_content: str,
+        rag_context: str,
+        language: str = "ar"
+    ) -> str:
+        """
+        Self-Check Verification (Faithfulness Check Guardrail):
+        Validates that factual claims in the generated response are grounded in the original lecture materials.
+        If hallucinated facts are detected, filters or grounds the response before display.
+        """
+        if not answer or len(answer.strip()) < 40:
+            return answer
+        if "هذه النقطة غير مغطاة" in answer or "أعتذر منك" in answer or "I apologize" in answer:
+            return answer
+
+        verification_prompt = f"""You are a strict Academic Faithfulness Verifier.
+Verify if the candidate tutor answer contains any hallucinated facts not supported by the lecture context.
+
+LECTURE CONTEXT:
+{slide_content}
+{rag_context}
+
+CANDIDATE TUTOR ANSWER:
+{answer}
+
+Instructions:
+1. If the candidate answer is faithful to the lecture context, return the exact candidate answer without change.
+2. If the candidate answer introduces factual hallucinations outside the lecture context, remove or correct the unsupported claims and return the grounded answer in the same language.
+3. Return ONLY the final student-facing answer text.
+"""
+        try:
+            check_resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a factual verification guardrail."},
+                    {"role": "user", "content": verification_prompt}
+                ],
+                temperature=0.0,
+                stream=False
+            )
+            if isinstance(check_resp, ChatCompletion) and check_resp.choices:
+                verified = check_resp.choices[0].message.content or ""
+                if verified and len(verified.strip()) > 20:
+                    return verified.strip()
+        except Exception as err:
+            logging.getLogger("LearningCoach").warning(f"Faithfulness self-check skipped due to: {err}")
+
+        return answer
 
     def extract_takeaways(
         self,

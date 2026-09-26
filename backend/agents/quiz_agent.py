@@ -15,6 +15,70 @@ except Exception:
         wrap_client = lambda c: c  
         traceable_agent = lambda *a, **k: (lambda f: f) 
 
+try:
+    from agents.security import check_sql_injection, check_prompt_injection, check_topic_boundary
+except ImportError:
+    try:
+        from backend.agents.security import check_sql_injection, check_prompt_injection, check_topic_boundary
+    except ImportError:
+        from security import check_sql_injection, check_prompt_injection, check_topic_boundary
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+class QuizQuestionSchema(BaseModel):
+    """
+    Pydantic schema enforcing:
+    1. Exactly 4 options for multiple choice questions.
+    2. Correct answer strictly matching one of the 4 options.
+    """
+    id: int = 1
+    type: str = "multiple_choice"
+    question: str
+    options: List[str]
+    answer: str
+    topic: Optional[str] = "Key Concept"
+    page: Optional[int] = 1
+    explanation: Optional[str] = ""
+
+    @field_validator("options")
+    @classmethod
+    def clean_options(cls, v: List[str]) -> List[str]:
+        cleaned = [str(opt).strip() for opt in v if str(opt).strip()]
+        if len(cleaned) < 2:
+            raise ValueError("A question must have at least 2 options.")
+        return cleaned
+
+    @model_validator(mode="after")
+    def validate_options_and_answer(self) -> "QuizQuestionSchema":
+        # 1. Multiple choice question must have exactly 4 options
+        if self.type == "multiple_choice":
+            if len(self.options) < 4:
+                raise ValueError(f"Multiple choice question must have exactly 4 options, got {len(self.options)}")
+            elif len(self.options) > 4:
+                self.options = self.options[:4]
+
+        # 2. Answer must exactly match one of the options
+        stripped_options = [opt.strip().lower() for opt in self.options]
+        target_answer = self.answer.strip().lower()
+
+        matched_option = None
+        for original, opt_low in zip(self.options, stripped_options):
+            if target_answer == opt_low or target_answer in opt_low:
+                matched_option = original
+                break
+
+        if matched_option:
+            self.answer = matched_option
+        else:
+            raise ValueError(f"Correct answer '{self.answer}' does not match any available option: {self.options}")
+
+        return self
+
+
+class QuizOutputSchema(BaseModel):
+    questions: List[QuizQuestionSchema]
+
 
 class QuizAgent:
     def __init__(
@@ -105,6 +169,10 @@ class QuizAgent:
         Create a quiz strictly from lecture content, preventing duplicate questions,
         and supporting explicit language selection with resilient fallbacks.
         """
+        # Guardrail: Topic validation against prompt injection and SQL injection
+        if topic and (check_sql_injection(topic) or check_prompt_injection(topic) or check_topic_boundary(topic)):
+            topic = "المفاهيم الأكاديمية الأساسية" if language == "ar" else "Core Academic Concepts"
+
         is_placeholder = False
         if isinstance(context, str):
             lower_ctx = context.lower()
@@ -243,6 +311,7 @@ LECTURE CONTENT:
                 if attempt > 0:
                     current_prompt += "\n\nCRITICAL: The previous response contained duplicate questions. You MUST generate an entirely DIFFERENT question testing a novel detail or angle from the content."
 
+                # Fallback Guardrail with 2.0-second Timeout Trigger
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
@@ -254,7 +323,8 @@ LECTURE CONTENT:
                     ],
                     temperature=0.75 + (attempt * 0.1),
                     response_format={"type": "json_object"},
-                    stream=False
+                    stream=False,
+                    timeout=2.0  # 2.0s Timeout Trigger to guarantee real-time fallback
                 )
 
                 if isinstance(response, ChatCompletion) and response.choices:
@@ -265,32 +335,37 @@ LECTURE CONTENT:
                         clean_json = re.sub(r"\n?```$", "", clean_json).strip()
 
                     parsed = json.loads(clean_json)
-                    questions = parsed.get("questions", [])
+                    raw_questions = parsed.get("questions", [])
 
-                    # Strictly filter out any question that duplicates previous ones
+                    # Strict Pydantic Structural Validation: exactly 4 options, answer match
                     validated_questions = []
-                    for q in questions:
-                        q_text = str(q.get("question", "")).strip()
-                        if not q_text:
-                            continue
+                    for q in raw_questions:
+                        try:
+                            valid_model = QuizQuestionSchema.model_validate(q)
+                            q_dict = valid_model.model_dump()
+                            q_text = q_dict["question"].strip()
 
-                        # Check against slide-specific history and previous questions
-                        if not self._is_duplicate(q_text, slide_previous):
-                            validated_questions.append(q)
-                            # Record in slide-specific memory and global set
-                            self.history_questions.add(q_text)
-                            slide_previous.append(q_text)
+                            # Deduplication check
+                            if not self._is_duplicate(q_text, slide_previous):
+                                validated_questions.append(q_dict)
+                                self.history_questions.add(q_text)
+                                slide_previous.append(q_text)
+                        except Exception as val_err:
+                            logging.getLogger("QuizAgent").warning(f"Pydantic validation rejected malformed quiz item: {val_err}")
+                            continue
 
                     if validated_questions:
                         # Update slide history
                         self.slide_history[slide_key] = slide_previous[-20:]
                         return {
                             "questions": validated_questions[:num_questions],
-                            "total_questions": len(validated_questions[:num_questions])
+                            "total_questions": len(validated_questions[:num_questions]),
+                            "guardrail_verified": True
                         }
 
         except Exception as e:
-            logging.getLogger("QuizAgent").error(f"Failed to generate quiz: {e}", exc_info=True)
+            logging.getLogger("QuizAgent").warning(f"Quiz generation timed out (>2.0s trigger) or failed: {e}. Activating instant Fallback Guardrail.")
+
 
         # Resilient Dynamic Fallback (Grounded in context, guarantees non-repeating questions)
         fallback_res = self._generate_fallback_quiz(
@@ -558,9 +633,12 @@ LECTURE CONTENT:
                 "correct": is_correct
             })
 
-        score = sum(1 for r in results if r["correct"])
         total = len(results)
+        raw_score = sum(1 for r in results if r["correct"])
+        # Guardrail: Strict score and percentage clamping
+        score = max(0, min(total, raw_score))
         percentage = round((score / total) * 100, 1) if total > 0 else 0.0
+        percentage = max(0.0, min(100.0, percentage))
 
         return {
             "score": score,

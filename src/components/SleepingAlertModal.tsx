@@ -19,6 +19,12 @@ export const SleepingAlertModal: React.FC<SleepingAlertModalProps> = ({
   if (!isOpen) return null;
 
   const isAr = language === 'ar';
+  const defaultArabic = 'تم رصد إغلاق العينين أو انحناء الرأس. أخذ قسط قصير من الراحة أفضل بكثير من المذاكرة تحت وطأة الإرهاق.';
+  const defaultEnglish = 'Eye closure or head resting detected. Taking a brief break is much better than studying while exhausted.';
+
+  const displayMessage = !isAr && coachMessage && /[\u0600-\u06FF]/.test(coachMessage)
+    ? defaultEnglish
+    : (coachMessage || (isAr ? defaultArabic : defaultEnglish));
 
   return (
     <div
@@ -41,7 +47,7 @@ export const SleepingAlertModal: React.FC<SleepingAlertModalProps> = ({
             {isAr ? 'تغالبك الرغبة في النوم؟ 💤' : 'Feeling Sleepy? 💤'}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
-            {coachMessage || (isAr ? 'تم رصد إغلاق العينين أو انحناء الرأس. أخذ قسط قصير من الراحة أفضل بكثير من المذاكرة تحت وطأة الإرهاق.' : 'Eye closure or head resting detected. Taking a brief break is much better than studying while exhausted.')}
+            {displayMessage}
           </p>
         </div>
 

@@ -16,12 +16,39 @@ except Exception:
         traceable_agent = lambda *a, **k: (lambda f: f) 
 
 try:
-    from agents.security import check_sql_injection, get_safe_rejection_response
+    from agents.security import (
+        check_sql_injection,
+        check_prompt_injection,
+        check_student_distress,
+        check_topic_boundary,
+        get_safe_rejection_response,
+        get_prompt_injection_rejection,
+        get_distress_intervention_response,
+        get_topic_boundary_rejection,
+    )
 except ImportError:
     try:
-        from backend.agents.security import check_sql_injection, get_safe_rejection_response
+        from backend.agents.security import (
+            check_sql_injection,
+            check_prompt_injection,
+            check_student_distress,
+            check_topic_boundary,
+            get_safe_rejection_response,
+            get_prompt_injection_rejection,
+            get_distress_intervention_response,
+            get_topic_boundary_rejection,
+        )
     except ImportError:
-        from security import check_sql_injection, get_safe_rejection_response
+        from security import (
+            check_sql_injection,
+            check_prompt_injection,
+            check_student_distress,
+            check_topic_boundary,
+            get_safe_rejection_response,
+            get_prompt_injection_rejection,
+            get_distress_intervention_response,
+            get_topic_boundary_rejection,
+        )
 
 
 class SocraticSummaryAgent:
@@ -254,9 +281,21 @@ Example:
         if self.finished:
             return self.final_summary or "Session already ended.", True
 
-        # Check for SQL injection or unsafe input
+        # Guardrail 1: SQL Injection Protection
         if check_sql_injection(user_input):
-            return get_safe_rejection_response(getattr(self, "session_language", "ar")), False
+            return get_safe_rejection_response(self.language), False
+
+        # Guardrail 2: Prompt Injection & Jailbreak Defense
+        if check_prompt_injection(user_input):
+            return get_prompt_injection_rejection(self.language), False
+
+        # Guardrail 3: Student Emotional Distress & Burnout Intervention
+        if check_student_distress(user_input):
+            return get_distress_intervention_response(self.language), False
+
+        # Guardrail 4: Out-of-Scope / Non-Academic Topic Boundary
+        if check_topic_boundary(user_input):
+            return get_topic_boundary_rejection(topic=self.topic, language=self.language), False
 
         if new_context and new_context != self.context:
             self.context = new_context
@@ -408,7 +447,8 @@ CRITICAL RULES:
                 stream=False
             )
             if isinstance(response, ChatCompletion) and response.choices:
-                summary = response.choices[0].message.content or ""
+                raw_summary = response.choices[0].message.content or ""
+                summary = self._verify_faithfulness(raw_summary, self.context, language=self.language)
             else:
                 summary = "Failed to generate summary."
         except Exception as e:
@@ -420,6 +460,52 @@ CRITICAL RULES:
         self.final_summary = summary
         self.structured_summary = self._parse_or_build_structured_summary(summary)
         return summary, True
+
+    def _verify_faithfulness(
+        self,
+        summary: str,
+        context: str,
+        language: str = "ar"
+    ) -> str:
+        """
+        Self-Check Verification (Faithfulness Check Guardrail):
+        Validates that factual claims in the generated summary are grounded in the lecture context.
+        """
+        if not summary or len(summary.strip()) < 50:
+            return summary
+
+        verification_prompt = f"""You are a strict Academic Faithfulness Verifier for lecture summaries.
+Verify if the candidate summary contains any hallucinated facts not supported by the lecture context.
+
+LECTURE CONTEXT:
+{context}
+
+CANDIDATE SUMMARY:
+{summary}
+
+Instructions:
+1. If the candidate summary is faithful to the lecture context and student answers, return it without change.
+2. If the summary introduces factual hallucinations unsupported by context, remove or correct them.
+3. Return ONLY the final summary text matching the exact requested format.
+"""
+        try:
+            check_resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a factual verification guardrail for academic summaries."},
+                    {"role": "user", "content": verification_prompt}
+                ],
+                temperature=0.0,
+                stream=False
+            )
+            if isinstance(check_resp, ChatCompletion) and check_resp.choices:
+                verified = check_resp.choices[0].message.content or ""
+                if verified and len(verified.strip()) > 30:
+                    return verified.strip()
+        except Exception as err:
+            logging.getLogger("SummaryAgent").warning(f"Faithfulness verification skipped: {err}")
+
+        return summary
 
     def _parse_or_build_structured_summary(self, summary_text: str) -> Dict[str, Any]:
         """
@@ -545,7 +631,8 @@ RULES:
                 stream=False
             )
             if isinstance(response, ChatCompletion) and response.choices:
-                return response.choices[0].message.content or ""
+                raw_direct = response.choices[0].message.content or ""
+                return self._verify_faithfulness(raw_direct, self.context, language=target_lang)
             return ""
         except Exception as e:
             logging.getLogger("SummaryAgent").error(f"Error in direct summary: {e}", exc_info=True)

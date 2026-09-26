@@ -13,11 +13,7 @@ import {
   RefreshCw,
   PanelRightClose,
   PanelRightOpen,
-  UserX,
-  BookOpen,
-  Laptop,
-  Coffee,
-  Utensils
+  UserX
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -36,19 +32,14 @@ interface StudySidebarProps {
   onTriggerPhoneDetected: (reason?: string) => void;
   onTriggerSleepingDetected: (reason?: string) => void;
   onTriggerAwayDetected?: (reason?: string) => void;
-  onTriggerBookDetected?: (reason?: string) => void;
-  onTriggerLaptopDetected?: (reason?: string) => void;
-  onTriggerCoffeeDetected?: (reason?: string) => void;
-  onTriggerEatingDetected?: (reason?: string) => void;
   onTriggerGazeDrift: () => void;
   onTriggerFocused: () => void;
-  onAnalyzeFrameSnapshot: (dataUrl: string) => Promise<void>;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
 }
 
 const PHONE_ALERT_THRESHOLD_MS = 3000;
-const SLEEP_ALERT_THRESHOLD_MS = 5000;
+const SLEEP_ALERT_THRESHOLD_MS = 15000; // 15 ثانية قبل إطلاق تنبيه إغلاق العينين
 const AWAY_ALERT_THRESHOLD_MS = 5000;
 const GRACE_PERIOD_MS = 2500;
 
@@ -67,17 +58,16 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
   onTriggerPhoneDetected,
   onTriggerSleepingDetected,
   onTriggerAwayDetected,
-  onTriggerBookDetected,
-  onTriggerLaptopDetected,
-  onTriggerCoffeeDetected,
-  onTriggerEatingDetected,
   onTriggerGazeDrift,
   onTriggerFocused,
-  onAnalyzeFrameSnapshot,
   isCollapsed = false,
   onToggleCollapse
 }) => {
   const { isAr, t } = useLanguage();
+  const isArRef = useRef(isAr);
+  useEffect(() => {
+    isArRef.current = isAr;
+  }, [isAr]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const [autoScanEnabled] = useState(true);
@@ -225,7 +215,9 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
             if (!phoneAlertFiredRef.current) {
               phoneAlertFiredRef.current = true;
               callbacksRef.current.onTriggerPhoneDetected(
-                `تم رصد استخدام الجوال! (${data.confidence || 90}%)`
+                isArRef.current
+                  ? `تم رصد استخدام الجوال! (${data.confidence || 90}%)`
+                  : `Mobile phone usage detected! (${data.confidence || 90}%)`
               );
             }
           }
@@ -259,7 +251,9 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
             if (!sleepAlertFiredRef.current) {
               sleepAlertFiredRef.current = true;
               callbacksRef.current.onTriggerSleepingDetected(
-                'تم رصد إغلاق العينين أو علامات النعاس!'
+                isArRef.current
+                  ? 'تم رصد إغلاق العينين أو علامات النعاس!'
+                  : 'Signs of drowsiness or closed eyes detected!'
               );
             }
           }
@@ -291,7 +285,9 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
             if (!awayAlertFiredRef.current) {
               awayAlertFiredRef.current = true;
               callbacksRef.current.onTriggerAwayDetected?.(
-                'تم رصد الابتعاد عن مكان المذاكرة.'
+                isArRef.current
+                  ? 'تم رصد الابتعاد عن مكان المذاكرة.'
+                  : 'Stepped away from study desk detected.'
               );
             }
           }
@@ -368,7 +364,7 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
           type="button"
           onClick={onToggleCollapse}
           className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors mb-4"
-          title="توسيع الشريط"
+          title={isAr ? "توسيع الشريط" : "Expand Sidebar"}
         >
           <PanelRightOpen className="w-5 h-5" />
         </button>
@@ -385,7 +381,7 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                     ? 'bg-[#0F172A] text-white font-bold shadow-xs scale-105'
                     : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/70'
                   }`}
-                title={`شريحة ${slide.pageNumber}: ${slide.title}`}
+                title={isAr ? `شريحة ${slide.pageNumber}: ${slide.title}` : `Slide ${slide.pageNumber}: ${slide.title}`}
               >
                 {slide.pageNumber}
               </button>
@@ -440,17 +436,11 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                     ? 'bg-blue-600 animate-pulse'
                     : cameraActive && (detectedState === 'away' || isAwayVisible)
                       ? 'bg-amber-500 animate-pulse'
-                      : cameraActive && (detectedState === 'book' || detectedState === 'reading_book' || detectedState === 'laptop' || detectedState === 'using_laptop')
-                        ? 'bg-emerald-500 animate-pulse'
-                        : cameraActive && (detectedState === 'coffee' || detectedState === 'drinking_coffee')
-                          ? 'bg-amber-600 animate-pulse'
-                          : cameraActive && detectedState === 'eating'
-                            ? 'bg-yellow-500 animate-pulse'
-                            : cameraActive && (detectedState === 'distracted' || attentionDrifted)
-                              ? 'bg-orange-500'
-                              : cameraActive && detectedState === 'focused'
-                                ? 'bg-emerald-500 animate-pulse'
-                                : 'bg-slate-300 dark:bg-slate-600'
+                      : cameraActive && (detectedState === 'distracted' || attentionDrifted)
+                        ? 'bg-orange-500'
+                        : cameraActive && detectedState === 'focused'
+                          ? 'bg-emerald-500 animate-pulse'
+                          : 'bg-slate-300 dark:bg-slate-600'
                 }`}
             />
             <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -461,17 +451,9 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
                     ? (isAr ? 'رصد إغلاق العينين 💤' : 'Eyes Closed 💤')
                     : (detectedState === 'away' || isAwayVisible)
                       ? (isAr ? 'مغادرة المقعد 🚶‍♂️' : 'Away from Seat 🚶‍♂️')
-                      : (detectedState === 'book' || detectedState === 'reading_book')
-                        ? (isAr ? 'مذاكرة: قراءة كتاب 📖 (محسوب)' : 'Studying: Book reading 📖')
-                        : (detectedState === 'laptop' || detectedState === 'using_laptop')
-                          ? (isAr ? 'مذاكرة: على اللابتوب 💻 (محسوب)' : 'Studying: Laptop work 💻')
-                          : (detectedState === 'coffee' || detectedState === 'drinking_coffee')
-                            ? (isAr ? 'رشفة قهوة ☕️ (كويز قادم)' : 'Coffee Break ☕️ (Quiz next)')
-                            : detectedState === 'eating'
-                              ? (isAr ? 'تناول وجبة 🥪 (تشتت خفيف)' : 'Snack/Eating 🥪 (Mild)')
-                              : detectedState === 'distracted' || attentionDrifted
-                                ? (isAr ? 'تشتت الانتباه' : 'Distracted')
-                                : (isAr ? 'مراقب التركيز: نشط' : 'Focus Monitor: Active')
+                      : detectedState === 'distracted' || attentionDrifted
+                        ? (isAr ? 'تشتت الانتباه' : 'Distracted')
+                        : (isAr ? 'مراقب التركيز: نشط' : 'Focus Monitor: Active')
                 : (isAr ? 'مراقب التركيز: متوقف' : 'Focus Monitor: Off')}
             </span>
           </div>
@@ -489,12 +471,12 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
             {cameraActive ? (
               <>
                 <VideoOff className="w-3.5 h-3.5 text-rose-600" />
-                <span>إيقاف الكاميرا</span>
+                <span>{isAr ? 'إيقاف الكاميرا' : 'Stop Camera'}</span>
               </>
             ) : (
               <>
                 <Video className="w-3.5 h-3.5 text-blue-300" />
-                <span>تشغيل الكاميرا</span>
+                <span>{isAr ? 'تشغيل الكاميرا' : 'Start Camera'}</span>
               </>
             )}
           </button>
@@ -513,13 +495,13 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
 
             <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] text-white flex items-center gap-1 font-mono">
               <Eye className="w-2.5 h-2.5 text-blue-400" />
-              <span>مباشر</span>
+              <span>{isAr ? 'مباشر' : 'LIVE'}</span>
             </div>
 
             {isAnalyzingFrame && (
               <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] text-emerald-300 flex items-center gap-1 font-mono">
                 <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                <span>فحص</span>
+                <span>{isAr ? 'فحص' : 'Scan'}</span>
               </div>
             )}
 
@@ -527,7 +509,7 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
               <div className="absolute inset-0 bg-rose-600/35 backdrop-blur-[1px] flex items-center justify-center">
                 <div className="px-3 py-1.5 rounded-xl bg-white shadow-md text-xs font-bold text-rose-600 flex items-center gap-1.5">
                   <Smartphone className="w-3.5 h-3.5" />
-                  <span>انتبه: الجوال مشتت!</span>
+                  <span>{isAr ? 'انتبه: الجوال مشتت!' : 'Alert: Phone distraction!'}</span>
                 </div>
               </div>
             )}
@@ -536,43 +518,7 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
               <div className="absolute inset-0 bg-blue-600/35 backdrop-blur-[1px] flex items-center justify-center">
                 <div className="px-3 py-1.5 rounded-xl bg-white shadow-md text-xs font-bold text-blue-600 flex items-center gap-1.5">
                   <Moon className="w-3.5 h-3.5" />
-                  <span>خذ استراحة قصيرة ☕</span>
-                </div>
-              </div>
-            )}
-
-            {(detectedState === 'book' || detectedState === 'reading_book') && (
-              <div className="absolute inset-0 bg-emerald-600/25 backdrop-blur-[1px] flex items-center justify-center animate-in fade-in">
-                <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 shadow-md text-xs font-bold text-emerald-600 flex items-center gap-1.5">
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span>{isAr ? 'مذاكرة ممتازة في الكتاب 📖' : 'Studying with Book 📖'}</span>
-                </div>
-              </div>
-            )}
-
-            {(detectedState === 'laptop' || detectedState === 'using_laptop') && (
-              <div className="absolute inset-0 bg-emerald-600/25 backdrop-blur-[1px] flex items-center justify-center animate-in fade-in">
-                <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 shadow-md text-xs font-bold text-emerald-600 flex items-center gap-1.5">
-                  <Laptop className="w-3.5 h-3.5" />
-                  <span>{isAr ? 'مذاكرة مركزة على اللابتوب 💻' : 'Focused Laptop Study 💻'}</span>
-                </div>
-              </div>
-            )}
-
-            {(detectedState === 'coffee' || detectedState === 'drinking_coffee') && (
-              <div className="absolute inset-0 bg-amber-700/25 backdrop-blur-[1px] flex items-center justify-center animate-in fade-in">
-                <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 shadow-md text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
-                  <Coffee className="w-3.5 h-3.5" />
-                  <span>{isAr ? 'بالعافية! ☕️ بعد القهوة كويز' : 'Enjoy your coffee! ☕️ Quiz next'}</span>
-                </div>
-              </div>
-            )}
-
-            {detectedState === 'eating' && (
-              <div className="absolute inset-0 bg-yellow-500/25 backdrop-blur-[1px] flex items-center justify-center animate-in fade-in">
-                <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 shadow-md text-xs font-bold text-yellow-700 dark:text-yellow-400 flex items-center gap-1.5">
-                  <Utensils className="w-3.5 h-3.5" />
-                  <span>{isAr ? 'عوافي! 🥪 لقمة سريعة ونرجع نركز' : 'Enjoy your snack! 🥪 Let\'s refocus soon'}</span>
+                  <span>{isAr ? 'خذ استراحة قصيرة ☕' : 'Take a short break ☕'}</span>
                 </div>
               </div>
             )}
@@ -581,7 +527,7 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
               <div className="absolute inset-0 bg-amber-600/35 backdrop-blur-[1px] flex items-center justify-center">
                 <div className="px-3 py-1.5 rounded-xl bg-white shadow-md text-xs font-bold text-amber-700 flex items-center gap-1.5">
                   <UserX className="w-3.5 h-3.5" />
-                  <span>في انتظار عودتك..</span>
+                  <span>{isAr ? 'في انتظار عودتك..' : 'Waiting for your return...'}</span>
                 </div>
               </div>
             )}
@@ -590,13 +536,13 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
               <div className="absolute inset-0 bg-orange-500/30 backdrop-blur-[1px] flex items-center justify-center">
                 <div className="px-3 py-1.5 rounded-xl bg-white shadow-md text-xs font-bold text-orange-600 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5" />
-                  <span>ركّز على الشريحة 🎯</span>
+                  <span>{isAr ? 'ركّز على الشريحة 🎯' : 'Focus on the slide 🎯'}</span>
                 </div>
               </div>
             )}
 
             <div className="absolute bottom-2 left-2 text-[9px] text-white/70 bg-black/40 px-1.5 py-0.5 rounded">
-              معالجة محلية خاصة
+              {isAr ? 'معالجة محلية خاصة' : 'Private On-Device Processing'}
             </div>
           </div>
         ) : (
@@ -604,9 +550,9 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
             <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 mx-auto">
               <VideoOff className="w-4 h-4" />
             </div>
-            <p className="text-xs font-bold text-slate-700">التتبع بالكاميرا متوقف حالياً</p>
+            <p className="text-xs font-bold text-slate-700">{isAr ? 'التتبع بالكاميرا متوقف حالياً' : 'Camera tracking currently off'}</p>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              شغّل الكاميرا لمتابعة التركيز وتنبيهك عند السهو أو استخدام الجوال.
+              {isAr ? 'شغّل الكاميرا لمتابعة التركيز وتنبيهك عند السهو أو استخدام الجوال.' : 'Turn on camera to monitor focus and alert you when distracted or using phone.'}
             </p>
           </div>
         )}
@@ -615,9 +561,9 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
           <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
             <span className="flex items-center gap-1.5 font-medium text-emerald-600">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>المراقبة تعمل بدقة</span>
+              <span>{isAr ? 'المراقبة تعمل بدقة' : 'Monitoring actively'}</span>
             </span>
-            <span className="text-[10px]">مشفر ومحمي</span>
+            <span className="text-[10px]">{isAr ? 'مشفر ومحمي' : 'Encrypted & secure'}</span>
           </div>
         )}
       </div>

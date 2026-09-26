@@ -310,17 +310,25 @@ class SharedRAGService:
         self,
         query: str,
         k: int = 5,
-        pdf_name: Optional[str] = None
+        pdf_name: Optional[str] = None,
+        min_similarity: float = 0.0
     ) -> List[Dict[str, Any]]:
         """
         Retrieves top-k relevant lecture chunks using Firestore Vector Search (Cosine distance).
         Falls back to in-memory cosine similarity if Firestore vector search is unavailable.
+        Computes explicit cosine similarity scores and applies min_similarity thresholding.
         """
         if not query or not query.strip():
             return []
 
         query_vector = self.embed_query(query)
         retrieved_chunks: List[Dict[str, Any]] = []
+
+        def cosine_similarity(v1: List[float], v2: List[float]) -> float:
+            dot = sum(a * b for a, b in zip(v1, v2))
+            norm1 = math.sqrt(sum(a * a for a in v1))
+            norm2 = math.sqrt(sum(b * b for b in v2))
+            return dot / (norm1 * norm2) if (norm1 and norm2) else 0.0
 
         # 1. Try Firestore Vector Search
         if self.collection_ref is not None and HAS_FIRESTORE and Vector and DistanceMeasure:
@@ -338,15 +346,29 @@ class SharedRAGService:
 
                 for result in results:
                     data = result.to_dict() or {}
-                    retrieved_chunks.append({
-                        "text": data.get("text", ""),
-                        "page": data.get("page", 1),
-                        "pdf_name": data.get("pdf_name", ""),
-                        "chunk_id": data.get("chunk_id", 0)
-                    })
+                    raw_emb = data.get("embedding")
+                    sim = 0.0
+                    if raw_emb is not None:
+                        emb_vals = raw_emb.to_map_value() if hasattr(raw_emb, "to_map_value") else raw_emb
+                        if isinstance(emb_vals, (list, tuple)):
+                            sim = cosine_similarity(query_vector, list(emb_vals))
+                        else:
+                            sim = 0.70  # default top match if vector format is opaque
+                    else:
+                        sim = 0.70
+
+                    if sim >= min_similarity:
+                        retrieved_chunks.append({
+                            "text": data.get("text", ""),
+                            "page": data.get("page", 1),
+                            "pdf_name": data.get("pdf_name", ""),
+                            "chunk_id": data.get("chunk_id", 0),
+                            "similarity": round(sim, 4)
+                        })
 
                 if retrieved_chunks:
-                    return retrieved_chunks
+                    retrieved_chunks.sort(key=lambda x: x["similarity"], reverse=True)
+                    return retrieved_chunks[:k]
             except Exception as e:
                 print(f"[RAG] Firestore vector search notice: {e}. Falling back to in-memory similarity.")
 
@@ -356,16 +378,11 @@ class SharedRAGService:
             if pdf_name:
                 candidates = [c for c in candidates if c.get("pdf_name") == pdf_name]
 
-            def cosine_similarity(v1: List[float], v2: List[float]) -> float:
-                dot = sum(a * b for a, b in zip(v1, v2))
-                norm1 = math.sqrt(sum(a * a for a in v1))
-                norm2 = math.sqrt(sum(b * b for b in v2))
-                return dot / (norm1 * norm2) if (norm1 and norm2) else 0.0
-
             scored = []
             for c in candidates:
                 sim = cosine_similarity(query_vector, c["embedding"])
-                scored.append((sim, c))
+                if sim >= min_similarity:
+                    scored.append((sim, c))
 
             scored.sort(key=lambda x: x[0], reverse=True)
             for sim, c in scored[:k]:
@@ -378,6 +395,23 @@ class SharedRAGService:
                 })
 
         return retrieved_chunks
+
+    def check_relevance(
+        self,
+        query: str,
+        chunks: List[Dict[str, Any]],
+        threshold: float = 0.65
+    ) -> bool:
+        """
+        RAG Grounding Guardrail:
+        Verifies if the retrieved chunks have adequate cosine similarity (>= threshold).
+        If below threshold (default 0.65), prevents hallucination.
+        """
+        if not chunks:
+            return False
+        max_sim = max((c.get("similarity", 0.0) for c in chunks), default=0.0)
+        return max_sim >= threshold
+
 
     def format_context(self, chunks: List[Dict[str, Any]]) -> str:
         """Formats a list of retrieved chunks into an LLM-ready prompt string."""

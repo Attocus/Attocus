@@ -7,8 +7,10 @@ export interface PointsHistoryItem {
   title: string;
   titleEn: string;
   folderName: string;
+  folderNameEn?: string;
   minutes: number;
   dateString: string;
+  dateStringEn?: string;
   pointsEarned: number;
   isDeduction: boolean;
 }
@@ -19,8 +21,10 @@ const DEFAULT_HISTORY: PointsHistoryItem[] = [
     title: 'جلسة بومودورو مكتملة 🎧',
     titleEn: 'Completed Pomodoro Session 🎧',
     folderName: 'علوم الحاسب',
+    folderNameEn: 'Computer Science',
     minutes: 25,
     dateString: 'اليوم · 02:45 م',
+    dateStringEn: 'Today · 02:45 PM',
     pointsEarned: 10,
     isDeduction: false,
   },
@@ -29,8 +33,10 @@ const DEFAULT_HISTORY: PointsHistoryItem[] = [
     title: 'مكافأة الاستمرار اليومي (Streak) 🔥',
     titleEn: 'Daily Streak Bonus 🔥',
     folderName: 'عام',
+    folderNameEn: 'General',
     minutes: 0,
     dateString: 'اليوم · 09:15 ص',
+    dateStringEn: 'Today · 09:15 AM',
     pointsEarned: 25,
     isDeduction: false,
   },
@@ -39,8 +45,10 @@ const DEFAULT_HISTORY: PointsHistoryItem[] = [
     title: 'جلسة تركيز عميق ومراجعة سلايدات 📚',
     titleEn: 'Deep Focus & Slide Review 📚',
     folderName: 'الرياضيات',
+    folderNameEn: 'Mathematics',
     minutes: 45,
     dateString: 'أمس · 04:30 م',
+    dateStringEn: 'Yesterday · 04:30 PM',
     pointsEarned: 20,
     isDeduction: false,
   },
@@ -49,8 +57,10 @@ const DEFAULT_HISTORY: PointsHistoryItem[] = [
     title: 'استبدال شخصية الهاكر الأكاديمي 💻',
     titleEn: 'Unlocked Tech Hacker Avatar 💻',
     folderName: 'متجر الشخصيات',
+    folderNameEn: 'Avatar Shop',
     minutes: 0,
     dateString: 'أمس · 06:10 م',
+    dateStringEn: 'Yesterday · 06:10 PM',
     pointsEarned: -60,
     isDeduction: true,
   },
@@ -59,12 +69,51 @@ const DEFAULT_HISTORY: PointsHistoryItem[] = [
     title: 'مكافأة التسجيل وبداية الفصل الأكاديمي 🎉',
     titleEn: 'Academic Welcome Bonus 🎉',
     folderName: 'منصة Attocus',
+    folderNameEn: 'Attocus Platform',
     minutes: 0,
     dateString: 'منذ يومين',
+    dateStringEn: '2 days ago',
     pointsEarned: 50,
     isDeduction: false,
   },
 ];
+
+const getDisplayFolderName = (item: PointsHistoryItem, isAr: boolean) => {
+  if (isAr) return item.folderName;
+  if (item.folderNameEn) return item.folderNameEn;
+  const folderTranslations: Record<string, string> = {
+    'علوم الحاسب': 'Computer Science',
+    'عام': 'General',
+    'الرياضيات': 'Mathematics',
+    'متجر الشخصيات': 'Avatar Shop',
+    'منصة Attocus': 'Attocus Platform',
+    'جلسة بومودورو': 'Pomodoro Session',
+    'اختبار سريع': 'Quick Quiz',
+    'الفيزياء': 'Physics',
+    'الأحياء': 'Biology',
+    'الكيمياء': 'Chemistry',
+    'اللغة الإنجليزية': 'English'
+  };
+  return folderTranslations[item.folderName] || item.folderName;
+};
+
+const getDisplayDateString = (item: PointsHistoryItem, isAr: boolean) => {
+  if (isAr) return item.dateString;
+  if (item.dateStringEn) return item.dateStringEn;
+  let str = item.dateString;
+  str = str.replace(/اليوم/g, 'Today');
+  str = str.replace(/أمس/g, 'Yesterday');
+  str = str.replace(/منذ يومين/g, '2 days ago');
+  str = str.replace(/منذ ثلاثة أيام/g, '3 days ago');
+  str = str.replace(/منذ أسبوع/g, '1 week ago');
+  str = str.replace(/منذ ساعة/g, '1 hour ago');
+  str = str.replace(/منذ ساعتين/g, '2 hours ago');
+  str = str.replace(/منذ لحظات/g, 'Just now');
+  str = str.replace(/\bم\b/g, 'PM');
+  str = str.replace(/\bص\b/g, 'AM');
+  return str;
+};
+
 
 interface PointsHistoryModalProps {
   isOpen: boolean;
@@ -173,7 +222,9 @@ export const PointsHistoryModal: React.FC<PointsHistoryModalProps> = ({
           {/* History List */}
           <div className="space-y-2.5">
             {history.map(item => {
-              const displayTitle = isAr ? item.title : item.titleEn;
+              const displayTitle = isAr ? item.title : (item.titleEn || item.title);
+              const displayFolder = getDisplayFolderName(item, isAr);
+              const displayDate = getDisplayDateString(item, isAr);
 
               return (
                 <div
@@ -204,9 +255,9 @@ export const PointsHistoryModal: React.FC<PointsHistoryModalProps> = ({
                         {displayTitle}
                       </h4>
                       <div className="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 flex-wrap">
-                        {item.folderName && (
+                        {displayFolder && (
                           <>
-                            <span>{item.folderName}</span>
+                            <span>{displayFolder}</span>
                             <span>•</span>
                           </>
                         )}
@@ -219,10 +270,11 @@ export const PointsHistoryModal: React.FC<PointsHistoryModalProps> = ({
                             <span>•</span>
                           </>
                         )}
-                        <span>{item.dateString}</span>
+                        <span>{displayDate}</span>
                       </div>
                     </div>
                   </div>
+
 
                   {/* Points Badge */}
                   <div className="shrink-0">

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Lecture } from '../types';
 import { parseUploadedFile } from '../utils/fileUpload';
-import { Upload, FileText, X, Loader2, Sparkles } from 'lucide-react';
+import { Upload, FileText, X, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface UploadModalProps {
@@ -18,13 +18,27 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [progressStatus, setProgressStatus] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { t, isAr, dir } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+
   if (!isOpen) return null;
 
   const handleFile = async (file: File) => {
+    setErrorMessage(null);
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    if (fileExt !== 'pdf' && file.type !== 'application/pdf') {
+      setErrorMessage(
+        isAr
+          ? 'عذراً، لا يقبل النظام إلا ملفات PDF فقط. يرجى إرفاق المحاضرة بصيغة PDF.'
+          : 'Sorry, only PDF files are accepted. Please attach a PDF file.'
+      );
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setIsProcessing(true);
     setProgressStatus(isAr ? `جاري تحليل ومعالجة "${file.name}"...` : `Analyzing and processing "${file.name}"...`);
 
@@ -34,12 +48,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       });
 
       // Ingest PDF into Shared Firestore RAG & Enrich slides
-      if (file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.pptx')) {
+      if (file.name.toLowerCase().endsWith('.pdf')) {
         setProgressStatus(isAr ? `جاري الفهرسة في قاعدة المعرفة الذكية...` : `Indexing into smart knowledge base...`);
         try {
           const formData = new FormData();
           formData.append('file', file);
           formData.append('session_id', parsedLecture.id || 'default');
+          formData.append('language', isAr ? 'ar' : 'en');
+
 
           const ragRes = await fetch('/api/rag/upload', {
             method: 'POST',
@@ -130,13 +146,18 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
       onLectureCreated(parsedLecture);
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error parsing uploaded file:', error);
-      alert(isAr ? 'عذراً، حدث خطأ أثناء معالجة الملف. يرجى التأكد من صلاحية ملف PDF.' : 'Error processing file. Please ensure it is a valid PDF.');
+      setErrorMessage(
+        error?.message ||
+        (isAr ? 'عذراً، لا يقبل النظام إلا ملفات PDF فقط. يرجى إرفاق المحاضرة بصيغة PDF.' : 'Error processing file. Please ensure it is a valid PDF.')
+      );
     } finally {
       setIsProcessing(false);
       setProgressStatus('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -183,7 +204,25 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-6 space-y-4">
+          {errorMessage && (
+            <div
+              id="upload-error-banner"
+              className="flex items-center gap-3 p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300 text-xs font-semibold animate-in fade-in slide-in-from-top-2 duration-150"
+            >
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+              <span className="flex-1">{errorMessage}</span>
+              <button
+                type="button"
+                onClick={() => setErrorMessage(null)}
+                className="p-1 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-400 hover:text-rose-700 dark:hover:text-rose-200 transition-colors"
+                title="إغلاق التنبيه"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {isProcessing ? (
             <div className="py-14 text-center space-y-3.5">
               <Loader2 className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-spin mx-auto" />
@@ -213,7 +252,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.pptx"
+                  accept=".pdf,application/pdf"
                   onChange={e => {
                     const f = e.target.files?.[0];
                     if (f) handleFile(f);
@@ -231,15 +270,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 </h4>
                 <p className="text-xs text-slate-400 dark:text-slate-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
                   {isAr
-                    ? 'يدعم ملفات السلايدات الجامعية، عروض PowerPoint بصيغة PDF، والمذكرات الدراسية.'
-                    : 'Supports lecture slides, PowerPoint in PDF format, and study notes.'}
+                    ? 'يدعم ملفات السلايدات الجامعية والمذكرات الدراسية بصيغة PDF حصرياً.'
+                    : 'Supports lecture slides and study notes strictly in PDF format.'}
                 </p>
 
                 <div className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0F172A] dark:bg-blue-600 hover:bg-[#1E293B] dark:hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-all active:scale-95">
                   <Upload className="w-3.5 h-3.5 text-blue-300 dark:text-white" />
-                  <span>{isAr ? 'اختر ملف من جهازك' : 'Choose file from device'}</span>
+                  <span>{isAr ? 'اختر ملف PDF من جهازك' : 'Choose PDF file from device'}</span>
                 </div>
               </div>
+
 
               {/* تلميح سفلي خفيف */}
               <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400 dark:text-slate-400 pt-1">

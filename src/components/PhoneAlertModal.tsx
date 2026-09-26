@@ -19,6 +19,12 @@ export const PhoneAlertModal: React.FC<PhoneAlertModalProps> = ({
   if (!isOpen) return null;
 
   const isAr = language === 'ar';
+  const defaultArabic = 'لاحظنا وجود الجوال في يدك. اقلب الشاشة للأسفل لإنهاء هذه الشريحة بتركيز كامل وبدون مشتتات!';
+  const defaultEnglish = 'We noticed phone usage. Put your screen face down to finish this slide with full focus!';
+
+  const displayMessage = !isAr && coachMessage && /[\u0600-\u06FF]/.test(coachMessage)
+    ? defaultEnglish
+    : (coachMessage || (isAr ? defaultArabic : defaultEnglish));
 
   return (
     <div
@@ -41,7 +47,7 @@ export const PhoneAlertModal: React.FC<PhoneAlertModalProps> = ({
             {isAr ? 'تم رصد استخدام الهاتف 📱' : 'Phone Usage Detected 📱'}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
-            {coachMessage || (isAr ? 'لاحظنا وجود الجوال في يدك. اقلب الشاشة للأسفل لإنهاء هذه الشريحة بتركيز كامل وبدون مشتتات!' : 'We noticed phone usage. Put your screen face down to finish this slide with full focus!')}
+            {displayMessage}
           </p>
         </div>
 

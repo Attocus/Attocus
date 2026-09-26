@@ -2,7 +2,6 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -35,20 +34,7 @@ function getAdminDb(): any {
   return adminDb;
 }
 
-let aiClient: GoogleGenAI | null = null;
-function getAi(): GoogleGenAI | null {
-  if (!aiClient && process.env.GEMINI_API_KEY) {
-    aiClient = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
-        }
-      }
-    });
-  }
-  return aiClient;
-}
+
 
 let openaiClient: OpenAI | null = null;
 function getOpenAI(): OpenAI | null {
@@ -60,9 +46,8 @@ function getOpenAI(): OpenAI | null {
   return openaiClient;
 }
 
-// Unified LLM helper prioritizing OpenAI (gpt-4o-mini)
+// Unified LLM helper using OpenAI (gpt-4o-mini)
 async function generateJsonWithLLM<T = any>(prompt: string, systemPrompt?: string): Promise<T | null> {
-  // 1. Prioritize OpenAI (gpt-4o-mini)
   const openai = getOpenAI();
   if (openai) {
     try {
@@ -80,25 +65,7 @@ async function generateJsonWithLLM<T = any>(prompt: string, systemPrompt?: strin
         return JSON.parse(text) as T;
       }
     } catch (err: any) {
-      console.warn('[OpenAI JSON error, trying Gemini]:', err.message);
-    }
-  }
-
-  // 2. Fallback to Gemini
-  const ai = getAi();
-  if (ai) {
-    try {
-      const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
-        contents: fullPrompt,
-        config: { responseMimeType: 'application/json' }
-      });
-      if (response.text) {
-        return JSON.parse(response.text) as T;
-      }
-    } catch (err: any) {
-      console.warn('[Gemini JSON error]:', err.message);
+      console.warn('[OpenAI JSON error]:', err.message);
     }
   }
 
@@ -106,7 +73,6 @@ async function generateJsonWithLLM<T = any>(prompt: string, systemPrompt?: strin
 }
 
 async function generateTextWithLLM(prompt: string, systemPrompt?: string): Promise<string | null> {
-  // 1. Prioritize OpenAI (gpt-4o-mini)
   const openai = getOpenAI();
   if (openai) {
     try {
@@ -121,22 +87,7 @@ async function generateTextWithLLM(prompt: string, systemPrompt?: string): Promi
       const text = completion.choices[0]?.message?.content;
       if (text) return text;
     } catch (err: any) {
-      console.warn('[OpenAI Text error, trying Gemini]:', err.message);
-    }
-  }
-
-  // 2. Fallback to Gemini
-  const ai = getAi();
-  if (ai) {
-    try {
-      const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
-        contents: fullPrompt
-      });
-      if (response.text) return response.text;
-    } catch (err: any) {
-      console.warn('[Gemini Text error]:', err.message);
+      console.warn('[OpenAI Text error]:', err.message);
     }
   }
 
@@ -195,7 +146,6 @@ async function startServer() {
     } catch {}
     res.json({
       status: 'ok',
-      hasGeminiKey: !!process.env.GEMINI_API_KEY,
       hasOpenAiKey: !!process.env.OPENAI_API_KEY,
       pythonBackendConnected: pythonConnected,
       pythonUrl: PYTHON_BACKEND_URL
@@ -845,8 +795,6 @@ CRITICAL RULES:
         console.warn('Python backend step failed, falling back:', err);
       }
 
-      const ai = getAi();
-
       if (isIDontKnow) {
         // Student clicked "I don't know anything about this"
         const nextPrompt = targetLang === 'ar'
@@ -870,7 +818,7 @@ CRITICAL RULES:
         return;
       }
 
-      if (ai) {
+      if (getOpenAI()) {
         const langRule = targetLang === 'ar'
           ? 'LANGUAGE REQUIREMENT: Respond strictly in ARABIC (اللغة العربية). The feedback and followUpQuestion MUST be in Arabic.'
           : 'LANGUAGE REQUIREMENT: Respond strictly in ENGLISH. The feedback and followUpQuestion MUST be in English.';
@@ -1032,11 +980,9 @@ Respond in valid JSON with schema:
         console.warn('Python backend summarize failed, falling back:', err);
       }
 
-      const ai = getAi();
-
       const dialogue = (history || []).map((h: any, i: number) => `Q${i+1}: ${h.question}\nA${i+1}: ${h.studentAnswer}`).join('\n\n');
 
-      if (ai && dialogue.trim().length > 0) {
+      if (getOpenAI() && dialogue.trim().length > 0) {
         const langRule = targetLang === 'ar'
           ? 'LANGUAGE REQUIREMENT: Respond strictly in ARABIC (اللغة العربية). All paragraphs, corrections, strengths, and lectureTakeaways MUST be written in Arabic.'
           : 'LANGUAGE REQUIREMENT: Respond strictly in ENGLISH. All paragraphs, corrections, strengths, and lectureTakeaways MUST be written in English.';
@@ -1618,31 +1564,29 @@ Respond strictly in valid JSON with this schema:
   // 6. Camera Attention Frame Analysis (Phone detection & Sleep detection)
   app.post('/api/coach/attention/analyze-frame', async (req, res) => {
     try {
-      const { imageBase64 } = req.body;
+      const { imageBase64, language = 'ar' } = req.body;
       if (!imageBase64) {
         return res.status(400).json({ error: 'Missing imageBase64' });
       }
 
+      const targetLang = language === 'en' ? 'English' : 'Arabic';
+
       const visionPrompt = `You are an attentive, calm, academic AI study coach monitoring a student's webcam while they study.
 Your task is to detect the student's physical and focus state accurately.
 Evaluate specifically:
-1. "using_phone": Is the student holding, touching, or looking down at a mobile phone / smartphone / handheld device?
+1. "using_phone": Is the student holding, touching, or looking down at a mobile phone / smartphone? (IMPORTANT: Do NOT confuse holding or drinking from a cup, mug, or water bottle with holding a phone!)
 2. "sleeping": Is the student asleep, eyes closed, head resting on their desk/arms/hands, or nodding off?
-3. "book": Is the student actively reading a physical book, textbook, or writing notes in a notebook? (This counts as active focus study time!)
-4. "laptop": Is the student actively working/reading on their laptop computer screen? (This counts as active focus study time!)
-5. "coffee": Is the student drinking from a cup/mug, holding a coffee or tea cup, or taking a sip? (Warmly praise them: "بالعافية وصحة وهنا! ☕️ روّق برشفة القهوة.. وبعدها عندنا كويز خفيف نثبّت به معلومات اليوم! 🎯")
-6. "eating": Is the student eating food, having a snack, sandwich, or meal? (Counted as mild distraction: "صحة وعافية! 🥪 الأكل بيُحسب كفترة تشتت خفيفة، خذ لك لقمة سريعة ونرجع نركز عشان ما يطير حماس الجلسة.")
-7. "distracted": Has their gaze or head turned away from their study material for an extended period?
-8. "away": Is the student not in frame / empty chair?
-9. "focused": Is the student sitting normally, looking at their study screen, reading, or writing notes?
+3. "distracted": Has their gaze or head turned away from their study material for an extended period?
+4. "away": Is the student not in frame / empty chair?
+5. "focused": Is the student sitting normally, studying, drinking water or tea/coffee, reading, or writing notes?
 
 Return ONLY valid JSON with this exact schema:
 {
-  "state": "focused" | "using_phone" | "sleeping" | "book" | "laptop" | "coffee" | "eating" | "distracted" | "away",
+  "state": "focused" | "using_phone" | "sleeping" | "distracted" | "away",
   "confidence": number between 0.0 and 1.0,
   "is_study_time": boolean,
-  "reason": "Brief 1-sentence respectful description in Arabic or English of what you observe",
-  "coachMessage": "Kind, encouraging Arabic prompt tailored to the state"
+  "reason": "Brief 1-sentence respectful description in ${targetLang} of what you observe",
+  "coachMessage": "Kind, encouraging message in ${targetLang} tailored to the state"
 }`;
 
       // 1. Try OpenAI Vision (gpt-4o-mini)
@@ -1668,46 +1612,11 @@ Return ONLY valid JSON with this exact schema:
             return res.json(JSON.parse(text));
           }
         } catch (err: any) {
-          console.warn('[OpenAI Vision error, trying Gemini]:', err.message);
+          console.warn('[OpenAI Vision error]:', err.message);
         }
       }
 
-      // 2. Fallback to Gemini
-      const ai = getAi();
-      if (ai) {
-        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-        try {
-          const response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  {
-                    inlineData: {
-                      mimeType: 'image/jpeg',
-                      data: base64Data
-                    }
-                  },
-                  {
-                    text: visionPrompt
-                  }
-                ]
-              }
-            ],
-            config: {
-              responseMimeType: 'application/json'
-            }
-          });
-
-          const parsed = JSON.parse(response.text || '{}');
-          return res.json(parsed);
-        } catch {
-          // fallback
-        }
-      }
-
-      // Fallback if no Gemini key
+      // Safe Local Heuristic Fallback
       res.json({
         state: 'focused',
         confidence: 0.95,

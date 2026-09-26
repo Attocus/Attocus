@@ -149,11 +149,34 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
     if (pointIntervalRef.current) clearInterval(pointIntervalRef.current);
     if (!isRunning || isBreak || isPointsForfeited) return;
 
-    pointIntervalRef.current = setInterval(() => {
+    pointIntervalRef.current = setInterval(async () => {
+      // Score Clamping Guardrail: Max 20 points per 30-minute sliding window
+      try {
+        const res = await fetch('/api/gamification/record-points', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ student_id: 'STU_101', points: 5, reason: 'Pomodoro Interval' })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const granted = data.granted_points ?? 5;
+          setFocusPointsEarned(prev => prev + granted);
+          if (granted > 0) {
+            onAddFocusPoints?.(granted);
+          }
+          return;
+        }
+      } catch {
+        // Fallback to local rate-limiting guardrail if backend is offline
+      }
+
       setFocusPointsEarned(prev => {
-        const newPts = prev + 5;
-        onAddFocusPoints?.(5);
-        return newPts;
+        if (prev >= 20) return prev;
+        const granted = Math.min(5, 20 - prev);
+        if (granted > 0) {
+          onAddFocusPoints?.(granted);
+        }
+        return prev + granted;
       });
     }, 5 * 60 * 1000);
 
@@ -161,6 +184,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
       if (pointIntervalRef.current) clearInterval(pointIntervalRef.current);
     };
   }, [isRunning, isBreak, isPointsForfeited, onAddFocusPoints]);
+
 
   const handlePlayPause = (e?: React.MouseEvent) => {
     e?.stopPropagation();

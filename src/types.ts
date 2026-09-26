@@ -138,14 +138,7 @@ export type AttentionStateKind =
   | 'using_phone' 
   | 'sleeping' 
   | 'distracted' 
-  | 'away'
-  | 'book'
-  | 'reading_book'
-  | 'laptop'
-  | 'using_laptop'
-  | 'coffee'
-  | 'drinking_coffee'
-  | 'eating';
+  | 'away';
 
 export interface AttentionTrackingState {
   cameraActive: boolean;

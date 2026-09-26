@@ -5,12 +5,39 @@ from .quiz_agent import QuizAgent
 from .summary_agent import SocraticSummaryAgent
 
 try:
-    from .security import check_sql_injection, get_safe_rejection_response
+    from .security import (
+        check_sql_injection,
+        check_prompt_injection,
+        check_student_distress,
+        check_topic_boundary,
+        get_safe_rejection_response,
+        get_prompt_injection_rejection,
+        get_distress_intervention_response,
+        get_topic_boundary_rejection
+    )
 except ImportError:
     try:
-        from security import check_sql_injection, get_safe_rejection_response
+        from security import (
+            check_sql_injection,
+            check_prompt_injection,
+            check_student_distress,
+            check_topic_boundary,
+            get_safe_rejection_response,
+            get_prompt_injection_rejection,
+            get_distress_intervention_response,
+            get_topic_boundary_rejection
+        )
     except ImportError:
-        from backend.agents.security import check_sql_injection, get_safe_rejection_response
+        from backend.agents.security import (
+            check_sql_injection,
+            check_prompt_injection,
+            check_student_distress,
+            check_topic_boundary,
+            get_safe_rejection_response,
+            get_prompt_injection_rejection,
+            get_distress_intervention_response,
+            get_topic_boundary_rejection
+        )
 
 try:
     from ..rag_service import SharedRAGService
@@ -148,7 +175,7 @@ class OrchestratorAgent:
 
     def retrieve_context(self, query: str, k: int = 5, pdf_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retrieves top-k relevant lecture chunks using Shared RAG."""
-        if check_sql_injection(query):
+        if check_sql_injection(query) or check_prompt_injection(query):
             return []
         return self.rag.retrieve_context(query=query, k=k, pdf_name=pdf_name)
 
@@ -166,11 +193,14 @@ class OrchestratorAgent:
         previous_questions: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """Triggers the Quiz Agent using explicit context or Shared RAG with anti-duplication."""
-        if (topic and check_sql_injection(topic)) or (isinstance(context, str) and check_sql_injection(context)):
+        has_prompt_attack = (topic and check_prompt_injection(topic)) or (isinstance(context, str) and check_prompt_injection(context))
+        has_sql_attack = (topic and check_sql_injection(topic)) or (isinstance(context, str) and check_sql_injection(context))
+
+        if has_prompt_attack or has_sql_attack:
             return {
                 "questions": [],
                 "total_questions": 0,
-                "error": get_safe_rejection_response(language)
+                "error": get_prompt_injection_rejection(language) if has_prompt_attack else get_safe_rejection_response(language)
             }
         return self.quiz_agent.generate_quiz(
             context=context,
@@ -225,9 +255,16 @@ class OrchestratorAgent:
         chat_history: Optional[List[Dict[str, str]]] = None,
         language: str = "ar"
     ) -> str:
-        """Triggers the Learning Coach explanation without repeating past chat content."""
-        if student_question and check_sql_injection(student_question):
-            return get_safe_rejection_response(language)
+        """Triggers the Learning Coach explanation with multi-layer guardrails."""
+        if student_question:
+            if check_sql_injection(student_question):
+                return get_safe_rejection_response(language)
+            if check_prompt_injection(student_question):
+                return get_prompt_injection_rejection(language)
+            if check_student_distress(student_question):
+                return get_distress_intervention_response(language)
+            if check_topic_boundary(student_question):
+                return get_topic_boundary_rejection(topic, language)
         return self.learning_agent.explain_concept(
             topic=topic,
             slide_content=slide_content,
