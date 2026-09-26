@@ -12,6 +12,8 @@ import { AuthModal } from './AuthModal';
 import { StreakModal } from './StreakModal';
 import { ShopModal } from './ShopModal';
 import { PointsHistoryModal } from './PointsHistoryModal';
+import { ScheduledReviewsModal } from './ScheduledReviewsModal';
+import { CalendarCheck } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { LanguageSelector } from './LanguageSelector';
 import { ThemeToggle } from './ThemeToggle';
@@ -70,6 +72,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [streakModalOpen, setStreakModalOpen] = useState(false);
   const [shopModalOpen, setShopModalOpen] = useState(false);
   const [pointsModalOpen, setPointsModalOpen] = useState(false);
+  const [scheduledReviewsModalOpen, setScheduledReviewsModalOpen] = useState(false);
   const [pendingDeleteLecture, setPendingDeleteLecture] = useState<{ id: string; title: string } | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -307,6 +310,26 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </span>
                 <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">
                   {t('home.pointsHistory', 'سجل النقاط')}
+                </span>
+              </div>
+            </button>
+
+            {/* بطاقة الأسئلة المجدولة والتكرار المتباعد */}
+            <button
+              type="button"
+              id="open-scheduled-reviews-btn"
+              onClick={() => setScheduledReviewsModalOpen(true)}
+              className="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/25 hover:border-emerald-500/50 hover:bg-emerald-500/15 transition-all text-start group active:scale-95"
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-sm shadow-emerald-500/30 shrink-0">
+                <CalendarCheck className="w-4 h-4" />
+              </div>
+              <div className={isAr ? 'text-right' : 'text-left'}>
+                <span className="block text-xs font-bold text-slate-900 dark:text-white leading-tight">
+                  {t('home.scheduledReviews', 'مراجعات مجدولة')}
+                </span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                  {t('home.spacedRepetition', 'تكرار متباعد')}
                 </span>
               </div>
             </button>
@@ -748,6 +771,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
         isOpen={pointsModalOpen}
         onClose={() => setPointsModalOpen(false)}
         totalPoints={totalFocusPoints}
+      />
+      <ScheduledReviewsModal
+        isOpen={scheduledReviewsModalOpen}
+        onClose={() => setScheduledReviewsModalOpen(false)}
       />
     </div>
   );

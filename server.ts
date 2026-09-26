@@ -241,6 +241,54 @@ async function startServer() {
   });
 
   // ==============================================================
+  // Spaced Repetition Proxies (Learning Agent / Leitner Engine)
+  // ==============================================================
+  app.get('/api/spaced-repetition/queue', async (req, res) => {
+    try {
+      const studentId = req.query.student_id || 'STU_101';
+      const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/spaced-repetition/queue?student_id=${studentId}`);
+      if (pyRes.ok) {
+        return res.json(await pyRes.json());
+      }
+      res.status(pyRes.status).json(await pyRes.json());
+    } catch (err: any) {
+      console.warn('Spaced Repetition queue proxy notice:', err.message);
+      res.json({ student_id: req.query.student_id || 'STU_101', queue: [], total_scheduled: 0, due_count: 0 });
+    }
+  });
+
+  app.get('/api/spaced-repetition/due', async (req, res) => {
+    try {
+      const studentId = req.query.student_id || 'STU_101';
+      const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/spaced-repetition/due?student_id=${studentId}`);
+      if (pyRes.ok) {
+        return res.json(await pyRes.json());
+      }
+      res.status(pyRes.status).json(await pyRes.json());
+    } catch (err: any) {
+      console.warn('Spaced Repetition due proxy notice:', err.message);
+      res.json({ student_id: req.query.student_id || 'STU_101', due_questions: [], count: 0 });
+    }
+  });
+
+  app.post('/api/spaced-repetition/review', async (req, res) => {
+    try {
+      const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/spaced-repetition/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body)
+      });
+      if (pyRes.ok) {
+        return res.json(await pyRes.json());
+      }
+      res.status(pyRes.status).json(await pyRes.json());
+    } catch (err: any) {
+      console.warn('Spaced Repetition review proxy notice:', err.message);
+      res.json({ success: true, local_fallback: true });
+    }
+  });
+
+  // ==============================================================
   // Direct Cloud Firestore Admin APIs (Project attocus-1)
   // Writes directly to root collections: files, sessions, summaries, quizzes, attention_logs, users
   // ==============================================================
