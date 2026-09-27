@@ -10,13 +10,15 @@ interface QuickQuizModalProps {
   onClose: () => void;
   slide: Slide;
   lectureTitle?: string;
+  source?: 'manual' | 'stuck' | 'phone_recovery';
 }
 
 export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
   isOpen,
   onClose,
   slide,
-  lectureTitle
+  lectureTitle,
+  source = 'manual'
 }) => {
   const { isAr, dir } = useLanguage();
   const { currentUser } = useAuth();
@@ -138,15 +140,30 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
         {/* رأس النافذة */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-100/80 dark:border-blue-900/50">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
+              source === 'phone_recovery'
+                ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/50'
+                : 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-100/80 dark:border-blue-900/50'
+            }`}>
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-[#0F172A] dark:text-white">
-                {isAr ? 'اختبار استيعاب سريع' : 'Quick Comprehension Quiz'}
+              <h3 className="text-sm font-bold text-[#0F172A] dark:text-white flex items-center gap-2">
+                <span>
+                  {source === 'phone_recovery'
+                    ? (isAr ? 'اختبار استرجاع التركيز 🎯' : 'Focus Recovery Quiz 🎯')
+                    : (isAr ? 'اختبار استيعاب سريع' : 'Quick Comprehension Quiz')}
+                </span>
+                {source === 'phone_recovery' && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                    {isAr ? 'بعد ترك الجوال' : 'Phone Away'}
+                  </span>
+                )}
               </h3>
               <p className="text-[11px] text-slate-400 dark:text-slate-400">
-                {isAr ? 'تثبيت المعلومة والتأكد من الفهم' : 'Reinforce knowledge and verify understanding'}
+                {source === 'phone_recovery'
+                  ? (isAr ? 'سؤال سريع وموجز لتثبيت ذهنك في الدرس ومواصلة تقدمك' : 'A quick question to re-lock your focus onto the lesson')
+                  : (isAr ? 'تثبيت المعلومة والتأكد من الفهم' : 'Reinforce knowledge and verify understanding')}
               </p>
             </div>
           </div>

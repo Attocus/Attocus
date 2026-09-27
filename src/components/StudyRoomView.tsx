@@ -212,6 +212,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   const [savedSummariesModalOpen, setSavedSummariesModalOpen] = useState(false);
   const [explainDrawerOpen, setExplainDrawerOpen] = useState(false);
   const [quickQuizModalOpen, setQuickQuizModalOpen] = useState(false);
+  const [quizSource, setQuizSource] = useState<'manual' | 'stuck' | 'phone_recovery'>('manual');
 
   // Attention Tracking State
   const [attentionState, setAttentionState] = useState<AttentionTrackingState>({
@@ -253,6 +254,12 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   const tabHiddenTimestampRef = useRef<number | null>(null);
   const tabSwitchesCountRef = useRef<number>(0);
   const totalAwaySecondsRef = useRef<number>(0);
+  const wasUsingPhoneRef = useRef<boolean>(false);
+  const isPhoneDetectedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    isPhoneDetectedRef.current = attentionState.phoneAlertOpen || attentionState.detectedState === 'using_phone';
+  }, [attentionState.phoneAlertOpen, attentionState.detectedState]);
 
   const currentSlide: Slide = lecture.slides.find(s => s.pageNumber === currentPage) || lecture.slides[0];
 
@@ -307,6 +314,9 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.hidden) return;
+
+      // ⏸️ إيقاف عداد وقت المذاكرة والشريحة أثناء استخدام الجوال
+      if (isPhoneDetectedRef.current) return;
 
       setSessionSeconds(prev => prev + 1);
       setPageTimeSeconds(prev => {
@@ -518,6 +528,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
 
   const handleTriggerPhoneDetected = (reason?: string) => {
     if (wrapUpModalOpenRef.current) return;
+    wasUsingPhoneRef.current = true;
     const defaultReason = isAr ? 'تم رصد استخدام الهاتف أثناء المذاكرة.' : 'Phone usage detected while studying.';
     setAttentionState(prev => ({
       ...prev,
@@ -598,6 +609,9 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   };
 
   const handleTriggerFocused = () => {
+    const hadPhone = wasUsingPhoneRef.current || attentionState.phoneAlertOpen || attentionState.detectedState === 'using_phone';
+    wasUsingPhoneRef.current = false;
+
     setAttentionState(prev => ({
       ...prev,
       detectedState: 'focused',
@@ -609,6 +623,12 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       sleepingAlertOpen: false,
       awayAlertOpen: false
     }));
+
+    // إذا كان الطالب ممسكاً بالجوال وتوه تركه، نفتح له كويز استرجاع التركيز فوراً!
+    if (hadPhone) {
+      setQuizSource('phone_recovery');
+      setQuickQuizModalOpen(true);
+    }
   };
 
   const handleAnalyzeFrameSnapshot = async (imageBase64: string) => {
@@ -632,11 +652,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         } else if (state === 'distracted') {
           handleTriggerGazeDrift();
         } else {
-          setAttentionState(prev => ({
-            ...prev,
-            detectedState: 'focused',
-            isAnalyzingFrame: false
-          }));
+          handleTriggerFocused();
         }
       }
     } catch (err) {
@@ -894,6 +910,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
             lectureId={lecture.id}
             onPomodoroComplete={() => onAddFocusPoints(10)}
             onAddFocusPoints={onAddFocusPoints}
+            isPausedByPhone={attentionState.phoneAlertOpen || attentionState.detectedState === 'using_phone'}
           />
 
           {/* شريط أدوات الرسم والتحديد */}
@@ -1192,6 +1209,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         }}
         onChooseQuiz={() => {
           setStuckState(prev => ({ ...prev, interventionActive: false }));
+          setQuizSource('stuck');
           setQuickQuizModalOpen(true);
         }}
         onChooseUnderstanding={() => {
@@ -1273,9 +1291,13 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
 
       <QuickQuizModal
         isOpen={quickQuizModalOpen}
-        onClose={() => setQuickQuizModalOpen(false)}
+        onClose={() => {
+          setQuickQuizModalOpen(false);
+          setQuizSource('manual');
+        }}
         slide={currentSlide}
         lectureTitle={lecture.title}
+        source={quizSource}
       />
 
       <CameraConsentModal
@@ -1313,14 +1335,19 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
         isOpen={attentionState.phoneAlertOpen}
         coachMessage={attentionState.detectionReason}
         onDismiss={() => {
+          wasUsingPhoneRef.current = false;
           setAttentionState(prev => ({
             ...prev,
             phoneAlertOpen: false,
             attentionDrifted: false,
             detectedState: 'focused'
           }));
+          // فتح الكويز السريع فوراً أول ما يترك الجوال
+          setQuizSource('phone_recovery');
+          setQuickQuizModalOpen(true);
         }}
         onTakeBreak={() => {
+          wasUsingPhoneRef.current = false;
           setAttentionState(prev => ({
             ...prev,
             phoneAlertOpen: false,

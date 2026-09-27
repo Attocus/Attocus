@@ -10,6 +10,7 @@ interface PomodoroTimerProps {
   lectureId: string;
   onPomodoroComplete?: () => void;
   onAddFocusPoints?: (points: number) => void;
+  isPausedByPhone?: boolean;
 }
 
 const RING_RADIUS = 36;
@@ -19,6 +20,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
   lectureId,
   onPomodoroComplete,
   onAddFocusPoints,
+  isPausedByPhone = false,
 }) => {
   const { isAr, t } = useLanguage();
   const { isDark } = useTheme();
@@ -93,15 +95,15 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
   }, [isPopoverOpen]);
 
   useEffect(() => {
-    if (isRunning) {
+    if (isRunning && !isPausedByPhone) {
       endTimeRef.current = Date.now() + secondsRemaining * 1000;
     } else {
       endTimeRef.current = null;
     }
-  }, [isRunning]);
+  }, [isRunning, isPausedByPhone]);
 
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isRunning || isPausedByPhone) return;
     const interval = setInterval(() => {
       if (!endTimeRef.current) return;
       const msLeft = endTimeRef.current - Date.now();
@@ -143,11 +145,11 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
       }
     }, 250);
     return () => clearInterval(interval);
-  }, [isRunning, isBreak, completedCycles, getStudySeconds, getBreakSeconds, playChime, onPomodoroComplete, autoRepeat, targetCycles]);
+  }, [isRunning, isPausedByPhone, isBreak, completedCycles, getStudySeconds, getBreakSeconds, playChime, onPomodoroComplete, autoRepeat, targetCycles]);
 
   useEffect(() => {
     if (pointIntervalRef.current) clearInterval(pointIntervalRef.current);
-    if (!isRunning || isBreak || isPointsForfeited) return;
+    if (!isRunning || isBreak || isPointsForfeited || isPausedByPhone) return;
 
     pointIntervalRef.current = setInterval(async () => {
       // Score Clamping Guardrail: Max 20 points per 30-minute sliding window
@@ -275,15 +277,22 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
       >
         {/* مؤشر الحالة */}
         <span className="relative flex h-2 w-2">
-          {isRunning && (
+          {isRunning && !isPausedByPhone && (
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
           )}
-          <span className={`relative inline-flex rounded-full h-2 w-2 ${isRunning ? (isBreak ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-slate-300 dark:bg-slate-600'
-            }`} />
+          <span className={`relative inline-flex rounded-full h-2 w-2 ${
+            isPausedByPhone
+              ? 'bg-amber-500 animate-pulse'
+              : isRunning
+                ? (isBreak ? 'bg-blue-500' : 'bg-emerald-500')
+                : 'bg-slate-300 dark:bg-slate-600'
+          }`} />
         </span>
 
         {/* عرض الوقت */}
-        <span className="font-mono text-xs font-bold tracking-wider text-[#0F172A] dark:text-white">
+        <span className={`font-mono text-xs font-bold tracking-wider ${
+          isPausedByPhone ? 'text-amber-600 dark:text-amber-400 animate-pulse' : 'text-[#0F172A] dark:text-white'
+        }`}>
           {formattedTime}
         </span>
 
