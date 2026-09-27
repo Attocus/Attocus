@@ -7,9 +7,11 @@ for all agent interactions and OpenAI calls.
 import os
 import functools
 import logging
-from typing import Any, Callable, Optional, Dict
+from typing import Any, Callable, Optional, Dict, List, Literal
 
 logger = logging.getLogger("AttocusObservability")
+
+RunType = Literal["chain", "embedding", "llm", "parser", "prompt", "retriever", "tool"]
 
 try:
     from langsmith import traceable
@@ -44,7 +46,7 @@ def wrap_client(client: Any) -> Any:
     Wraps an OpenAI client instance with LangSmith tracing.
     If LangSmith is not installed or no API key is provided, returns client unmodified.
     """
-    if not HAS_LANGSMITH or not client:
+    if not HAS_LANGSMITH or wrap_openai is None or not client:
         return client
 
     try:
@@ -60,16 +62,16 @@ def wrap_client(client: Any) -> Any:
 
 def traceable_agent(
     name: Optional[str] = None,
-    run_type: str = "chain",
-    tags: Optional[list] = None,
-    metadata: Optional[dict] = None
+    run_type: RunType = "chain",
+    tags: Optional[List[str]] = None,
+    metadata: Optional[Dict[str, Any]] = None
 ) -> Callable:
     """
     Decorator to trace agent execution in LangSmith.
     Gracefully falls back to a no-op decorator if LangSmith is disabled.
     """
     def decorator(func: Callable) -> Callable:
-        if HAS_LANGSMITH and is_tracing_enabled() and traceable:
+        if HAS_LANGSMITH and is_tracing_enabled() and traceable is not None:
             return traceable(
                 name=name or func.__name__,
                 run_type=run_type,

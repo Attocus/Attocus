@@ -30,10 +30,7 @@ except ImportError:
 try:
     from services.streak_service import streak_service
 except ImportError:
-    try:
-        from streak_service import streak_service
-    except ImportError:
-        from backend.services.streak_service import streak_service
+    from backend.services.streak_service import streak_service
 
 
 try:
@@ -42,7 +39,7 @@ except Exception:
     try:
         from backend.services.observability import get_langsmith_status
     except Exception:
-        get_langsmith_status = lambda: {"langsmith_installed": False}  # type: ignore
+        get_langsmith_status = lambda: {"langsmith_installed": False}  
 
 try:
     from services.eval_service import eval_service
@@ -50,7 +47,7 @@ except Exception:
     try:
         from backend.services.eval_service import eval_service
     except Exception:
-        eval_service = None  # type: ignore
+        eval_service = None 
 
 try:
     from routers.detection import detection_router
@@ -58,7 +55,7 @@ except Exception:
     try:
         from backend.routers.detection import detection_router
     except Exception:
-        detection_router = None  # type: ignore
+        detection_router = None 
 
 
 

@@ -57,7 +57,13 @@ class RAGEvalService:
         """
         Runs comprehensive DeepEval metrics on an agent response and retrieved context.
         """
-        if not self.has_deepeval:
+        if (
+            not self.has_deepeval
+            or LLMTestCase is None
+            or FaithfulnessMetric is None
+            or AnswerRelevancyMetric is None
+            or ContextualRelevancyMetric is None
+        ):
             return {
                 "success": False,
                 "error": "deepeval is not installed in environment.",

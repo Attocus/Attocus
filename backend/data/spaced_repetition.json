@@ -621,6 +621,254 @@
       "days_interval": 3,
       "status": "pending",
       "review_count": 0
+    },
+    {
+      "id": "sr_TEST_STU_q101_1790505750",
+      "student_id": "TEST_STU",
+      "question_id": "q101",
+      "question": "What is polymorphism?",
+      "topic": "OOP",
+      "page": 2,
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "correct_answer": "B",
+      "explanation": "",
+      "created_at": "2026-09-27T10:42:30.376661+00:00",
+      "review_date": "2026-09-30T10:42:30.376661+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_quick_missed_pdf-page-17_1790507944846_1790507944",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "quick_missed_pdf-page-17_1790507944846",
+      "question": "In the Supervisor Pattern, the orchestrator agent is responsible for directing the actions of specialized worker agents.",
+      "topic": "Agent Orchestration: Patterns and Roles The Supervisor Pattern One orchestr",
+      "page": 17,
+      "options": [
+        "True",
+        "False"
+      ],
+      "correct_answer": "True",
+      "explanation": "The Supervisor Pattern involves an orchestrator agent that directs a team of specialized worker agents, determining their tasks and timing.",
+      "created_at": "2026-09-27T11:19:04.855341+00:00",
+      "review_date": "2026-09-30T11:19:04.855341+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_quick_missed_pdf-page-18_1790508187691_1790508187",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "quick_missed_pdf-page-18_1790508187691",
+      "question": "Empowering connections is a key feature of the Agentic CRM Platform.",
+      "topic": "J O I N T H E J O U R N E Y Make the first move، let the Ripple effect take",
+      "page": 18,
+      "options": [
+        "True",
+        "False"
+      ],
+      "correct_answer": "True",
+      "explanation": "The Agentic CRM Platform is designed to enhance and empower connections, facilitating effective engagement and collaboration.",
+      "created_at": "2026-09-27T11:23:07.700177+00:00",
+      "review_date": "2026-09-30T11:23:07.700177+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_gap-q-1_1790508215",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "gap-q-1",
+      "question": "In × CRM Records Notes Calendar Comm, what is the critical mechanism preventing conflicts?",
+      "topic": "× CRM Records Notes Calendar Comm",
+      "page": 1,
+      "options": [
+        "Data is the new currency scattered across every tool",
+        "Centralized authority without elections",
+        "Synchronized wall-clock timestamps",
+        "Ignoring uncommitted entries indefinitely"
+      ],
+      "correct_answer": "Data is the new currency scattered across every tool",
+      "explanation": "As detailed in × CRM Records Notes Calendar Comm: Data is the new currency scattered across every tool",
+      "created_at": "2026-09-27T11:23:35.408743+00:00",
+      "review_date": "2026-09-30T11:23:35.408743+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_gap-q-2_1790508215",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "gap-q-2",
+      "question": "How does × Capability AI-assisted sales workflows ✓ ✓ Autonomous Next-Step Planning  ensure safety during network partitions?",
+      "topic": "× Capability AI-assisted sales workflows ✓ ✓ Autonomous Next-Step Planning ",
+      "page": 1,
+      "options": [
+        "Single LLM Agent: Limited context and competence.",
+        "All partitions continue accepting and committing writes equally.",
+        "The minority partition forces the majority to halt.",
+        "Data is merged blindly without term checks."
+      ],
+      "correct_answer": "Single LLM Agent: Limited context and competence.",
+      "explanation": "Quorum overlap ensures that split-brain commits are mathematically impossible.",
+      "created_at": "2026-09-27T11:23:35.408743+00:00",
+      "review_date": "2026-09-30T11:23:35.408743+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_fBQdWcP3kESbuFo8dfNm4QUodsW2_sr-1_1790508215",
+      "student_id": "fBQdWcP3kESbuFo8dfNm4QUodsW2",
+      "question_id": "sr-1",
+      "question": "What are the key components of effective CRM records management?",
+      "topic": "CRM Records Notes Calendar Comm",
+      "page": 1,
+      "options": [
+        "Data entry accuracy",
+        "User interface design",
+        "Synchronized timestamps",
+        "Sales forecasting"
+      ],
+      "correct_answer": "Data entry accuracy",
+      "explanation": "Accurate data entry is crucial for maintaining reliable CRM records.",
+      "created_at": "2026-09-27T11:23:35.408743+00:00",
+      "review_date": "2026-09-30T11:23:35.408743+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_TEST_STU_q101_1790508328",
+      "student_id": "TEST_STU",
+      "question_id": "q101",
+      "question": "What is polymorphism?",
+      "topic": "OOP",
+      "page": 2,
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "correct_answer": "B",
+      "explanation": "",
+      "created_at": "2026-09-27T11:25:28.672346+00:00",
+      "review_date": "2026-09-30T11:25:28.672346+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_TEST_STU_q101_1790514604",
+      "student_id": "TEST_STU",
+      "question_id": "q101",
+      "question": "What is polymorphism?",
+      "topic": "OOP",
+      "page": 2,
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "correct_answer": "B",
+      "explanation": "",
+      "created_at": "2026-09-27T13:10:04.037452+00:00",
+      "review_date": "2026-09-30T13:10:04.037452+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_TEST_STU_q101_1790516062",
+      "student_id": "TEST_STU",
+      "question_id": "q101",
+      "question": "What is polymorphism?",
+      "topic": "OOP",
+      "page": 2,
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "correct_answer": "B",
+      "explanation": "",
+      "created_at": "2026-09-27T13:34:22.070865+00:00",
+      "review_date": "2026-09-30T13:34:22.070865+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_TEST_STU_q101_1790516145",
+      "student_id": "TEST_STU",
+      "question_id": "q101",
+      "question": "What is polymorphism?",
+      "topic": "OOP",
+      "page": 2,
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "correct_answer": "B",
+      "explanation": "",
+      "created_at": "2026-09-27T13:35:45.465210+00:00",
+      "review_date": "2026-09-30T13:35:45.465210+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_TEST_STU_q101_1790516217",
+      "student_id": "TEST_STU",
+      "question_id": "q101",
+      "question": "What is polymorphism?",
+      "topic": "OOP",
+      "page": 2,
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "correct_answer": "B",
+      "explanation": "",
+      "created_at": "2026-09-27T13:36:57.593256+00:00",
+      "review_date": "2026-09-30T13:36:57.593256+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
+    },
+    {
+      "id": "sr_TEST_STU_q101_1790548531",
+      "student_id": "TEST_STU",
+      "question_id": "q101",
+      "question": "What is polymorphism?",
+      "topic": "OOP",
+      "page": 2,
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "correct_answer": "B",
+      "explanation": "",
+      "created_at": "2026-09-27T22:35:31.604278+00:00",
+      "review_date": "2026-09-30T22:35:31.604278+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
     }
   ]
 }
