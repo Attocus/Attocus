@@ -17,6 +17,7 @@ export interface Lecture {
   id: string;
   title: string;
   subject: string;
+  folderId?: string;
   authorOrCourse: string;
   totalPages: number;
   slides: Slide[];

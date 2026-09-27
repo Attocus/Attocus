@@ -77,12 +77,45 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [pointsModalOpen, setPointsModalOpen] = useState(false);
   const [scheduledReviewsModalOpen, setScheduledReviewsModalOpen] = useState(false);
   const [pendingDeleteLecture, setPendingDeleteLecture] = useState<{ id: string; title: string } | null>(null);
-  const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  const [selectedFolder, setSelectedFolder] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('attocus_selected_folder');
+      if (saved) return saved;
+    } catch {}
+    return 'all';
+  });
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [customFolders, setCustomFolders] = useState<FolderItem[]>([]);
+  const [customFolders, setCustomFolders] = useState<FolderItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('attocus_custom_folders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.map((f: any) => ({
+            ...f,
+            icon: Folder
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn('[Storage] Error loading custom folders:', err);
+    }
+    return [];
+  });
   const [addFolderModalOpen, setAddFolderModalOpen] = useState(false);
   const [pendingDeleteFolder, setPendingDeleteFolder] = useState<{ id: string; label: string } | null>(null);
-  const [deletedDefaultFolders, setDeletedDefaultFolders] = useState<string[]>([]);
+  const [deletedDefaultFolders, setDeletedDefaultFolders] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('attocus_deleted_default_folders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (err) {
+      console.warn('[Storage] Error loading deleted default folders:', err);
+    }
+    return [];
+  });
   const [folderInputValue, setFolderInputValue] = useState('');
   const folderInputRef = useRef<HTMLInputElement>(null);
 
@@ -90,36 +123,24 @@ export const HomeView: React.FC<HomeViewProps> = ({
     try { return parseInt(localStorage.getItem('attocus_streak') || '5', 10); } catch { return 5; }
   })();
 
-  // Load custom folders from localStorage
+  // Save selected folder to localStorage
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('attocus_custom_folders');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setCustomFolders(parsed);
-      }
-    } catch (err) {
-      console.warn('[Storage] Error loading custom folders:', err);
-    }
-  }, []);
+      localStorage.setItem('attocus_selected_folder', selectedFolder);
+    } catch {}
+  }, [selectedFolder]);
 
-  // Load deleted default folders from localStorage
+  // Save custom folders to localStorage when they change (only serializable fields)
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('attocus_deleted_default_folders');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setDeletedDefaultFolders(parsed);
-      }
-    } catch (err) {
-      console.warn('[Storage] Error loading deleted default folders:', err);
-    }
-  }, []);
-
-  // Save custom folders to localStorage when they change
-  useEffect(() => {
-    try {
-      localStorage.setItem('attocus_custom_folders', JSON.stringify(customFolders));
+      const serializable = customFolders.map(f => ({
+        id: f.id,
+        key: f.key,
+        defaultLabel: f.defaultLabel,
+        color: f.color,
+        isCustom: true
+      }));
+      localStorage.setItem('attocus_custom_folders', JSON.stringify(serializable));
     } catch (err) {
       console.warn('[Storage] Error saving custom folders:', err);
     }
@@ -209,17 +230,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const getLectureCountForFolder = (folderId: string) => {
     if (folderId === 'all') return lectures.length;
 
-    const customFolder = customFolders.find(f => f.id === folderId);
-    if (customFolder) {
-      const folderName = customFolder.defaultLabel.toLowerCase();
-      return lectures.filter(l => {
-        const s = (l.subject || '').toLowerCase();
-        return s.includes(folderName);
-      }).length;
-    }
-
     return lectures.filter(l => {
+      // 1. Match by direct folderId
+      if (l.folderId && l.folderId === folderId) return true;
+
       const s = (l.subject || '').toLowerCase();
+
+      // 2. Match custom folder by name
+      const customFolder = customFolders.find(f => f.id === folderId);
+      if (customFolder) {
+        const folderName = customFolder.defaultLabel.toLowerCase();
+        return s.includes(folderName);
+      }
+
+      // 3. Match default folders
       if (folderId === 'math') return s.includes('math') || s.includes('رياضيات');
       if (folderId === 'cs') return s.includes('cs') || s.includes('computer') || s.includes('حاسب') || s.includes('os') || s.includes('operating');
       if (folderId === 'physics') return s.includes('physic') || s.includes('فيزياء');
@@ -234,17 +258,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const s = (l.subject || '').toLowerCase();
     let matchesFolder = selectedFolder === 'all';
     if (!matchesFolder) {
-      const customFolder = customFolders.find(f => f.id === selectedFolder);
-      if (customFolder) {
-        const folderName = customFolder.defaultLabel.toLowerCase();
-        matchesFolder = s.includes(folderName);
-      } else if (selectedFolder === 'math') matchesFolder = s.includes('math') || s.includes('رياضيات');
-      else if (selectedFolder === 'cs') matchesFolder = s.includes('cs') || s.includes('computer') || s.includes('حاسب') || s.includes('os') || s.includes('operating');
-      else if (selectedFolder === 'physics') matchesFolder = s.includes('physic') || s.includes('فيزياء');
-      else if (selectedFolder === 'bio') matchesFolder = s.includes('bio') || s.includes('أحياء') || s.includes('احياء');
-      else if (selectedFolder === 'chem') matchesFolder = s.includes('chem') || s.includes('كيمياء');
-      else if (selectedFolder === 'english') matchesFolder = s.includes('eng') || s.includes('إنجليزي') || s.includes('انجليزي');
-      else matchesFolder = s.includes(selectedFolder);
+      if (l.folderId && l.folderId === selectedFolder) {
+        matchesFolder = true;
+      } else {
+        const customFolder = customFolders.find(f => f.id === selectedFolder);
+        if (customFolder) {
+          const folderName = customFolder.defaultLabel.toLowerCase();
+          matchesFolder = s.includes(folderName);
+        } else if (selectedFolder === 'math') matchesFolder = s.includes('math') || s.includes('رياضيات');
+        else if (selectedFolder === 'cs') matchesFolder = s.includes('cs') || s.includes('computer') || s.includes('حاسب') || s.includes('os') || s.includes('operating');
+        else if (selectedFolder === 'physics') matchesFolder = s.includes('physic') || s.includes('فيزياء');
+        else if (selectedFolder === 'bio') matchesFolder = s.includes('bio') || s.includes('أحياء') || s.includes('احياء');
+        else if (selectedFolder === 'chem') matchesFolder = s.includes('chem') || s.includes('كيمياء');
+        else if (selectedFolder === 'english') matchesFolder = s.includes('eng') || s.includes('إنجليزي') || s.includes('انجليزي');
+        else matchesFolder = s.includes(selectedFolder);
+      }
     }
 
     const q = searchQuery.toLowerCase().trim();
@@ -480,7 +508,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               const active = selectedFolder === folder.id;
               const count = getLectureCountForFolder(folder.id);
               const label = t(folder.key, folder.defaultLabel);
-              const IconComp = folder.icon;
+              const IconComp = folder.icon || Folder;
 
               return (
                 <button
@@ -1058,7 +1086,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
       <UploadModal
         isOpen={uploadModalOpen}
         onClose={() => setUploadModalOpen(false)}
-        onLectureCreated={onUploadLecture}
+        onLectureCreated={(newLecture) => {
+          const folderObj = allFolders.find(f => f.id === selectedFolder);
+          const enrichedLecture: Lecture = {
+            ...newLecture,
+            folderId: selectedFolder !== 'all' ? selectedFolder : undefined,
+            subject: selectedFolder !== 'all' && folderObj ? folderObj.defaultLabel : newLecture.subject
+          };
+          onUploadLecture(enrichedLecture);
+        }}
       />
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
       <StreakModal isOpen={streakModalOpen} onClose={() => setStreakModalOpen(false)} currentStreak={currentStreak} />

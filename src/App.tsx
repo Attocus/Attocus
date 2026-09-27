@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Lecture } from './types';
 import { SAMPLE_LECTURES } from './data/sampleLectures';
+import { IntroView } from './components/IntroView';
 import { HomeView } from './components/HomeView';
 import { StudyRoomView } from './components/StudyRoomView';
 import { AboutView } from './components/AboutView';
@@ -23,7 +24,13 @@ import {
 
 function AppContent() {
   const { currentUser, userProfile } = useAuth();
-  const [currentScreen, setCurrentScreen] = useState<'home' | 'study_room' | 'about'>('home');
+  const [currentScreen, setCurrentScreen] = useState<'intro' | 'home' | 'study_room' | 'about'>(() => {
+    try {
+      const hash = window.location.hash.replace('#', '').toLowerCase();
+      if (hash === 'about' || hash === 'developers' || hash === 'tech' || hash === 'contact') return 'about';
+    } catch {}
+    return 'intro';
+  });
   const [aboutInitialSection, setAboutInitialSection] = useState<'about' | 'developers' | 'tech' | 'contact'>('about');
   const [lectures, setLectures] = useState<Lecture[]>(SAMPLE_LECTURES);
 
@@ -59,22 +66,13 @@ function AppContent() {
       try {
         const storedLectures = await getAllLecturesFromDB();
         const savedActiveId = localStorage.getItem('study_coach_active_lecture_id');
-        const savedScreen = localStorage.getItem('study_coach_active_screen');
 
         if (storedLectures && storedLectures.length > 0) {
           setLectures(storedLectures);
           if (savedActiveId && storedLectures.some(l => l.id === savedActiveId)) {
             setActiveLectureId(savedActiveId);
-            if (savedScreen === 'study_room') {
-              setCurrentScreen('study_room');
-            } else if (savedScreen === 'about') {
-              setCurrentScreen('about');
-            }
           } else {
             setActiveLectureId(storedLectures[0].id);
-            if (savedScreen === 'about') {
-              setCurrentScreen('about');
-            }
           }
         } else {
           // Seed IndexedDB with sample lectures on first run
@@ -97,8 +95,27 @@ function AppContent() {
       try {
         const cloudLectures = await getLecturesFromFirestore(currentUser.uid);
         if (cloudLectures && cloudLectures.length > 0) {
-          setLectures(cloudLectures);
-          setActiveLectureId(cloudLectures[0].id);
+          setLectures(prev => {
+            const map = new Map<string, Lecture>();
+            // 1. Put cloud lectures into map
+            cloudLectures.forEach(l => map.set(l.id, l));
+            // 2. Merge local lectures, giving priority to local uploads and high-res canvas slides
+            prev.forEach(l => {
+              const fromCloud = map.get(l.id);
+              if (fromCloud) {
+                map.set(l.id, {
+                  ...fromCloud,
+                  ...l,
+                  slides: l.slides && l.slides.length > 0 ? l.slides : fromCloud.slides
+                });
+              } else {
+                map.set(l.id, l);
+              }
+            });
+            const merged = Array.from(map.values());
+            merged.forEach(l => saveLectureToDB(l));
+            return merged;
+          });
         } else {
           // Sync current initial lectures to Firestore so the user doesn't start empty
           await batchSaveInitialLectures(currentUser.uid, lectures);
@@ -137,19 +154,36 @@ function AppContent() {
 
   const activeLecture = lectures.find(l => l.id === activeLectureId) || lectures[0];
 
-  // Handle URL hash changes (#about, #developers, #contact, #tech)
+  // Handle URL hash changes (#about, #developers, #contact, #tech, #intro, #home)
   useEffect(() => {
     const handleHash = () => {
       const raw = window.location.hash.replace('#', '').toLowerCase();
       if (raw === 'about' || raw === 'developers' || raw === 'tech' || raw === 'contact') {
         setAboutInitialSection(raw as 'about' | 'developers' | 'tech' | 'contact');
         setCurrentScreen('about');
+      } else if (raw === 'intro') {
+        setCurrentScreen('intro');
+      } else if (raw === 'home') {
+        setCurrentScreen('home');
       }
     };
     handleHash();
     window.addEventListener('hashchange', handleHash);
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
+
+
+
+  const handleEnterWorkspace = () => {
+    setCurrentScreen('home');
+    try {
+      sessionStorage.setItem('attocus_entered_workspace', 'true');
+      localStorage.setItem('study_coach_active_screen', 'home');
+      if (window.location.hash === '#intro') {
+        history.replaceState(null, '', window.location.pathname);
+      }
+    } catch {}
+  };
 
   const handleSelectLecture = (lectureId: string) => {
     setActiveLectureId(lectureId);
@@ -244,7 +278,14 @@ function AppContent() {
 
   return (
     <div dir={dir} className="w-full h-full min-h-screen bg-[#FAFAF8] dark:bg-[#121417] font-sans antialiased text-[#1E2124] dark:text-[#F3F4F6] transition-colors duration-200">
-      {currentScreen === 'about' ? (
+      {currentScreen === 'intro' ? (
+        <IntroView
+          onEnterApp={handleEnterWorkspace}
+          onOpenAbout={handleOpenAbout}
+          onSelectLecture={handleSelectLecture}
+          recentLecture={activeLecture}
+        />
+      ) : currentScreen === 'about' ? (
         <AboutView
           onReturnHome={handleReturnHome}
           initialSection={aboutInitialSection}
