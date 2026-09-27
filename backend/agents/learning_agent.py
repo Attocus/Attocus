@@ -228,14 +228,29 @@ Return ONLY valid JSON with this exact schema:
             except Exception as rag_err:
                 logging.getLogger("LearningCoach").warning(f"RAG retrieval error: {rag_err}")
 
-        # If the student's question has low semantic similarity to lecture (< 0.65) and isn't on the slide:
-        if student_question and student_question.strip():
+        # 5. Check for greetings or general slide explanation requests
+        user_lower = user_query.lower().strip()
+        GREETINGS = [
+            "اهلا", "أهلا", "مرحبا", "سلام", "السلام عليكم", "هلا", "اهلين", "صباح الخير", "مساء الخير",
+            "hello", "hi", "hey", "greetings", "good morning", "good evening"
+        ]
+        is_greeting = any(g in user_lower for g in GREETINGS) and len(user_lower.split()) <= 4
+
+        GENERAL_EXPLAIN_PHRASES = [
+            "اشرح", "وضح", "لخص", "ماهي الفكرة", "ما هي الفكرة", "عن ماذا", "وش السلايد", "وش الشريحة",
+            "explain", "summarize", "overview", "what is this", "tell me about this slide", "ساعدني"
+        ]
+        is_general_slide_query = any(q in user_lower for q in GENERAL_EXPLAIN_PHRASES) and len(user_lower.split()) <= 6
+
+        # If the student asks a specific off-slide question that is completely alien to both slide and lecture:
+        if student_question and student_question.strip() and not is_greeting and not is_general_slide_query:
             has_slide_overlap = any(
                 w.lower() in (slide_content or "").lower()
                 for w in user_query.split()
                 if len(w) > 3 and w.lower() not in {"what", "when", "where", "how", "explain", "ماذا", "كيف", "اشرح", "ماهو", "ماهي", "عن"}
             )
-            if chunks and top_similarity < 0.65 and not has_slide_overlap:
+            # Only trigger out-of-lecture rejection if similarity is extremely low and there is no slide overlap
+            if chunks and top_similarity < 0.50 and not has_slide_overlap and not (slide_content and len(slide_content.strip()) > 30):
                 if language == "ar":
                     return "هذه النقطة غير مغطاة في المحاضرة الحالية، هل ترغب في ربطها بمفهوم آخر؟"
                 return "This point is not covered in the current lecture slides. Would you like to connect it to another concept?"
