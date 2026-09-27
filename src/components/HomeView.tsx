@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Lecture } from '../types';
 import {
   Plus, Trash2, LogIn, LogOut, Search,
   FileText, Sparkles, Flame, GraduationCap,
   Folder, Layers, Calculator, Laptop, Compass, Dna,
-  Languages, ChevronRight, X, ArrowUpRight, Upload
+  Languages, ChevronRight, X, ArrowUpRight, Upload, Edit
 } from 'lucide-react';
 import { UploadModal } from './UploadModal';
 import { useAuth } from '../contexts/AuthContext';
@@ -35,6 +35,7 @@ interface FolderItem {
   defaultLabel: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
+  isCustom?: boolean;
 }
 
 const FOLDER_ITEMS: FolderItem[] = [
@@ -78,10 +79,60 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [pendingDeleteLecture, setPendingDeleteLecture] = useState<{ id: string; title: string } | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [customFolders, setCustomFolders] = useState<FolderItem[]>([]);
+  const [addFolderModalOpen, setAddFolderModalOpen] = useState(false);
+  const [pendingDeleteFolder, setPendingDeleteFolder] = useState<{ id: string; label: string } | null>(null);
+  const [deletedDefaultFolders, setDeletedDefaultFolders] = useState<string[]>([]);
+  const [folderInputValue, setFolderInputValue] = useState('');
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   const currentStreak = (() => {
     try { return parseInt(localStorage.getItem('attocus_streak') || '5', 10); } catch { return 5; }
   })();
+
+  // Load custom folders from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('attocus_custom_folders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setCustomFolders(parsed);
+      }
+    } catch (err) {
+      console.warn('[Storage] Error loading custom folders:', err);
+    }
+  }, []);
+
+  // Load deleted default folders from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('attocus_deleted_default_folders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setDeletedDefaultFolders(parsed);
+      }
+    } catch (err) {
+      console.warn('[Storage] Error loading deleted default folders:', err);
+    }
+  }, []);
+
+  // Save custom folders to localStorage when they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('attocus_custom_folders', JSON.stringify(customFolders));
+    } catch (err) {
+      console.warn('[Storage] Error saving custom folders:', err);
+    }
+  }, [customFolders]);
+
+  // Save deleted default folders to localStorage when they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('attocus_deleted_default_folders', JSON.stringify(deletedDefaultFolders));
+    } catch (err) {
+      console.warn('[Storage] Error saving deleted default folders:', err);
+    }
+  }, [deletedDefaultFolders]);
 
   const handleDeleteClick = (e: React.MouseEvent, lectureId: string, lectureTitle: string) => {
     e.stopPropagation();
@@ -96,9 +147,77 @@ export const HomeView: React.FC<HomeViewProps> = ({
     }
   };
 
+  const handleAddFolder = (folderName: string) => {
+    // Check if we're editing an existing folder
+    const currentFolder = allFolders.find(f => f.id === selectedFolder);
+
+    if (currentFolder && currentFolder.isCustom) {
+      // Update existing custom folder
+      setCustomFolders(prev =>
+        prev.map(f =>
+          f.id === selectedFolder
+            ? { ...f, defaultLabel: folderName, key: `folder.custom_${folderName}` }
+            : f
+        )
+      );
+    } else {
+      // Check if this folder name matches a deleted default folder
+      const deletedDefaultFolder = FOLDER_ITEMS.find(f =>
+        deletedDefaultFolders.includes(f.id) &&
+        f.defaultLabel.toLowerCase() === folderName.toLowerCase()
+      );
+
+      if (deletedDefaultFolder) {
+        // Restore the deleted default folder
+        setDeletedDefaultFolders(prev => prev.filter(id => id !== deletedDefaultFolder.id));
+        setSelectedFolder(deletedDefaultFolder.id);
+      } else {
+        // Create a new custom folder
+        const newFolder: FolderItem = {
+          id: `custom_${Date.now()}`,
+          key: `folder.custom_${folderName}`,
+          defaultLabel: folderName,
+          icon: Folder,
+          color: '#6366F1',
+          isCustom: true
+        };
+        setCustomFolders(prev => [...prev, newFolder]);
+        setSelectedFolder(newFolder.id);
+      }
+    }
+  };
+
+  const handleDeleteFolder = (folderId: string) => {
+    // Check if it's a default folder
+    const isDefaultFolder = FOLDER_ITEMS.some(f => f.id === folderId);
+
+    if (isDefaultFolder) {
+      // Add to deleted default folders list
+      setDeletedDefaultFolders(prev => [...prev, folderId]);
+    } else {
+      // Remove from custom folders
+      setCustomFolders(prev => prev.filter(f => f.id !== folderId));
+    }
+
+    if (selectedFolder === folderId) {
+      setSelectedFolder('all');
+    }
+    setPendingDeleteFolder(null);
+  };
+
 
   const getLectureCountForFolder = (folderId: string) => {
     if (folderId === 'all') return lectures.length;
+
+    const customFolder = customFolders.find(f => f.id === folderId);
+    if (customFolder) {
+      const folderName = customFolder.defaultLabel.toLowerCase();
+      return lectures.filter(l => {
+        const s = (l.subject || '').toLowerCase();
+        return s.includes(folderName);
+      }).length;
+    }
+
     return lectures.filter(l => {
       const s = (l.subject || '').toLowerCase();
       if (folderId === 'math') return s.includes('math') || s.includes('رياضيات');
@@ -115,7 +234,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const s = (l.subject || '').toLowerCase();
     let matchesFolder = selectedFolder === 'all';
     if (!matchesFolder) {
-      if (selectedFolder === 'math') matchesFolder = s.includes('math') || s.includes('رياضيات');
+      const customFolder = customFolders.find(f => f.id === selectedFolder);
+      if (customFolder) {
+        const folderName = customFolder.defaultLabel.toLowerCase();
+        matchesFolder = s.includes(folderName);
+      } else if (selectedFolder === 'math') matchesFolder = s.includes('math') || s.includes('رياضيات');
       else if (selectedFolder === 'cs') matchesFolder = s.includes('cs') || s.includes('computer') || s.includes('حاسب') || s.includes('os') || s.includes('operating');
       else if (selectedFolder === 'physics') matchesFolder = s.includes('physic') || s.includes('فيزياء');
       else if (selectedFolder === 'bio') matchesFolder = s.includes('bio') || s.includes('أحياء') || s.includes('احياء');
@@ -148,7 +271,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
     return SUBJECT_THEMES[subject];
   };
 
-  const currentFolderObj = FOLDER_ITEMS.find(f => f.id === selectedFolder) || FOLDER_ITEMS[0];
+  const allFolders = [
+    ...FOLDER_ITEMS.filter(f => !deletedDefaultFolders.includes(f.id)),
+    ...customFolders
+  ];
+  const currentFolderObj = allFolders.find(f => f.id === selectedFolder) || allFolders[0];
   const currentFolderName = t(currentFolderObj.key, currentFolderObj.defaultLabel);
   const displayName = currentUser?.displayName || userProfile?.displayName || t('home.welcomeStudent', 'طالب متميز');
 
@@ -332,13 +459,24 @@ export const HomeView: React.FC<HomeViewProps> = ({
         {/* 2. رف المقررات والمجلدات الدراسية (مثل Folders Shelf في iOS)  */}
         {/* ═══════════════════════════════════════════════════════════ */}
         <section className="space-y-3">
-          <div className={`flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 ${isAr ? 'justify-start' : 'justify-start'}`}>
-            <Folder className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            <span>{t('home.coursesAndFolders', 'المقررات والمجلدات الدراسية')}</span>
+          <div className={`flex items-center justify-between gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 ${isAr ? 'flex-row-reverse' : 'flex-row'}`}>
+            <div className="flex items-center gap-2">
+              <Folder className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <span>{t('home.coursesAndFolders', 'المقررات والمجلدات الدراسية')}</span>
+            </div>
+            <button
+              type="button"
+              id="add-folder-btn"
+              onClick={() => setAddFolderModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all text-xs font-semibold"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>{t('home.addFolder', 'إضافة مجلد')}</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-1">
-            {FOLDER_ITEMS.map(folder => {
+            {allFolders.map(folder => {
               const active = selectedFolder === folder.id;
               const count = getLectureCountForFolder(folder.id);
               const label = t(folder.key, folder.defaultLabel);
@@ -402,6 +540,38 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">
                   {currentFolderName}
                 </h2>
+
+                {/* أزرار التحكم بالمجلد */}
+                {selectedFolder !== 'all' && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      id="edit-folder-btn"
+                      onClick={() => {
+                        const currentFolder = allFolders.find(f => f.id === selectedFolder);
+                        if (currentFolder && currentFolder.isCustom) {
+                          setFolderInputValue(currentFolder.defaultLabel);
+                        } else {
+                          setFolderInputValue('');
+                        }
+                        setAddFolderModalOpen(true);
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 dark:text-slate-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors"
+                      title={t('home.editFolder', 'تعديل المجلد')}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      id="delete-folder-btn"
+                      onClick={() => setPendingDeleteFolder({ id: selectedFolder, label: currentFolderName })}
+                      className="p-1.5 rounded-lg text-slate-400 dark:text-slate-600 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                      title={t('home.deleteFolder', 'حذف المجلد')}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-400">
                 {t('home.docsCount', 'المستندات والمحاضرات الدراسية ({count} مستند)').replace('{count}', String(filteredLectures.length))}
@@ -750,6 +920,131 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 type="button"
                 id="confirm-delete-lecture-btn"
                 onClick={confirmDelete}
+                className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-all shadow-sm"
+              >
+                {t('modal.confirmDelete', 'تأكيد الحذف')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── مودال إضافة/تعديل مجلد ─────────────────────────────────── */}
+      {addFolderModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#111827] rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <Folder className="w-5 h-5" />
+            </div>
+
+            <div className={`space-y-1 ${isAr ? 'text-right' : 'text-left'}`}>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                {selectedFolder !== 'all' && allFolders.find(f => f.id === selectedFolder)?.isCustom
+                  ? t('modal.editFolderTitle', 'تعديل المجلد')
+                  : t('modal.addFolderTitle', 'إضافة مجلد جديد')
+                }
+              </h3>
+              {!(selectedFolder !== 'all' && allFolders.find(f => f.id === selectedFolder)?.isCustom) && (
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  {t('modal.addFolderHint', 'إذا قمت بحذف مجلد افتراضي، يمكنك إعادته بإدخال اسمه هنا')}
+                </p>
+              )}
+            </div>
+
+            <input
+              type="text"
+              id="new-folder-name-input"
+              ref={folderInputRef}
+              value={folderInputValue}
+              onChange={(e) => setFolderInputValue(e.target.value)}
+              placeholder={t('modal.addFolderPlaceholder', 'اسم المجلد')}
+              className={`w-full py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 focus:border-blue-600 dark:focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none transition-all ${
+                isAr ? 'text-right' : 'text-left'
+              }`}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const name = folderInputValue.trim();
+                  if (name) {
+                    handleAddFolder(name);
+                    setAddFolderModalOpen(false);
+                    setFolderInputValue('');
+                  }
+                } else if (e.key === 'Escape') {
+                  setAddFolderModalOpen(false);
+                  setFolderInputValue('');
+                }
+              }}
+            />
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                id="cancel-add-folder-btn"
+                onClick={() => {
+                  setAddFolderModalOpen(false);
+                  setFolderInputValue('');
+                }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+              >
+                {t('modal.cancel', 'إلغاء')}
+              </button>
+              <button
+                type="button"
+                id="confirm-add-folder-btn"
+                onClick={() => {
+                  const name = folderInputValue.trim();
+                  if (name) {
+                    handleAddFolder(name);
+                    setAddFolderModalOpen(false);
+                    setFolderInputValue('');
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm"
+              >
+                {selectedFolder !== 'all' && allFolders.find(f => f.id === selectedFolder)?.isCustom
+                  ? t('modal.saveFolder', 'حفظ التغييرات')
+                  : t('modal.createFolder', 'إنشاء المجلد')
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── مودال تأكيد حذف المجلد ─────────────────────────────────── */}
+      {pendingDeleteFolder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#111827] rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+              <Trash2 className="w-5 h-5" />
+            </div>
+
+            <div className={`space-y-1 ${isAr ? 'text-right' : 'text-left'}`}>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                {t('modal.deleteFolderTitle', 'حذف المجلد نهائياً؟')}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                {t('modal.deleteFolderDesc', 'هل أنت متأكد من حذف المجلد "{title}"؟ لن يتم حذف المستندات، لكن سيتم إزالة المجلد من القائمة.').replace('{title}', pendingDeleteFolder.label)}
+              </p>
+              <p className="text-[10px] text-blue-600 dark:text-blue-400 leading-relaxed">
+                {t('modal.deleteFolderRestoreHint', 'يمكنك إضافة المجلد مرة أخرى من خلال زر "إضافة مجلد"')}
+              </p>
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                id="cancel-delete-folder-btn"
+                onClick={() => setPendingDeleteFolder(null)}
+                className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+              >
+                {t('modal.cancel', 'إلغاء')}
+              </button>
+              <button
+                type="button"
+                id="confirm-delete-folder-btn"
+                onClick={() => handleDeleteFolder(pendingDeleteFolder.id)}
                 className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-all shadow-sm"
               >
                 {t('modal.confirmDelete', 'تأكيد الحذف')}
