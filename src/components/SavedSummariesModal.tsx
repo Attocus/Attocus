@@ -211,6 +211,46 @@ export const SavedSummariesModal: React.FC<SavedSummariesModalProps> = ({
                       </div>
                     </div>
                   )}
+
+                  {/* Strengths */}
+                  {item.strengths && item.strengths.length > 0 && (
+                    <div className={`space-y-1.5 ${isAr ? 'text-right' : 'text-left'}`}>
+                      <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                        {isAr ? 'نقاط القوة والاستيعاب لديك:' : 'Your strengths & understanding:'}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {item.strengths.map((point, pIdx) => (
+                          <span
+                            key={pIdx}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 text-xs font-medium border border-emerald-200/50 dark:border-emerald-900/50"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                            {point.replace(/^[-*•\d.]+\s*/, '')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Corrections */}
+                  {item.corrections && item.corrections.length > 0 && (
+                    <div className={`space-y-1.5 ${isAr ? 'text-right' : 'text-left'}`}>
+                      <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                        {isAr ? 'التصحيحات والاستدراكات المعرفية:' : 'Knowledge corrections & clarifications:'}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {item.corrections.map((point, pIdx) => (
+                          <span
+                            key={pIdx}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-medium border border-amber-200/50 dark:border-amber-900/50"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                            {point.replace(/^[-*•\d.]+\s*/, '')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
