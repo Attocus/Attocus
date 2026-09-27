@@ -448,7 +448,7 @@ export const UnderstandingModal: React.FC<UnderstandingModalProps> = ({
               ) : (
                 <div className="p-5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 text-xs sm:text-sm leading-relaxed text-slate-800 dark:text-slate-200 shadow-2xs space-y-3">
                   {editableSummaryText
-                    .split(/(?:Corrections|التصحيحات|Your Strengths|نقاط القوة):/i)[0]
+                    .split(/(?:Corrections|التصحيحات|التصويبات|تصويبات وملاحظات|Your Strengths|نقاط القوة|نقاط قوتك):/i)[0]
                     .split(/\n\s*\n/)
                     .map(p => p.trim())
                     .filter(Boolean)

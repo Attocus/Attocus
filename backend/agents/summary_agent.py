@@ -461,6 +461,28 @@ CRITICAL RULES:
         self.structured_summary = self._parse_or_build_structured_summary(summary)
         return summary, True
 
+    def _extract_raw_corrections_and_strengths(self, text: str) -> Tuple[List[str], List[str]]:
+        """Extracts bullet points under corrections and strengths headers safely."""
+        if not text:
+            return [], []
+        corr_pattern = r"(?:^|\n)(?:[#*🔍\s]*)(?:Corrections|التصحيحات|التصويبات|تصويبات وملاحظات)[:\s*]*(.*?)(?=(?:\n(?:[#*✨\s]*)(?:Your Strengths|نقاط قوتك|نقاط القوة)[:\s*]*)|\Z)"
+        str_pattern = r"(?:^|\n)(?:[#*✨\s]*)(?:Your Strengths|نقاط قوتك|نقاط القوة)[:\s*]*(.*?)(?=\Z)"
+
+        m_c = re.search(corr_pattern, text, re.DOTALL | re.IGNORECASE)
+        m_s = re.search(str_pattern, text, re.DOTALL | re.IGNORECASE)
+
+        corrections = []
+        if m_c:
+            lines = m_c.group(1).strip().split("\n")
+            corrections = [l.strip().lstrip("-*• ").strip() for l in lines if l.strip().startswith(("-", "*", "•"))]
+
+        strengths = []
+        if m_s:
+            lines = m_s.group(1).strip().split("\n")
+            strengths = [l.strip().lstrip("-*• ").strip() for l in lines if l.strip().startswith(("-", "*", "•"))]
+
+        return corrections, strengths
+
     def _verify_faithfulness(
         self,
         summary: str,
@@ -470,24 +492,34 @@ CRITICAL RULES:
         """
         Self-Check Verification (Faithfulness Check Guardrail):
         Validates that factual claims in the generated summary are grounded in the lecture context.
+        Strictly preserves the Summary, Corrections, and Strengths sections.
         """
         if not summary or len(summary.strip()) < 50:
             return summary
 
-        verification_prompt = f"""You are a strict Academic Faithfulness Verifier for lecture summaries.
-Verify if the candidate summary contains any hallucinated facts not supported by the lecture context.
+        verification_prompt = f"""You are a strict Academic Faithfulness Verifier for lecture study sessions.
+Verify if the candidate text contains any hallucinated facts not supported by the lecture context.
 
 LECTURE CONTEXT:
 {context}
 
-CANDIDATE SUMMARY:
+CANDIDATE TEXT:
 {summary}
 
+CRITICAL FORMATTING REQUIREMENT:
+The candidate text contains three essential sections:
+1. Summary section ('Your Summary in Your Own Words:' or 'ملخصك بأسلوبك الخاص:')
+2. Corrections section ('Corrections:' or 'التصحيحات:')
+3. Strengths section ('Your Strengths:' or 'نقاط قوتك:')
+
 Instructions:
-1. If the candidate summary is faithful to the lecture context and student answers, return it without change.
-2. If the summary introduces factual hallucinations unsupported by context, remove or correct them.
-3. Return ONLY the final summary text matching the exact requested format.
+1. If the candidate text is faithful to the lecture context and student answers, return it EXACTLY AS IS without removing any sections.
+2. If the summary introduces factual hallucinations unsupported by context, correct the hallucinated statements in place.
+3. You MUST PRESERVE all three sections: the Summary paragraphs, the Corrections bullet points, and the Strengths bullet points.
+4. NEVER omit, truncate, or strip the Corrections or Strengths sections.
+5. Return the full text with all sections intact.
 """
+        verified = summary
         try:
             check_resp = self.client.chat.completions.create(
                 model=self.model,
@@ -499,13 +531,38 @@ Instructions:
                 stream=False
             )
             if isinstance(check_resp, ChatCompletion) and check_resp.choices:
-                verified = check_resp.choices[0].message.content or ""
-                if verified and len(verified.strip()) > 30:
-                    return verified.strip()
+                cand = check_resp.choices[0].message.content or ""
+                if cand and len(cand.strip()) > 30:
+                    verified = cand.strip()
         except Exception as err:
             logging.getLogger("SummaryAgent").warning(f"Faithfulness verification skipped: {err}")
 
-        return summary
+        # Defensive Guardrail: Ensure Corrections & Strengths are NEVER lost
+        raw_corrections, raw_strengths = self._extract_raw_corrections_and_strengths(summary)
+        verified_corrections, verified_strengths = self._extract_raw_corrections_and_strengths(verified)
+
+        if (raw_corrections and not verified_corrections) or (raw_strengths and not verified_strengths):
+            logging.getLogger("SummaryAgent").warning("Faithfulness verification dropped sections; restoring from candidate summary.")
+            corr_header = "التصحيحات:" if self.language == "ar" else "Corrections:"
+            str_header = "نقاط قوتك:" if self.language == "ar" else "Your Strengths:"
+
+            clean_verified_summary = re.split(
+                r"(?:^|\n)(?:[#*🔍\s]*)(?:Corrections|التصحيحات|التصويبات|تصويبات وملاحظات|Your Strengths|نقاط قوتك|نقاط القوة)[:\s*]*",
+                verified,
+                flags=re.IGNORECASE
+            )[0].strip()
+
+            restored_parts = [clean_verified_summary]
+            final_c = verified_corrections if verified_corrections else raw_corrections
+            final_s = verified_strengths if verified_strengths else raw_strengths
+
+            if final_c:
+                restored_parts.append(f"{corr_header}\n" + "\n".join(f"- {c}" for c in final_c))
+            if final_s:
+                restored_parts.append(f"{str_header}\n" + "\n".join(f"- {s}" for s in final_s))
+            verified = "\n\n".join(restored_parts)
+
+        return verified
 
     def _parse_or_build_structured_summary(self, summary_text: str) -> Dict[str, Any]:
         """
@@ -513,27 +570,22 @@ Instructions:
         and scores axes coverage.
         """
         paragraphs: List[str] = []
-        corrections: List[str] = []
-        strengths: List[str] = []
 
-        # Extract sections using robust bilingual regex
-        summary_pattern = r"(?:(?:📝\s*)?(?:Your Summary in Your Own Words|ملخصك بأسلوبك(?: الخاص)?|الملخص في كلماتك|الملخص)):\s*\n(.*?)(?=\n(?:[🔍\s]*(?:Corrections|التصويبات|التصحيحات|تصويبات وملاحظات)):|\Z)"
+        summary_pattern = r"(?:^|\n)(?:[#*📝\s]*)(?:Your Summary in Your Own Words|ملخصك بأسلوبك(?: الخاص)?|الملخص في كلماتك|الملخص|ملخصك)[:\s*]*(.*?)(?=(?:\n(?:[#*🔍\s]*)(?:Corrections|التصحيحات|التصويبات|تصويبات وملاحظات)[:\s*]*)|\Z)"
         summary_match = re.search(summary_pattern, summary_text, re.DOTALL | re.IGNORECASE)
-        if summary_match:
+        if summary_match and summary_match.group(1).strip():
             raw_paras = summary_match.group(1).strip().split("\n\n")
-            paragraphs = [p.strip() for p in raw_paras if p.strip() and not p.strip().startswith("- ")]
+            paragraphs = [p.strip() for p in raw_paras if p.strip() and not p.strip().startswith(("-", "*", "•"))]
+        else:
+            clean_top = re.split(
+                r"(?:^|\n)(?:[#*🔍\s]*)(?:Corrections|التصحيحات|التصويبات|تصويبات وملاحظات|Your Strengths|نقاط قوتك|نقاط القوة)[:\s*]*",
+                summary_text,
+                flags=re.IGNORECASE
+            )[0].strip()
+            raw_paras = clean_top.split("\n\n")
+            paragraphs = [p.strip() for p in raw_paras if p.strip() and not p.strip().startswith(("-", "*", "•"))]
 
-        corrections_pattern = r"(?:(?:🔍\s*)?(?:Corrections|التصويبات|التصحيحات|تصويبات وملاحظات)):[\s]*\n(.*?)(?=\n(?:[✨\s]*(?:Your Strengths|نقاط قوتك|نقاط القوة)):|\Z)"
-        corrections_match = re.search(corrections_pattern, summary_text, re.DOTALL | re.IGNORECASE)
-        if corrections_match:
-            lines = corrections_match.group(1).strip().split("\n")
-            corrections = [l.strip().lstrip("-*• ").strip() for l in lines if l.strip().startswith(("-", "*", "•"))]
-
-        strengths_pattern = r"(?:(?:✨\s*)?(?:Your Strengths|نقاط قوتك|نقاط القوة)):[\s]*\n(.*?)(?=\Z)"
-        strengths_match = re.search(strengths_pattern, summary_text, re.DOTALL | re.IGNORECASE)
-        if strengths_match:
-            lines = strengths_match.group(1).strip().split("\n")
-            strengths = [l.strip().lstrip("-*• ").strip() for l in lines if l.strip().startswith(("-", "*", "•"))]
+        corrections, strengths = self._extract_raw_corrections_and_strengths(summary_text)
 
         # Axes mastery evaluation
         covered_set = set(self.covered_axes)

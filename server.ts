@@ -963,38 +963,40 @@ Respond in valid JSON with schema:
     const corrections: string[] = [];
     const strengths: string[] = [];
 
-    // Robust regex matching for summary, corrections, and strengths headers
-    const summaryHeader = /(?:(?:📝\s*)?(?:Your Summary in Your Own Words|الملخص في كلماتك|ملخصك بأسلوبك(?: الخاص)?|الملخص|ملخصك))[\s:]*/i;
-    const correctionsHeader = /(?:(?:🔍\s*)?(?:Corrections|التصحيحات|التصويبات|تصويبات وملاحظات|تصويبات))[\s:]*/i;
-    const strengthsHeader = /(?:(?:✨\s*)?(?:Your Strengths|نقاط القوة|نقاط قوتك))[\s:]*/i;
+    if (!raw) return { summaryText, corrections, strengths };
 
-    const summaryMatch = raw.match(new RegExp(`${summaryHeader.source}([\\s\\S]*?)(?=(?:${correctionsHeader.source}|${strengthsHeader.source}|$))`, 'i'));
+    const corrPattern = /(?:^|\n)(?:[#*🔍\s]*)(?:Corrections|التصحيحات|التصويبات|تصويبات وملاحظات)[:\s*]*(.*?)(?=(?:\n(?:[#*✨\s]*)(?:Your Strengths|نقاط قوتك|نقاط القوة)[:\s*]*)|\Z)/is;
+    const strPattern = /(?:^|\n)(?:[#*✨\s]*)(?:Your Strengths|نقاط قوتك|نقاط القوة)[:\s*]*(.*?)(?=\Z)/is;
+    const sumPattern = /(?:^|\n)(?:[#*📝\s]*)(?:Your Summary in Your Own Words|ملخصك بأسلوبك(?: الخاص)?|الملخص في كلماتك|الملخص|ملخصك)[:\s*]*(.*?)(?=(?:\n(?:[#*🔍\s]*)(?:Corrections|التصحيحات|التصويبات|تصويبات وملاحظات)[:\s*]*)|\Z)/is;
+
+    const summaryMatch = raw.match(sumPattern);
     if (summaryMatch && summaryMatch[1].trim()) {
       summaryText = summaryMatch[1].trim();
     } else {
-      const parts = raw.split(correctionsHeader);
-      summaryText = parts[0].replace(summaryHeader, '').trim();
+      // Fallback: take everything before corrections or strengths header
+      summaryText = raw.split(/(?:^|\n)(?:[#*🔍\s]*)(?:Corrections|التصحيحات|التصويبات|تصويبات وملاحظات|Your Strengths|نقاط قوتك|نقاط القوة)[:\s*]*/i)[0].trim();
+      summaryText = summaryText.replace(/(?:^|\n)(?:[#*📝\s]*)(?:Your Summary in Your Own Words|ملخصك بأسلوبك(?: الخاص)?|الملخص في كلماتك|الملخص|ملخصك)[:\s*]*/i, '').trim();
     }
 
-    const correctionsMatch = raw.match(new RegExp(`${correctionsHeader.source}([\\s\\S]*?)(?=(?:${strengthsHeader.source}|$))`, 'i'));
+    const correctionsMatch = raw.match(corrPattern);
     if (correctionsMatch && correctionsMatch[1].trim()) {
       const lines = correctionsMatch[1].split('\n').map(l => l.trim()).filter(Boolean);
       for (const line of lines) {
         if (/^[-*•\d.]/.test(line)) {
           corrections.push(line.replace(/^[-*•\d.]+\s*/, '').trim());
-        } else if (line.length > 5 && !line.toLowerCase().includes('corrections:') && !line.includes('تصحيحات:') && !line.includes('تصويبات:')) {
+        } else if (line.length > 3 && !line.toLowerCase().includes('corrections:') && !line.includes('تصحيحات:') && !line.includes('تصويبات:')) {
           corrections.push(line);
         }
       }
     }
 
-    const strengthsMatch = raw.match(new RegExp(`${strengthsHeader.source}([\\s\\S]*?)$`, 'i'));
+    const strengthsMatch = raw.match(strPattern);
     if (strengthsMatch && strengthsMatch[1].trim()) {
       const lines = strengthsMatch[1].split('\n').map(l => l.trim()).filter(Boolean);
       for (const line of lines) {
         if (/^[-*•\d.]/.test(line)) {
           strengths.push(line.replace(/^[-*•\d.]+\s*/, '').trim());
-        } else if (line.length > 5 && !line.toLowerCase().includes('strengths:') && !line.includes('نقاط القوة:') && !line.includes('نقاط قوتك:')) {
+        } else if (line.length > 3 && !line.toLowerCase().includes('strengths:') && !line.includes('نقاط القوة:') && !line.includes('نقاط قوتك:')) {
           strengths.push(line);
         }
       }
@@ -1030,12 +1032,26 @@ Respond in valid JSON with schema:
 
         if (pyRes.ok) {
           const data = await pyRes.json();
-          if (data.final_summary) {
-            const parsed = parseSocraticSummary(data.final_summary);
+          if (data.final_summary || data.structured_summary) {
+            const parsed = parseSocraticSummary(data.final_summary || '');
+            const pyStructured = data.structured_summary;
+
+            const finalCorrections = (pyStructured?.corrections && pyStructured.corrections.length > 0)
+              ? pyStructured.corrections
+              : parsed.corrections;
+
+            const finalStrengths = (pyStructured?.strengths && pyStructured.strengths.length > 0)
+              ? pyStructured.strengths
+              : parsed.strengths;
+
+            const studentWords = (pyStructured?.summary_paragraphs && pyStructured.summary_paragraphs.length > 0)
+              ? pyStructured.summary_paragraphs.join('\n\n')
+              : (parsed.summaryText || data.final_summary);
+
             return res.json({
-              studentWordsSummary: parsed.summaryText || data.final_summary,
-              corrections: parsed.corrections,
-              strengths: parsed.strengths,
+              studentWordsSummary: studentWords,
+              corrections: finalCorrections,
+              strengths: finalStrengths,
               inlineCorrections: [],
               lectureTakeaways: data.slide_axes || slide?.keyPoints || (targetLang === 'ar' ? ['تم استيعاب المبدأ الجوهري'] : ['Core concept solidified'])
             });
