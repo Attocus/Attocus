@@ -18,6 +18,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { LanguageSelector } from './LanguageSelector';
 import { ThemeToggle } from './ThemeToggle';
 
+import { InfoSection } from './InfoPagesView';
+
 interface HomeViewProps {
   lectures: Lecture[];
   activeLectureId: string;
@@ -27,6 +29,7 @@ interface HomeViewProps {
   totalFocusPoints: number;
   todayMinutesStudied: number;
   onOpenAbout?: (section?: 'about' | 'developers' | 'contact' | 'tech') => void;
+  onOpenInfo?: (section: InfoSection) => void;
 }
 
 interface FolderItem {
@@ -66,6 +69,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   totalFocusPoints,
   todayMinutesStudied,
   onOpenAbout,
+  onOpenInfo,
 }) => {
   const { currentUser, userProfile, logout } = useAuth();
   const { t, isAr, dir } = useLanguage();
@@ -850,9 +854,33 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 {t('footer.platform', 'المنصة')}
               </h4>
               <ul className="space-y-2.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
-                <li><a href="#features" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('footer.featuresTitle', 'المميزات والخصائص')}</a></li>
-                <li><a href="#pricing" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('footer.pricingTitle', 'الباقات الأكاديمية')}</a></li>
-                <li><a href="#updates" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('footer.updatesTitle', 'تحديثات المنصة')}</a></li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onOpenInfo?.('features')}
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-right cursor-pointer"
+                  >
+                    {t('footer.featuresTitle', 'المميزات والخصائص')}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onOpenInfo?.('pricing')}
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-right cursor-pointer"
+                  >
+                    {t('footer.pricingTitle', 'الباقات الأكاديمية')}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onOpenInfo?.('updates')}
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-right cursor-pointer"
+                  >
+                    {t('footer.updatesTitle', 'تحديثات المنصة')}
+                  </button>
+                </li>
               </ul>
             </div>
 
@@ -866,7 +894,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onOpenAbout?.('about')}
-                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors inline-flex items-center gap-1 text-right"
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors inline-flex items-center gap-1 text-right cursor-pointer"
                   >
                     {isAr ? 'من نحن ورؤيتنا' : 'About Us & Vision'}
                   </button>
@@ -875,7 +903,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onOpenAbout?.('developers')}
-                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors inline-flex items-center gap-1 text-right"
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors inline-flex items-center gap-1 text-right cursor-pointer"
                   >
                     {isAr ? 'فريق التأسيس' : 'Co-Founders & Team'}
                   </button>
@@ -884,7 +912,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onOpenAbout?.('contact')}
-                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors inline-flex items-center gap-1 text-right"
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors inline-flex items-center gap-1 text-right cursor-pointer"
                   >
                     {t('footer.contactTitle', 'تواصل معنا والدعم الفني')}
                   </button>
@@ -898,10 +926,42 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 {t('footer.legal', 'القانونية والسياسات')}
               </h4>
               <ul className="space-y-2.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
-                <li><a href="#privacy" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('footer.privacyTitle', 'سياسة الخصوصية')}</a></li>
-                <li><a href="#terms" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('footer.termsTitle', 'شروط الاستخدام')}</a></li>
-                <li><a href="#security" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('footer.securityTitle', 'أمان وحماية البيانات')}</a></li>
-                <li><a href="#cookies" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('footer.cookiesTitle', 'إعدادات ملفات الارتباط')}</a></li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onOpenInfo?.('privacy')}
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-right cursor-pointer"
+                  >
+                    {t('footer.privacyTitle', 'سياسة الخصوصية')}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onOpenInfo?.('terms')}
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-right cursor-pointer"
+                  >
+                    {t('footer.termsTitle', 'شروط الاستخدام')}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onOpenInfo?.('security')}
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-right cursor-pointer"
+                  >
+                    {t('footer.securityTitle', 'أمان وحماية البيانات')}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onOpenInfo?.('cookies')}
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-right cursor-pointer"
+                  >
+                    {t('footer.cookiesTitle', 'إعدادات ملفات الارتباط')}
+                  </button>
+                </li>
               </ul>
             </div>
           </div>

@@ -268,6 +268,14 @@ export const IntroView: React.FC<IntroViewProps> = ({
           <span>•</span>
           <span>{isAr ? 'المنصة الأكاديمية الذكية' : 'Intelligent Academic Platform'}</span>
         </div>
+        <div className="flex items-center gap-4 text-[11px] text-slate-400 flex-wrap justify-center">
+          <a href="#features" className="hover:text-blue-400 transition-colors">{isAr ? 'المميزات والخصائص' : 'Features'}</a>
+          <a href="#pricing" className="hover:text-blue-400 transition-colors">{isAr ? 'الباقات الأكاديمية' : 'Pricing'}</a>
+          <a href="#updates" className="hover:text-blue-400 transition-colors">{isAr ? 'تحديثات المنصة' : 'Updates'}</a>
+          <a href="#privacy" className="hover:text-blue-400 transition-colors">{isAr ? 'سياسة الخصوصية' : 'Privacy'}</a>
+          <a href="#terms" className="hover:text-blue-400 transition-colors">{isAr ? 'شروط الاستخدام' : 'Terms'}</a>
+          <a href="#security" className="hover:text-blue-400 transition-colors">{isAr ? 'أمان البيانات' : 'Security'}</a>
+        </div>
         <span>© 2026 ATTOCUS</span>
       </footer>
     </div>

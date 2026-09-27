@@ -5,6 +5,7 @@ import { IntroView } from './components/IntroView';
 import { HomeView } from './components/HomeView';
 import { StudyRoomView } from './components/StudyRoomView';
 import { AboutView } from './components/AboutView';
+import { InfoPagesView, InfoSection } from './components/InfoPagesView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
@@ -24,14 +25,24 @@ import {
 
 function AppContent() {
   const { currentUser, userProfile } = useAuth();
-  const [currentScreen, setCurrentScreen] = useState<'intro' | 'home' | 'study_room' | 'about'>(() => {
+  const [currentScreen, setCurrentScreen] = useState<'intro' | 'home' | 'study_room' | 'about' | 'info'>(() => {
     try {
       const hash = window.location.hash.replace('#', '').toLowerCase();
       if (hash === 'about' || hash === 'developers' || hash === 'tech' || hash === 'contact') return 'about';
+      if (['privacy', 'terms', 'security', 'cookies', 'features', 'pricing', 'updates'].includes(hash)) return 'info';
     } catch {}
     return 'intro';
   });
   const [aboutInitialSection, setAboutInitialSection] = useState<'about' | 'developers' | 'tech' | 'contact'>('about');
+  const [infoInitialSection, setInfoInitialSection] = useState<InfoSection>(() => {
+    try {
+      const hash = window.location.hash.replace('#', '').toLowerCase();
+      if (['privacy', 'terms', 'security', 'cookies', 'features', 'pricing', 'updates'].includes(hash)) {
+        return hash as InfoSection;
+      }
+    } catch {}
+    return 'privacy';
+  });
   const [lectures, setLectures] = useState<Lecture[]>(SAMPLE_LECTURES);
 
   const [activeLectureId, setActiveLectureId] = useState<string>(() => {
@@ -154,13 +165,16 @@ function AppContent() {
 
   const activeLecture = lectures.find(l => l.id === activeLectureId) || lectures[0];
 
-  // Handle URL hash changes (#about, #developers, #contact, #tech, #intro, #home)
+  // Handle URL hash changes (#about, #developers, #contact, #tech, #intro, #home, #privacy, #terms, #security, #cookies, #features, #pricing, #updates)
   useEffect(() => {
     const handleHash = () => {
       const raw = window.location.hash.replace('#', '').toLowerCase();
       if (raw === 'about' || raw === 'developers' || raw === 'tech' || raw === 'contact') {
         setAboutInitialSection(raw as 'about' | 'developers' | 'tech' | 'contact');
         setCurrentScreen('about');
+      } else if (['privacy', 'terms', 'security', 'cookies', 'features', 'pricing', 'updates'].includes(raw)) {
+        setInfoInitialSection(raw as InfoSection);
+        setCurrentScreen('info');
       } else if (raw === 'intro') {
         setCurrentScreen('intro');
       } else if (raw === 'home') {
@@ -201,6 +215,15 @@ function AppContent() {
     window.location.hash = target;
     try {
       localStorage.setItem('study_coach_active_screen', 'about');
+    } catch {}
+  };
+
+  const handleOpenInfo = (section: InfoSection) => {
+    setInfoInitialSection(section);
+    setCurrentScreen('info');
+    window.location.hash = section;
+    try {
+      localStorage.setItem('study_coach_active_screen', 'info');
     } catch {}
   };
 
@@ -290,6 +313,11 @@ function AppContent() {
           onReturnHome={handleReturnHome}
           initialSection={aboutInitialSection}
         />
+      ) : currentScreen === 'info' ? (
+        <InfoPagesView
+          onReturnHome={handleReturnHome}
+          initialSection={infoInitialSection}
+        />
       ) : currentScreen === 'study_room' ? (
         <StudyRoomView
           lecture={activeLecture}
@@ -308,6 +336,7 @@ function AppContent() {
           totalFocusPoints={totalFocusPoints}
           todayMinutesStudied={todayMinutesStudied}
           onOpenAbout={handleOpenAbout}
+          onOpenInfo={handleOpenInfo}
         />
       )}
     </div>
