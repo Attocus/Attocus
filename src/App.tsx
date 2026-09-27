@@ -6,6 +6,7 @@ import { HomeView } from './components/HomeView';
 import { StudyRoomView } from './components/StudyRoomView';
 import { AboutView } from './components/AboutView';
 import { InfoPagesView, InfoSection } from './components/InfoPagesView';
+import { OnboardingTour } from './components/OnboardingTour';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
@@ -15,7 +16,9 @@ import {
   deleteLectureFromFirestore,
   batchSaveInitialLectures,
   syncUserStatsToFirestore,
-  getUserStatsFromFirestore
+  getUserStatsFromFirestore,
+  getOnboardingStatus,
+  completeOnboarding
 } from './services/firestoreService';
 import {
   saveLectureToDB,
@@ -24,15 +27,51 @@ import {
 } from './services/dbStorage';
 
 function AppContent() {
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, loading: authLoading } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<'intro' | 'home' | 'study_room' | 'about' | 'info'>(() => {
     try {
       const hash = window.location.hash.replace('#', '').toLowerCase();
       if (hash === 'about' || hash === 'developers' || hash === 'tech' || hash === 'contact') return 'about';
       if (['privacy', 'terms', 'security', 'cookies', 'features', 'pricing', 'updates'].includes(hash)) return 'info';
-    } catch {}
+    } catch { }
     return 'intro';
   });
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  const handleCompleteOnboarding = async () => {
+    if (!currentUser) throw new Error('Sign in to save your tour.');
+    await completeOnboarding(currentUser.uid);
+    setShowOnboarding(false);
+  };
+
+  // Check once the authenticated user enters Home or Study Room.
+  // Firestore is the source of truth across devices.
+  const workspaceReady = currentScreen === 'home' || currentScreen === 'study_room';
+  useEffect(() => {
+
+    if (!workspaceReady || authLoading || !currentUser) {
+      setShowOnboarding(false);
+      return;
+    }
+
+
+    let cancelled = false;
+
+
+    getOnboardingStatus(currentUser.uid)
+      .then(completed => {
+
+        if (!cancelled) {
+          setShowOnboarding(!completed);
+        }
+      })
+      .catch(err => {
+        console.error('[Onboarding] Firestore error:', err);
+      });
+
+    return () => { cancelled = true; };
+  }, [workspaceReady, authLoading, currentUser?.uid]);
+
   const [aboutInitialSection, setAboutInitialSection] = useState<'about' | 'developers' | 'tech' | 'contact'>('about');
   const [infoInitialSection, setInfoInitialSection] = useState<InfoSection>(() => {
     try {
@@ -40,7 +79,7 @@ function AppContent() {
       if (['privacy', 'terms', 'security', 'cookies', 'features', 'pricing', 'updates'].includes(hash)) {
         return hash as InfoSection;
       }
-    } catch {}
+    } catch { }
     return 'privacy';
   });
   const [lectures, setLectures] = useState<Lecture[]>(SAMPLE_LECTURES);
@@ -49,7 +88,7 @@ function AppContent() {
     try {
       const saved = localStorage.getItem('study_coach_active_lecture_id');
       if (saved) return saved;
-    } catch {}
+    } catch { }
     return SAMPLE_LECTURES[0].id;
   });
 
@@ -160,7 +199,7 @@ function AppContent() {
   useEffect(() => {
     try {
       localStorage.setItem('study_coach_focus_points', totalFocusPoints.toString());
-    } catch {}
+    } catch { }
   }, [totalFocusPoints]);
 
   const activeLecture = lectures.find(l => l.id === activeLectureId) || lectures[0];
@@ -196,7 +235,7 @@ function AppContent() {
       if (window.location.hash === '#intro') {
         history.replaceState(null, '', window.location.pathname);
       }
-    } catch {}
+    } catch { }
   };
 
   const handleSelectLecture = (lectureId: string) => {
@@ -205,7 +244,7 @@ function AppContent() {
     try {
       localStorage.setItem('study_coach_active_lecture_id', lectureId);
       localStorage.setItem('study_coach_active_screen', 'study_room');
-    } catch {}
+    } catch { }
   };
 
   const handleOpenAbout = (section?: 'about' | 'developers' | 'tech' | 'contact') => {
@@ -215,7 +254,7 @@ function AppContent() {
     window.location.hash = target;
     try {
       localStorage.setItem('study_coach_active_screen', 'about');
-    } catch {}
+    } catch { }
   };
 
   const handleOpenInfo = (section: InfoSection) => {
@@ -224,7 +263,7 @@ function AppContent() {
     window.location.hash = section;
     try {
       localStorage.setItem('study_coach_active_screen', 'info');
-    } catch {}
+    } catch { }
   };
 
   const handleReturnHome = () => {
@@ -232,11 +271,11 @@ function AppContent() {
     if (window.location.hash) {
       try {
         history.replaceState(null, '', window.location.pathname);
-      } catch {}
+      } catch { }
     }
     try {
       localStorage.setItem('study_coach_active_screen', 'home');
-    } catch {}
+    } catch { }
   };
 
   const handleUploadLecture = (newLecture: Lecture) => {
@@ -250,7 +289,7 @@ function AppContent() {
     try {
       localStorage.setItem('study_coach_active_lecture_id', newLecture.id);
       localStorage.setItem('study_coach_active_screen', 'study_room');
-    } catch {}
+    } catch { }
 
     // Register uploaded file in Firestore
     saveLectureToFirestore(currentUser?.uid || 'user_1', newLecture);
@@ -271,7 +310,7 @@ function AppContent() {
     try {
       localStorage.removeItem(`annotations-${lectureIdToDelete}`);
       localStorage.removeItem(`pomodoro-${lectureIdToDelete}`);
-    } catch {}
+    } catch { }
 
     if (currentUser) {
       deleteLectureFromFirestore(currentUser.uid, lectureIdToDelete);
@@ -284,7 +323,7 @@ function AppContent() {
           setActiveLectureId(remaining[0].id);
           try {
             localStorage.setItem('study_coach_active_lecture_id', remaining[0].id);
-          } catch {}
+          } catch { }
         } else {
           setActiveLectureId('');
         }
@@ -339,6 +378,17 @@ function AppContent() {
           onOpenInfo={handleOpenInfo}
         />
       )}
+      {showOnboarding && currentUser &&
+        (currentScreen === 'home' || currentScreen === 'study_room') && (
+          <OnboardingTour
+            screen={currentScreen}
+            onNavigateHome={handleReturnHome}
+            onNavigateStudyRoom={() => {
+              if (activeLecture) handleSelectLecture(activeLecture.id);
+            }}
+            onComplete={handleCompleteOnboarding}
+          />
+        )}
     </div>
   );
 }

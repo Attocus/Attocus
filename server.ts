@@ -97,7 +97,7 @@ async function generateTextWithLLM(prompt: string, systemPrompt?: string): Promi
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
   const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://127.0.0.1:8000';
 
   app.use(express.json({ limit: '10mb' }));
@@ -143,7 +143,7 @@ async function startServer() {
     try {
       const py = await fetch(`${PYTHON_BACKEND_URL}/health`, { signal: AbortSignal.timeout(1000) });
       if (py.ok) pythonConnected = true;
-    } catch {}
+    } catch { }
     res.json({
       status: 'ok',
       hasOpenAiKey: !!process.env.OPENAI_API_KEY,
@@ -159,7 +159,7 @@ async function startServer() {
       if (pyRes.ok) {
         return res.json(await pyRes.json());
       }
-    } catch {}
+    } catch { }
     res.json({ firestore_connected: false, memory_chunks_count: 0, status: 'offline' });
   });
 
@@ -521,7 +521,7 @@ async function startServer() {
             });
           }
         }
-      } catch {}
+      } catch { }
 
       const lectureContext = `Lecture: "${lectureTitle}"
 Current Slide (Page ${currentSlide?.pageNumber || 1}):
@@ -538,7 +538,7 @@ ${(allSlides || []).map((s: any) => `Page ${s.pageNumber}: ${s.title} (${s.topic
 
       const historyContext = cleanHistory.length > 0
         ? `\nPrior Conversation History:\n` +
-          cleanHistory.slice(-8).map((m: any) => `${m.role === 'user' ? 'Student' : 'Coach'}: ${m.content}`).join('\n') + '\n'
+        cleanHistory.slice(-8).map((m: any) => `${m.role === 'user' ? 'Student' : 'Coach'}: ${m.content}`).join('\n') + '\n'
         : '';
 
       const systemPrompt = `You are a calm, academic, highly supportive human tutor sitting right next to a university student.
@@ -611,7 +611,7 @@ Does that clarify how it connects to ${currentSlide?.topic || 'this topic'}?`;
             return res.json(data);
           }
         }
-      } catch {}
+      } catch { }
 
       const cleanText = (slideText || '').replace(/[●•·]/g, '-').trim();
       const fullSlideStr = `${slideTitle || ''} ${cleanText}`;
@@ -629,10 +629,10 @@ CRITICAL RULES:
    - Format each point strictly as: "[Key Concept / Keyword]: [Brief definition or core takeaway]"
    - DO NOT write full paragraphs, long explanatory sentences, or verbose prose.
 2. STRICT LANGUAGE MATCHING (تلقائي بنفس لغة السلايد):
-   ${isArabicSlide 
-     ? '- The slide is in ARABIC: You MUST output all takeaways in ARABIC ONLY (اللغة العربية - رؤوس أقلام).'
-     : '- The slide is in ENGLISH: You MUST output all takeaways in ENGLISH ONLY (Crisp English bullet headlines).'
-   }
+   ${isArabicSlide
+          ? '- The slide is in ARABIC: You MUST output all takeaways in ARABIC ONLY (اللغة العربية - رؤوس أقلام).'
+          : '- The slide is in ENGLISH: You MUST output all takeaways in ENGLISH ONLY (Crisp English bullet headlines).'
+        }
 3. Clean out all raw symbols, bullet dots (●, •), dashes, or slide line numbers.
 4. Return strictly valid JSON:
 {
@@ -659,7 +659,7 @@ Extract 2-4 ultra-concise bullet headlines (رؤوس أقلام) now in the exac
 
       const parsed = await generateJsonWithLLM<TakeawayJson>(prompt, systemPrompt);
       if (parsed && Array.isArray(parsed.coreTakeaways) && parsed.coreTakeaways.length > 0) {
-        const cleanTakeaways = parsed.coreTakeaways.map(t => 
+        const cleanTakeaways = parsed.coreTakeaways.map(t =>
           t.replace(/^[0-9]+[\.\-\)]\s*/, '').replace(/^[●•·\-\*]\s*/, '').trim()
         ).filter(t => t.length > 3);
 
@@ -679,9 +679,9 @@ Extract 2-4 ultra-concise bullet headlines (رؤوس أقلام) now in the exac
       const fallbackTakeaways = lines.slice(0, 3).length > 0
         ? lines.slice(0, 3).map((l: string) => l.slice(0, 70))
         : [
-            isArabicSlide ? `المفهوم المحوري: ${slideTitle}` : `Core Concept: ${slideTitle}`,
-            isArabicSlide ? `الآليات الأساسية: فهم المتغيرات والنتائج الرئيسية` : `Key Mechanism: Understand primary inputs and outputs`
-          ];
+          isArabicSlide ? `المفهوم المحوري: ${slideTitle}` : `Core Concept: ${slideTitle}`,
+          isArabicSlide ? `الآليات الأساسية: فهم المتغيرات والنتائج الرئيسية` : `Key Mechanism: Understand primary inputs and outputs`
+        ];
 
       return res.json({
         coreTakeaways: fallbackTakeaways,
@@ -864,11 +864,11 @@ CRITICAL RULES:
         // Student clicked "I don't know anything about this"
         const nextPrompt = targetLang === 'ar'
           ? ((slide.keyPoints && slide.keyPoints[1])
-              ? `لا مشكلة أبداً — هذا هو هدف دراستنا معاً! دعنا نبسط الأمر: هل يمكنك تذكر ما هو دور ${slide.keyPoints[1]}؟`
-              : `هذا أمر طبيعي تماماً! دعنا نأخذها خطوة بخطوة: ما هو الهدف الأساسي من ${slide.title}؟`)
+            ? `لا مشكلة أبداً — هذا هو هدف دراستنا معاً! دعنا نبسط الأمر: هل يمكنك تذكر ما هو دور ${slide.keyPoints[1]}؟`
+            : `هذا أمر طبيعي تماماً! دعنا نأخذها خطوة بخطوة: ما هو الهدف الأساسي من ${slide.title}؟`)
           : ((slide.keyPoints && slide.keyPoints[1])
-              ? `No problem at all — that's why we're studying! Let's break it down: Can you recall what role ${slide.keyPoints[1]} plays?`
-              : `That's completely fine! Let's take it one step at a time: What is the main purpose of ${slide.title}?`);
+            ? `No problem at all — that's why we're studying! Let's break it down: Can you recall what role ${slide.keyPoints[1]} plays?`
+            : `That's completely fine! Let's take it one step at a time: What is the main purpose of ${slide.title}?`);
 
         res.json({
           analysis: {
@@ -934,7 +934,7 @@ Respond in valid JSON with schema:
       }
 
       // Deterministic fallback
-      const hasKeywords = (slide.keyPoints || []).some((kp: string) => 
+      const hasKeywords = (slide.keyPoints || []).some((kp: string) =>
         studentAnswer.toLowerCase().includes(kp.split(' ')[0].toLowerCase())
       );
 
@@ -1061,7 +1061,7 @@ Respond in valid JSON with schema:
         console.warn('Python backend summarize failed, falling back:', err);
       }
 
-      const dialogue = (history || []).map((h: any, i: number) => `Q${i+1}: ${h.question}\nA${i+1}: ${h.studentAnswer}`).join('\n\n');
+      const dialogue = (history || []).map((h: any, i: number) => `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.studentAnswer}`).join('\n\n');
 
       if (getOpenAI() && dialogue.trim().length > 0) {
         const langRule = targetLang === 'ar'
@@ -1116,21 +1116,21 @@ Respond in JSON:
       const validAnswers = (history || []).map((h: any) => h.studentAnswer).filter((a: string) => a && !a.includes("don't know") && !a.includes("لا أعلم"));
       const fallbackParagraphs = targetLang === 'ar'
         ? (validAnswers.length > 1
-            ? [
-                validAnswers.slice(0, Math.ceil(validAnswers.length / 2)).join('. ') + '.',
-                validAnswers.slice(Math.ceil(validAnswers.length / 2)).join('. ') + '.'
-              ].join('\n\n')
-            : (validAnswers[0]
-                ? `${validAnswers[0]}.\n\nأظهرت إجابتك استيعاباً مباشراً للآليات والمفاهيم الأساسية المشروحة في الشريحة.`
-                : `تم استكشاف المبادئ الأساسية لـ ${slide.title}.\n\nركزت شروحاتك على المفاهيم الجوهرية والخصائص التشغيلية.`))
+          ? [
+            validAnswers.slice(0, Math.ceil(validAnswers.length / 2)).join('. ') + '.',
+            validAnswers.slice(Math.ceil(validAnswers.length / 2)).join('. ') + '.'
+          ].join('\n\n')
+          : (validAnswers[0]
+            ? `${validAnswers[0]}.\n\nأظهرت إجابتك استيعاباً مباشراً للآليات والمفاهيم الأساسية المشروحة في الشريحة.`
+            : `تم استكشاف المبادئ الأساسية لـ ${slide.title}.\n\nركزت شروحاتك على المفاهيم الجوهرية والخصائص التشغيلية.`))
         : (validAnswers.length > 1
-            ? [
-                validAnswers.slice(0, Math.ceil(validAnswers.length / 2)).join('. ') + '.',
-                validAnswers.slice(Math.ceil(validAnswers.length / 2)).join('. ') + '.'
-              ].join('\n\n')
-            : (validAnswers[0]
-                ? `${validAnswers[0]}.\n\nYour explanations demonstrated direct engagement with the core conceptual mechanisms.`
-                : `You explored the fundamentals of ${slide.title}.\n\nYour explanations focused on the primary operational characteristics.`));
+          ? [
+            validAnswers.slice(0, Math.ceil(validAnswers.length / 2)).join('. ') + '.',
+            validAnswers.slice(Math.ceil(validAnswers.length / 2)).join('. ') + '.'
+          ].join('\n\n')
+          : (validAnswers[0]
+            ? `${validAnswers[0]}.\n\nYour explanations demonstrated direct engagement with the core conceptual mechanisms.`
+            : `You explored the fundamentals of ${slide.title}.\n\nYour explanations focused on the primary operational characteristics.`));
 
       res.json({
         studentWordsSummary: fallbackParagraphs,
@@ -1238,7 +1238,7 @@ Respond in JSON:
         if (pyRes.ok) {
           const quizData = await pyRes.json();
           const cleanPrev = (previousQuestions || []).map((q: string) => q.trim().toLowerCase());
-          
+
           // Select first question that is NOT in previousQuestions
           const candidateQuestions = quizData.questions || [];
           const validQ = candidateQuestions.find((q: any) => {
@@ -1430,7 +1430,7 @@ Return JSON:
         });
       }
 
-      const allKeyPoints = (allSlides || []).flatMap((s: any) => 
+      const allKeyPoints = (allSlides || []).flatMap((s: any) =>
         (s.keyPoints || []).map((kp: string) => `[Slide ${s.pageNumber}: ${s.topic || s.title || ''}] ${kp}`)
       );
 
@@ -1543,7 +1543,7 @@ Respond strictly in valid JSON with this schema:
         });
       }
 
-      const questionsList = (gapQuestions || []).map((q: any) => 
+      const questionsList = (gapQuestions || []).map((q: any) =>
         `- Concept: ${q.concept} | Correct: ${q.isCorrect ? 'YES' : 'NO'} (Student selected: "${q.studentAnswer}")`
       ).join('\n');
 

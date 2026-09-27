@@ -73,7 +73,7 @@ export async function saveLectureToFirestore(uid: string, lecture: Lecture): Pro
         lectureId: lecture.id,
         totalPages: lecture.totalPages || lecture.slides.length
       })
-    }).catch(() => {});
+    }).catch(() => { });
 
     // 2. Save lightweight lecture without base64 canvas images in user subcollection
     const cleanSlides = (lecture.slides || []).map(s => {
@@ -90,7 +90,7 @@ export async function saveLectureToFirestore(uid: string, lecture: Lecture): Pro
         updatedAt: serverTimestamp()
       },
       { merge: true }
-    ).catch(() => {});
+    ).catch(() => { });
   } catch (err) {
     console.warn('[Firestore] saveLecture error:', err);
   }
@@ -114,7 +114,7 @@ export async function deleteLectureFromFirestore(uid: string, lectureId: string)
 
     // Also remove associated annotations
     const annotRef = doc(db, 'users', uid, 'annotations', lectureId);
-    await deleteDoc(annotRef).catch(() => {});
+    await deleteDoc(annotRef).catch(() => { });
   } catch (err) {
     console.warn('[Firestore] deleteLecture error:', err);
   }
@@ -242,7 +242,7 @@ export async function saveSessionReportToFirestore(
       });
       return docRef.id;
     }
-  } catch {}
+  } catch { }
 
   return null;
 }
@@ -324,4 +324,56 @@ export async function saveContactMessageToFirestore(
     console.error('[Firestore] saveContactMessage error:', err);
     return { success: false, error: err?.message || 'Failed to save message' };
   }
+}
+
+
+// ==========================================
+// 7. First-Time User Onboarding
+// ==========================================
+
+export const ONBOARDING_VERSION = 1;
+
+export async function getOnboardingStatus(
+  uid: string
+): Promise<boolean> {
+  const onboardingRef = doc(
+    db,
+    'users',
+    uid,
+    'onboarding',
+    'mainTour'
+  );
+
+  const snapshot = await getDoc(onboardingRef);
+
+  if (!snapshot.exists()) return false;
+
+  const data = snapshot.data();
+
+  return (
+    data.completed === true &&
+    data.version === ONBOARDING_VERSION
+  );
+}
+
+export async function completeOnboarding(
+  uid: string
+): Promise<void> {
+  const onboardingRef = doc(
+    db,
+    'users',
+    uid,
+    'onboarding',
+    'mainTour'
+  );
+
+  await setDoc(
+    onboardingRef,
+    {
+      completed: true,
+      version: ONBOARDING_VERSION,
+      completedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
 }
