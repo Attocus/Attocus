@@ -18,6 +18,98 @@ interface Message {
   externalCitation?: string;
 }
 
+const RenderFormattedText: React.FC<{ text: string }> = ({ text }) => {
+  const isArabic = /[\u0600-\u06FF]/.test(text);
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  const parseInline = (line: string) => {
+    // Clean up awkward punctuation glitches
+    const cleaned = line.replace(/^:\s*\*\*/, '**');
+    const parts = cleaned.split(/(\*\*[^*]+\*\*)/g);
+
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        const inner = part.slice(2, -2).trim();
+        const hasLatin = /[a-zA-Z]/.test(inner);
+        return (
+          <strong key={i} className="font-bold text-slate-900 dark:text-white">
+            {isArabic && hasLatin ? (
+              <bdi dir="ltr" className="inline-block px-1 mx-0.5 font-mono text-[11px] bg-slate-100 dark:bg-slate-700/60 rounded text-blue-600 dark:text-blue-400">
+                {inner}
+              </bdi>
+            ) : (
+              inner
+            )}
+          </strong>
+        );
+      }
+
+      // If the line is Arabic, isolate any English words/parentheses (e.g. (Nodes) or (Edges))
+      if (isArabic && /[a-zA-Z]/.test(part)) {
+        const subParts = part.split(/(\(?[a-zA-Z0-9_\-/\s]+\)?)/g);
+        return subParts.map((sub, j) => {
+          if (/[a-zA-Z]/.test(sub)) {
+            return (
+              <bdi
+                key={`${i}-${j}`}
+                dir="ltr"
+                className="inline-block px-1 mx-0.5 text-[11px] font-mono font-medium text-blue-600 dark:text-blue-400 bg-blue-50/70 dark:bg-blue-950/40 rounded border border-blue-100 dark:border-blue-900/40"
+              >
+                {sub}
+              </bdi>
+            );
+          }
+          return <span key={`${i}-${j}`}>{sub}</span>;
+        });
+      }
+
+      return <span key={i}>{part}</span>;
+    });
+  };
+
+  return (
+    <div
+      dir={isArabic ? 'rtl' : 'ltr'}
+      className={`space-y-1.5 leading-relaxed ${isArabic ? 'text-right font-sans' : 'text-left'}`}
+    >
+      {lines.map((line, idx) => {
+        const isBullet = /^[-*•]\s+/.test(line);
+        const isNumbered = /^\d+[\.\)]\s+/.test(line);
+
+        if (isBullet) {
+          const content = line.replace(/^[-*•]\s+/, '');
+          return (
+            <div key={idx} className="flex items-start gap-2 mr-1">
+              <span className="text-blue-500 font-bold shrink-0 mt-0.5">•</span>
+              <div className="flex-1">{parseInline(content)}</div>
+            </div>
+          );
+        }
+
+        if (isNumbered) {
+          const match = line.match(/^(\d+)[\.\)]\s+(.*)/);
+          const num = match ? match[1] : '';
+          const content = match ? match[2] : line;
+          return (
+            <div key={idx} className="flex items-start gap-2 mr-1">
+              <span className="w-4 h-4 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                {num}
+              </span>
+              <div className="flex-1">{parseInline(content)}</div>
+            </div>
+          );
+        }
+
+        return (
+          <p key={idx} className="my-0.5">
+            {parseInline(line)}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
 export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
   isOpen,
   onClose,
@@ -202,7 +294,7 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
                     : 'bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-bl-xs shadow-xs'
                 }`}
               >
-                {m.text}
+                <RenderFormattedText text={m.text} />
               </div>
 
               {/* مصادر الاقتباس */}
