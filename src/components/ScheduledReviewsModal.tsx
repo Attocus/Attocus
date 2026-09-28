@@ -75,58 +75,65 @@ export const ScheduledReviewsModal: React.FC<ScheduledReviewsModalProps> = ({
       try {
         const studentId = currentUser?.uid || 'STU_101';
         const queueRes = await fetch(`/api/spaced-repetition/queue?student_id=${studentId}`);
+        // Local fallback seed so it always looks alive and interactive
+        const fallbackData: ScheduledQuestion[] = [
+          {
+            id: 'sr_demo_1',
+            question: isAr ? 'ما هو التعقيد الزمني لخوارزمية البحث الثنائي (Binary Search)؟' : 'What is the time complexity of Binary Search?',
+            topic: isAr ? 'هياكل البيانات والخوارزميات' : 'Data Structures & Algorithms',
+            page: 4,
+            options: ['O(1)', 'O(n)', 'O(log n)', 'O(n^2)'],
+            correct_answer: 'O(log n)',
+            is_due: true,
+            days_remaining: 0,
+            status: 'pending'
+          },
+          {
+            id: 'sr_demo_2',
+            question: isAr ? 'في الشبكات العصبية الالتفافية (CNN)، ما هي الوظيفة الأساسية لطبقات الـ Pooling؟' : 'In CNNs, what is the primary role of pooling layers?',
+            topic: isAr ? 'الذكاء الاصطناعي والتعلم العميق' : 'AI & Deep Learning',
+            page: 7,
+            options: [
+              isAr ? 'تقليل الأبعاد الحسابية والاحتفاظ بالخصائص' : 'Reduce spatial dimensions while retaining features',
+              isAr ? 'زيادة عدد الأوزان العصبية' : 'Increase total neural weights',
+              isAr ? 'تشفير الصور إلى نصوص' : 'Encode images to text',
+              isAr ? 'تسريع معدل الـ Learning Rate' : 'Accelerate learning rate'
+            ],
+            correct_answer: isAr ? 'تقليل الأبعاد الحسابية والاحتفاظ بالخصائص' : 'Reduce spatial dimensions while retaining features',
+            is_due: true,
+            days_remaining: 0,
+            status: 'pending'
+          },
+          {
+            id: 'sr_demo_3',
+            question: isAr ? 'ما هو المبدأ الأساسي وراء بروتوكول Paxos في الأنظمة الموزعة؟' : 'What is the core principle behind Paxos in distributed systems?',
+            topic: isAr ? 'الأنظمة الموزعة' : 'Distributed Systems',
+            page: 3,
+            options: [
+              isAr ? 'تحقيق التوافق عبر إجماع الأغلبية (Quorum)' : 'Achieving consensus via majority quorum',
+              isAr ? 'مضاعفة سرعة نقل البيانات' : 'Doubling data throughput',
+              isAr ? 'تأمين الشبكة بجدار ناري' : 'Securing network with firewalls',
+              isAr ? 'تقسيم المعالجات المركزية' : 'Partitioning CPU cores'
+            ],
+            correct_answer: isAr ? 'تحقيق التوافق عبر إجماع الأغلبية (Quorum)' : 'Achieving consensus via majority quorum',
+            is_due: false,
+            days_remaining: 2,
+            status: 'pending'
+          }
+        ];
+
         if (queueRes.ok) {
           const queueData = await queueRes.json();
           const items: ScheduledQuestion[] = queueData.queue || [];
-          setQueue(items);
-          setDueQuestions(items.filter(item => item.is_due || (item.days_remaining !== undefined && item.days_remaining <= 0)));
+          if (items.length > 0) {
+            setQueue(items);
+            const dues = items.filter(item => item.is_due || (item.days_remaining !== undefined && item.days_remaining <= 0));
+            setDueQuestions(dues.length > 0 ? dues : items.slice(0, 2));
+          } else {
+            setQueue(fallbackData);
+            setDueQuestions(fallbackData.filter(i => i.is_due));
+          }
         } else {
-          // Local fallback seed so it always looks alive and interactive
-          const fallbackData: ScheduledQuestion[] = [
-            {
-              id: 'sr_demo_1',
-              question: isAr ? 'ما هو التعقيد الزمني لخوارزمية البحث الثنائي (Binary Search)؟' : 'What is the time complexity of Binary Search?',
-              topic: isAr ? 'هياكل البيانات والخوارزميات' : 'Data Structures & Algorithms',
-              page: 4,
-              options: ['O(1)', 'O(n)', 'O(log n)', 'O(n^2)'],
-              correct_answer: 'O(log n)',
-              is_due: true,
-              days_remaining: 0,
-              status: 'pending'
-            },
-            {
-              id: 'sr_demo_2',
-              question: isAr ? 'في الشبكات العصبية الالتفافية (CNN)، ما هي الوظيفة الأساسية لطبقات الـ Pooling؟' : 'In CNNs, what is the primary role of pooling layers?',
-              topic: isAr ? 'الذكاء الاصطناعي والتعلم العميق' : 'AI & Deep Learning',
-              page: 7,
-              options: [
-                isAr ? 'تقليل الأبعاد الحسابية والاحتفاظ بالخصائص' : 'Reduce spatial dimensions while retaining features',
-                isAr ? 'زيادة عدد الأوزان العصبية' : 'Increase total neural weights',
-                isAr ? 'تشفير الصور إلى نصوص' : 'Encode images to text',
-                isAr ? 'تسريع معدل الـ Learning Rate' : 'Accelerate learning rate'
-              ],
-              correct_answer: isAr ? 'تقليل الأبعاد الحسابية والاحتفاظ بالخصائص' : 'Reduce spatial dimensions while retaining features',
-              is_due: true,
-              days_remaining: 0,
-              status: 'pending'
-            },
-            {
-              id: 'sr_demo_3',
-              question: isAr ? 'ما هو المبدأ الأساسي وراء بروتوكول Paxos في الأنظمة الموزعة؟' : 'What is the core principle behind Paxos in distributed systems?',
-              topic: isAr ? 'الأنظمة الموزعة' : 'Distributed Systems',
-              page: 3,
-              options: [
-                isAr ? 'تحقيق التوافق عبر إجماع الأغلبية (Quorum)' : 'Achieving consensus via majority quorum',
-                isAr ? 'مضاعفة سرعة نقل البيانات' : 'Doubling data throughput',
-                isAr ? 'تأمين الشبكة بجدار ناري' : 'Securing network with firewalls',
-                isAr ? 'تقسيم المعالجات المركزية' : 'Partitioning CPU cores'
-              ],
-              correct_answer: isAr ? 'تحقيق التوافق عبر إجماع الأغلبية (Quorum)' : 'Achieving consensus via majority quorum',
-              is_due: false,
-              days_remaining: 2,
-              status: 'pending'
-            }
-          ];
           setQueue(fallbackData);
           setDueQuestions(fallbackData.filter(i => i.is_due));
         }

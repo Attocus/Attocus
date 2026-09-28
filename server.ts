@@ -286,7 +286,25 @@ async function startServer() {
       }
       res.status(pyRes.status).json(await pyRes.json());
     } catch (err: any) {
-      console.warn('Spaced Repetition queue proxy notice:', err.message);
+      console.warn('Spaced Repetition queue proxy notice (falling back to local data):', err.message);
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const filePath = path.resolve(__dirname, 'backend', 'data', 'spaced_repetition.json');
+        if (fs.existsSync(filePath)) {
+          const raw = fs.readFileSync(filePath, 'utf-8');
+          const data = JSON.parse(raw);
+          const queue = (data.reviews || []).filter((r: any) => r.status === 'pending');
+          return res.json({
+            student_id: req.query.student_id || 'STU_101',
+            queue,
+            total_scheduled: queue.length,
+            due_count: queue.length
+          });
+        }
+      } catch (fsErr) {
+        console.warn('Local spaced repetition file read notice:', fsErr);
+      }
       res.json({ student_id: req.query.student_id || 'STU_101', queue: [], total_scheduled: 0, due_count: 0 });
     }
   });
@@ -300,7 +318,24 @@ async function startServer() {
       }
       res.status(pyRes.status).json(await pyRes.json());
     } catch (err: any) {
-      console.warn('Spaced Repetition due proxy notice:', err.message);
+      console.warn('Spaced Repetition due proxy notice (falling back to local data):', err.message);
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const filePath = path.resolve(__dirname, 'backend', 'data', 'spaced_repetition.json');
+        if (fs.existsSync(filePath)) {
+          const raw = fs.readFileSync(filePath, 'utf-8');
+          const data = JSON.parse(raw);
+          const due_questions = (data.reviews || []).filter((r: any) => r.status === 'pending');
+          return res.json({
+            student_id: req.query.student_id || 'STU_101',
+            due_questions,
+            count: due_questions.length
+          });
+        }
+      } catch (fsErr) {
+        console.warn('Local spaced repetition due file read notice:', fsErr);
+      }
       res.json({ student_id: req.query.student_id || 'STU_101', due_questions: [], count: 0 });
     }
   });
