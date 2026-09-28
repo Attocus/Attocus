@@ -9,7 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, model_validator
 from dotenv import load_dotenv
 import tempfile
-from faster_whisper import WhisperModel
+try:
+    from faster_whisper import WhisperModel
+except Exception:
+    WhisperModel = None
 
 
 # Ensure backend directory is in python search path
@@ -72,12 +75,22 @@ app = FastAPI(
     version="1.1.0"
 )
 
-# Speech-to-Text model
-whisper_model = WhisperModel(
-    "small",
-    device="cpu",
-    compute_type="int8"
-)
+# Speech-to-Text model (lazy-loaded on first request to prevent blocking server startup)
+_whisper_model = None
+
+def get_whisper_model():
+    global _whisper_model
+    if _whisper_model is None and WhisperModel is not None:
+        try:
+            _whisper_model = WhisperModel(
+                "small",
+                device="cpu",
+                compute_type="int8"
+            )
+        except Exception as e:
+            print(f"[Whisper] Failed to load WhisperModel: {e}")
+            _whisper_model = None
+    return _whisper_model
 
 # Enable CORS for React frontend (localhost:3000, 5173, etc.)
 app.add_middleware(
@@ -237,7 +250,14 @@ async def transcribe_audio(file: UploadFile = File(...)):
             temp_file.write(audio_bytes)
             temp_path = temp_file.name
 
-        segments, info = whisper_model.transcribe(
+        whisper_instance = get_whisper_model()
+        if not whisper_instance:
+            raise HTTPException(
+                status_code=503,
+                detail="Speech-to-text model is not available or still loading."
+            )
+
+        segments, info = whisper_instance.transcribe(
             temp_path,
             language=None,
             beam_size=5,
