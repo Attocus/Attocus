@@ -289,6 +289,7 @@ Create a quiz ONLY from the lecture content provided below.
 Rules:
 - {lang_instruction}
 - Use ONLY academic knowledge and facts from the provided lecture content.
+- STRICT GROUNDING: Base all questions and explanations strictly on the provided lecture facts and definitions without extrapolating.
 - NEVER generate questions about slide numbers, file names, lecture titles, or visual layout placeholders.
 - Every question must test an actual concept, definition, theorem, mechanism, or fact taught in the lecture.
 - Multiple choice questions must have exactly 4 distinct, plausible options.

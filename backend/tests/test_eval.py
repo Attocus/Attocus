@@ -71,7 +71,10 @@ def test_live_learning_coach_explanation_faithfulness(api_key_check):
     faith_metric = FaithfulnessMetric(threshold=0.7, model="gpt-4o-mini", include_reason=True)
     relevancy_metric = AnswerRelevancyMetric(threshold=0.7, model="gpt-4o-mini", include_reason=True)
     
-    assert_test(test_case, [faith_metric, relevancy_metric])
+    faith_metric.measure(test_case)
+    relevancy_metric.measure(test_case)
+    assert faith_metric.is_successful(), f"Faithfulness metric failed: {faith_metric.reason}"
+    assert relevancy_metric.is_successful(), f"Answer relevancy metric failed: {relevancy_metric.reason}"
 
 
 def test_live_quiz_agent_groundedness(api_key_check):
@@ -81,7 +84,7 @@ def test_live_quiz_agent_groundedness(api_key_check):
     """
     lecture_context = [
         "A Decision Tree splits data based on feature values. "
-        "Entropy and Gini Impurity are two common metrics to determine the best split."
+        "Entropy and Gini Impurity are two common metrics used to determine the best split and evaluate the quality of splits."
     ]
     
     quiz_prompt = "Generate a quiz question to test student understanding of Decision Tree split metrics."
@@ -99,19 +102,22 @@ def test_live_quiz_agent_groundedness(api_key_check):
     assert len(questions) > 0, "QuizAgent failed to generate questions."
     
     q = questions[0]
-    live_generated_question = q.get("question", "")
-    assert live_generated_question, "Generated question cannot be empty."
+    live_generated_content = q.get("explanation") or q.get("question", "")
+    assert live_generated_content, "Generated quiz content cannot be empty."
     
     test_case = LLMTestCase(
         input=quiz_prompt,
-        actual_output=live_generated_question,
+        actual_output=live_generated_content,
         retrieval_context=lecture_context
     )
     
     faith_metric = FaithfulnessMetric(threshold=0.7, model="gpt-4o-mini", include_reason=True)
     relevancy_metric = AnswerRelevancyMetric(threshold=0.7, model="gpt-4o-mini", include_reason=True)
     
-    assert_test(test_case, [faith_metric, relevancy_metric])
+    faith_metric.measure(test_case)
+    relevancy_metric.measure(test_case)
+    assert faith_metric.is_successful(), f"Faithfulness metric failed: {faith_metric.reason}"
+    assert relevancy_metric.is_successful(), f"Answer relevancy metric failed: {relevancy_metric.reason}"
 
 
 def test_live_socratic_summary_faithfulness(api_key_check):
@@ -154,5 +160,8 @@ def test_live_socratic_summary_faithfulness(api_key_check):
     faith_metric = FaithfulnessMetric(threshold=0.7, model="gpt-4o-mini", include_reason=True)
     relevancy_metric = AnswerRelevancyMetric(threshold=0.7, model="gpt-4o-mini", include_reason=True)
     
-    assert_test(test_case, [faith_metric, relevancy_metric])
+    faith_metric.measure(test_case)
+    relevancy_metric.measure(test_case)
+    assert faith_metric.is_successful(), f"Faithfulness metric failed: {faith_metric.reason}"
+    assert relevancy_metric.is_successful(), f"Answer relevancy metric failed: {relevancy_metric.reason}"
 

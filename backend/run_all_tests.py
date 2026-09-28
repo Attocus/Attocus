@@ -43,18 +43,14 @@ def run_test_module(module_path: str, title: str) -> tuple[int, int, int, float]
     print("-" * 79)
     start_time = time.time()
     
-    deepeval_bin = os.path.join(os.path.dirname(sys.executable), "deepeval")
-    if "test_eval.py" in module_path and os.path.exists(deepeval_bin):
-        cmd = [deepeval_bin, "test", "run", module_path]
-    else:
-        cmd = [
-            sys.executable, "-m", "pytest",
-            module_path,
-            "-v",
-            "--tb=short",
-            "-W", "ignore::DeprecationWarning",
-            "-W", "ignore::FutureWarning"
-        ]
+    cmd = [
+        sys.executable, "-m", "pytest",
+        module_path,
+        "-v",
+        "--tb=short",
+        "-W", "ignore::DeprecationWarning",
+        "-W", "ignore::FutureWarning"
+    ]
     
     env = os.environ.copy()
     env["PYTHONPATH"] = backend_dir + (f":{env['PYTHONPATH']}" if "PYTHONPATH" in env else "")
