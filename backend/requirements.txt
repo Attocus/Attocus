@@ -23,3 +23,6 @@ langsmith>=0.1.0
 deepeval>=2.9.0,<3.0.0
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
+
+# Speech-to-Text
+faster-whisper>=1.1.0

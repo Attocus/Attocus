@@ -8,6 +8,9 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, model_validator
 from dotenv import load_dotenv
+import tempfile
+from faster_whisper import WhisperModel
+
 
 # Ensure backend directory is in python search path
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -67,6 +70,13 @@ app = FastAPI(
     title="Attocus Multi-Agent AI Backend",
     description="Orchestrator, Attention, Learning Coach, Quiz, Socratic Summary Agents, and Shared Firestore RAG",
     version="1.1.0"
+)
+
+# Speech-to-Text model
+whisper_model = WhisperModel(
+    "small",
+    device="cpu",
+    compute_type="int8"
 )
 
 # Enable CORS for React frontend (localhost:3000, 5173, etc.)
@@ -204,7 +214,72 @@ def health_check():
         "observability": obs_status,
         "evaluation": eval_status
     }
+# -------------------------------------------------------------
+# Voice-to-Text Transcription
+# -------------------------------------------------------------
+@app.post("/api/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    """Transcribe Arabic, English, or mixed speech using faster-whisper."""
 
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No audio file provided.")
+
+    audio_bytes = await file.read()
+
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Audio file is empty.")
+
+    suffix = Path(file.filename).suffix or ".webm"
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+            temp_file.write(audio_bytes)
+            temp_path = temp_file.name
+
+        segments, info = whisper_model.transcribe(
+            temp_path,
+            language=None,
+            beam_size=5,
+            vad_filter=True
+        )
+
+        text = " ".join(
+            segment.text.strip()
+            for segment in segments
+            if segment.text.strip()
+        ).strip()
+
+        if not text:
+            raise HTTPException(
+                status_code=422,
+                detail="No speech could be detected in the recording."
+            )
+
+        return {
+            "text": text,
+            "language": info.language,
+            "language_probability": info.language_probability
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as err:
+        print(f"[Whisper] Transcription error: {err}")
+        raise HTTPException(
+            status_code=500,
+            detail="Audio transcription failed."
+        )
+
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+            
 # -------------------------------------------------------------
 # Shared RAG & PDF Ingestion Endpoints
 # -------------------------------------------------------------

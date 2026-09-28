@@ -426,11 +426,10 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
           <div
             key={stroke.id}
             id={`annotation-text-${stroke.id}`}
-            className={`absolute pointer-events-auto transition-shadow group ${
-              isSelected
-                ? 'z-40 ring-2 ring-blue-500 rounded-xl shadow-xl'
-                : 'z-25 hover:ring-1 hover:ring-blue-400/60 rounded-xl'
-            }`}
+            className={`absolute pointer-events-auto transition-shadow group ${isSelected
+              ? 'z-40 ring-2 ring-blue-500 rounded-xl shadow-xl'
+              : 'z-25 hover:ring-1 hover:ring-blue-400/60 rounded-xl'
+              }`}
             style={{
               left: `${boxX}px`,
               top: `${boxY}px`,
@@ -449,11 +448,10 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
             {/* Top Toolbar for Selected Text */}
             {isSelected && (
               <div
-                className={`absolute left-0 -top-10 flex items-center gap-1 px-2 py-1 rounded-xl shadow-lg border text-xs z-50 animate-in fade-in zoom-in-95 duration-100 ${
-                  isDarkMode
-                    ? 'bg-slate-800/95 border-slate-700 text-slate-200'
-                    : 'bg-white/95 border-slate-200 text-slate-700'
-                }`}
+                className={`absolute left-0 -top-10 flex items-center gap-1 px-2 py-1 rounded-xl shadow-lg border text-xs z-50 animate-in fade-in zoom-in-95 duration-100 ${isDarkMode
+                  ? 'bg-slate-800/95 border-slate-700 text-slate-200'
+                  : 'bg-white/95 border-slate-200 text-slate-700'
+                  }`}
                 onPointerDown={e => e.stopPropagation()}
               >
                 {/* Drag Handle */}
@@ -507,21 +505,19 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
 
             {/* The Text Box Container */}
             <div
-              className={`w-full h-full rounded-xl transition-colors relative flex flex-col ${
-                isSelected
-                  ? isDarkMode
-                    ? 'bg-slate-900/90 border border-blue-500/40'
-                    : 'bg-white/95 border border-blue-500/40 shadow-sm'
-                  : isDarkMode
+              className={`w-full h-full rounded-xl transition-colors relative flex flex-col ${isSelected
+                ? isDarkMode
+                  ? 'bg-slate-900/90 border border-blue-500/40'
+                  : 'bg-white/95 border border-blue-500/40 shadow-sm'
+                : isDarkMode
                   ? 'bg-slate-900/60 hover:bg-slate-900/80 backdrop-blur-2xs'
                   : 'bg-white/60 hover:bg-white/80 backdrop-blur-2xs'
-              }`}
+                }`}
             >
               {/* Drag Header on the card */}
               <div
-                className={`h-4 w-full flex items-center justify-between px-2 pt-1 cursor-grab active:cursor-grabbing select-none rounded-t-xl ${
-                  isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
-                }`}
+                className={`h-4 w-full flex items-center justify-between px-2 pt-1 cursor-grab active:cursor-grabbing select-none rounded-t-xl ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
+                  }`}
                 onPointerDown={e => startDragText(e, stroke)}
               >
                 <div className="flex items-center gap-1">
@@ -538,7 +534,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
                 value={stroke.text || ''}
                 onChange={e => handleTextChange(stroke, e.target.value)}
                 placeholder={t('text.placeholder', 'اكتب هنا...')}
-                dir={isAr ? 'rtl' : 'ltr'}
+                dir="auto"
                 rows={Math.max(1, Math.ceil((stroke.text?.length || 1) / 25))}
                 className="w-full flex-1 bg-transparent p-2 text-slate-900 dark:text-slate-100 font-semibold outline-none resize-none overflow-hidden leading-snug"
                 style={{

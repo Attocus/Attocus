@@ -30,7 +30,10 @@ import {
   Sun,
   BookOpen,
   MousePointer,
-  ClipboardPaste
+  ClipboardPaste,
+  Mic,
+  Square,
+  Loader2
 } from 'lucide-react';
 import { SlideViewer } from './SlideViewer';
 import { AnnotationCanvas } from './AnnotationCanvas';
@@ -91,6 +94,18 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
   const [activeTool, setActiveTool] = useState<'pen' | 'highlighter' | 'eraser' | 'text' | 'none'>('none');
   const [activeColor, setActiveColor] = useState<string>(PEN_COLOR_OPTIONS[0].color);
   const [strokeThickness, setStrokeThickness] = useState<number>(3);
+
+  // Voice-to-Text states
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [showVoicePreview, setShowVoicePreview] = useState(false);
+  const [voiceError, setVoiceError] = useState('');
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const microphoneStreamRef = useRef<MediaStream | null>(null);
+
   const [pageAnnotations, setPageAnnotations] = useState<PageAnnotationsMap>(() => {
     try {
       const saved = localStorage.getItem(`annotations-${lecture.id}`);
@@ -765,7 +780,132 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       };
     });
   };
+  // Voice-to-Text: send recorded audio to Whisper backend
+  const transcribeVoiceRecording = async (audioBlob: Blob) => {
+    setIsTranscribing(true);
+    setVoiceError('');
 
+    try {
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'voice-note.webm');
+
+      const response = await fetch('http://localhost:8000/api/transcribe', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.detail || 'Transcription failed.');
+      }
+
+      const data = await response.json();
+
+      if (!data.text?.trim()) {
+        throw new Error('No speech was detected.');
+      }
+
+      setVoiceTranscript(data.text.trim());
+      setShowVoicePreview(true);
+
+    } catch (error) {
+      console.error('Voice transcription failed:', error);
+      setVoiceError(
+        error instanceof Error
+          ? error.message
+          : 'Voice transcription failed.'
+      );
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+
+  // Start microphone recording
+  const startVoiceRecording = async () => {
+    try {
+      setVoiceError('');
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true
+      });
+
+      microphoneStreamRef.current = stream;
+      audioChunksRef.current = [];
+
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || 'audio/webm'
+        });
+
+        stream.getTracks().forEach(track => track.stop());
+        microphoneStreamRef.current = null;
+
+        await transcribeVoiceRecording(audioBlob);
+      };
+
+      recorder.start();
+      setIsRecording(true);
+
+    } catch (error) {
+      console.error('Microphone access failed:', error);
+      setVoiceError(
+        'Microphone access was denied or the microphone is unavailable.'
+      );
+    }
+  };
+
+
+  // Stop microphone recording
+  const stopVoiceRecording = () => {
+    const recorder = mediaRecorderRef.current;
+
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+    }
+
+    setIsRecording(false);
+  };
+
+  // Add transcribed voice note as an existing Text annotation
+  const addVoiceTranscriptToSlide = () => {
+    const text = voiceTranscript.trim();
+
+    if (!text) return;
+
+    const newStroke: AnnotationStroke = {
+      id: `text-stroke-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      tool: 'text',
+      color: isDarkMode ? '#F8FAFC' : '#0F172A',
+      width: 2,
+      opacity: 1,
+      points: [],
+      text,
+      textX: 140,
+      textY: 140,
+      boxWidth: Math.min(480, Math.max(220, text.length * 10)),
+      boxHeight: Math.min(
+        220,
+        Math.max(80, Math.ceil(text.length / 45) * 28)
+      ),
+      fontSize: 16
+    };
+
+    handleAddStroke(newStroke);
+
+    setVoiceTranscript('');
+    setShowVoicePreview(false);
+    setVoiceError('');
+  };
   // Handle Paste from Clipboard directly onto the slide
   const handlePasteFromClipboard = useCallback(async () => {
     try {
@@ -884,7 +1024,66 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       className={`h-screen w-screen flex flex-col overflow-hidden selection:bg-[#0F172A] selection:text-white transition-colors duration-300 ${isDarkMode ? 'bg-[#0B0F17] text-slate-100' : 'bg-[#F8FAFC] text-slate-900'}`}
       onMouseMove={registerEngagement}
       onKeyDown={registerEngagement}
-    >
+    >{/* Voice-to-Text Preview Modal */}
+      {showVoicePreview && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div
+            className={`w-[90%] max-w-lg rounded-2xl border p-5 shadow-2xl ${isDarkMode
+                ? 'bg-slate-900 border-slate-700 text-white'
+                : 'bg-white border-slate-200 text-slate-900'
+              }`}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Mic className="w-5 h-5 text-purple-500" />
+              <h3 className="text-lg font-semibold">
+                Voice Note
+              </h3>
+            </div>
+
+            <p className={`text-sm mb-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'
+              }`}>
+              Review and edit the transcription before adding it to the slide.
+            </p>
+
+            <textarea
+              value={voiceTranscript}
+              onChange={(e) => setVoiceTranscript(e.target.value)}
+              dir="auto"
+              autoFocus
+              rows={6}
+              className={`w-full resize-y rounded-xl border p-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 ${isDarkMode
+                  ? 'bg-slate-800 border-slate-700 text-white'
+                  : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+            />
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowVoicePreview(false);
+                  setVoiceTranscript('');
+                }}
+                className={`px-4 py-2 rounded-xl text-sm font-medium ${isDarkMode
+                    ? 'bg-slate-800 hover:bg-slate-700'
+                    : 'bg-slate-100 hover:bg-slate-200'
+                  }`}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={addVoiceTranscriptToSlide}
+                disabled={!voiceTranscript.trim()}
+                className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add to Slide
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ─── 1. TOP HEADER TOOLBAR (APPLE MINIMALIST) ─────────────── */}
       <header className={`h-16 backdrop-blur-md border-b px-6 flex items-center justify-between shrink-0 select-none z-30 transition-colors duration-300 ${isFullScreen ? 'hidden' : ''} ${isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/90 border-slate-200/80'}`}>
 
@@ -988,7 +1187,41 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
               <Type className="w-3.5 h-3.5 text-purple-500" />
               <span className="hidden sm:inline">{t('workspace.text', 'نص')}</span>
             </button>
+            {/* Voice-to-Text */}
+            <button
+              type="button"
+              onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+              disabled={isTranscribing}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${isRecording
+                ? 'bg-red-100 text-red-600'
+                : isDarkMode
+                  ? 'text-slate-400 hover:text-white'
+                  : 'text-slate-500 hover:text-slate-900'
+                } ${isTranscribing ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={
+                isRecording
+                  ? 'Stop recording'
+                  : isTranscribing
+                    ? 'Transcribing...'
+                    : 'Voice note'
+              }
+            >
+              {isTranscribing ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-500" />
+              ) : isRecording ? (
+                <Square className="w-3.5 h-3.5 fill-current text-red-500" />
+              ) : (
+                <Mic className="w-3.5 h-3.5 text-purple-500" />
+              )}
 
+              <span className="hidden sm:inline">
+                {isTranscribing
+                  ? 'Transcribing...'
+                  : isRecording
+                    ? 'Stop'
+                    : 'Voice'}
+              </span>
+            </button>
             {/* ألوان القلم: التوضيح يظهر أسفل كل لون مباشرة بنفس التصميم الحالي تماماً بدون تكرار */}
             {(activeTool === 'pen' || activeTool === 'text') && (
               <div className={`flex items-center gap-2 px-2 border-r mr-1 ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
