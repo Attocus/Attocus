@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
@@ -101,6 +102,39 @@ async function startServer() {
   const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://127.0.0.1:8000';
 
   app.use(express.json({ limit: '10mb' }));
+
+  // ─── Express Rate Limiting Guardrails ──────────────────────────────────────────
+  // 1. General API Limiter: 150 requests / 1 minute (Prevents DDoS and flooding)
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 150,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+      error: 'Too many requests. Please slow down and try again shortly.',
+      errorAr: 'تم إرسال عدد كبير من الطلبات. يرجى الانتظار قليلاً والمحاولة مجدداً.'
+    }
+  });
+  app.use('/api/', apiLimiter);
+
+  // 2. Strict AI / LLM & Quiz Generation Limiter: 30 requests / 1 minute
+  // (Prevents token exhaustion, loops, and rapid LLM credit burn)
+  const aiCoachLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 30,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+      error: 'AI request limit reached. Please wait a minute before making more requests.',
+      errorAr: 'تم الوصول للحد الأقصى المؤقت لطلبات الذكاء الاصطناعي. يرجى الانتظار دقيقة لحماية الرصيد والمحاولة ثانية.'
+    }
+  });
+
+  // Apply strict limiter to heavy AI and LLM generation endpoints
+  app.use('/api/coach/', aiCoachLimiter);
+  app.use('/api/quiz/', aiCoachLimiter);
+  app.use('/api/rag/upload', aiCoachLimiter);
+
 
   // SQL Injection validation helper
   const isSqlInjection = (text: string): boolean => {
