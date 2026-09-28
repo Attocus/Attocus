@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Lecture, Slide, GapQuizQuestion, WrapUpReport, ConceptMastery } from '../types';
 import { CheckCircle, AlertCircle, ArrowLeft, Sparkles, BookOpen, Clock, Award, RotateCcw, Brain, Check, Cloud, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { saveSessionReportToFirestore } from '../services/firestoreService';
+import { saveSessionReportToFirestore, saveScheduledQuestionForStudent, saveStudentQuizAttempt } from '../services/firestoreService';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface WrapUpModalProps {
@@ -120,6 +120,18 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
     currentQ.studentAnswer = selectedOption;
     currentQ.isCorrect = selectedOption === currentQ.correctAnswer;
     setGapQuestions(updatedQuestions);
+
+    if (currentUser?.uid) {
+      saveStudentQuizAttempt(currentUser.uid, {
+        lectureId: lecture.id,
+        lectureTitle: lecture.title,
+        question: currentQ.question,
+        topic: currentQ.concept || lecture.title,
+        selectedAnswer: selectedOption,
+        correctAnswer: currentQ.correctAnswer,
+        isCorrect: selectedOption === currentQ.correctAnswer
+      }).catch(() => {});
+    }
   };
 
   const handleNextQuizQuestion = () => {
@@ -188,6 +200,11 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
       }
 
       if (scheduledItems.length > 0) {
+        if (currentUser?.uid) {
+          scheduledItems.forEach(item => {
+            saveScheduledQuestionForStudent(currentUser.uid, item).catch(() => {});
+          });
+        }
         fetch('/api/spaced-repetition/schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -236,21 +253,27 @@ export const WrapUpModal: React.FC<WrapUpModalProps> = ({
 
       const missedFallback = questions.filter(q => q.isCorrect === false);
       if (missedFallback.length > 0) {
+        const fallbackItems = missedFallback.map((q, idx) => ({
+          id: q.id || `gap_missed_${lecture.id}_${Date.now()}_${idx}`,
+          question: q.question,
+          topic: q.concept || lecture.title,
+          page: 1,
+          options: q.options || [],
+          correct_answer: q.correctAnswer,
+          explanation: q.explanation || '',
+          days_interval: 3
+        }));
+        if (currentUser?.uid) {
+          fallbackItems.forEach(item => {
+            saveScheduledQuestionForStudent(currentUser.uid, item).catch(() => {});
+          });
+        }
         fetch('/api/spaced-repetition/schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             student_id: currentUser?.uid || 'STU_101',
-            questions: missedFallback.map((q, idx) => ({
-              id: q.id || `gap_missed_${lecture.id}_${Date.now()}_${idx}`,
-              question: q.question,
-              topic: q.concept || lecture.title,
-              page: 1,
-              options: q.options || [],
-              correct_answer: q.correctAnswer,
-              explanation: q.explanation || '',
-              days_interval: 3
-            })),
+            questions: fallbackItems,
             days_interval: 3
           })
         }).catch(err => console.warn('Could not schedule fallback missed questions:', err));

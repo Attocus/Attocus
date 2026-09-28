@@ -16,6 +16,11 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  getScheduledQuestionsForStudent,
+  seedInitialStudentReviewQuestions,
+  updateScheduledQuestionStatus
+} from '../services/firestoreService';
 
 export interface ScheduledQuestion {
   id: string;
@@ -74,8 +79,69 @@ export const ScheduledReviewsModal: React.FC<ScheduledReviewsModalProps> = ({
       setIsLoading(true);
       try {
         const studentId = currentUser?.uid || 'STU_101';
-        const queueRes = await fetch(`/api/spaced-repetition/queue?student_id=${studentId}`);
-        // Local fallback seed so it always looks alive and interactive
+        let items: ScheduledQuestion[] = [];
+
+        // 1. Check student questions directly in Firestore
+        if (currentUser?.uid) {
+          try {
+            const fsItems = await getScheduledQuestionsForStudent(currentUser.uid);
+            if (fsItems && fsItems.length > 0) {
+              items = fsItems.map(f => ({
+                id: f.id || '',
+                student_id: f.student_id || currentUser.uid,
+                question: f.question,
+                topic: f.topic,
+                page: f.page,
+                options: f.options,
+                correct_answer: f.correct_answer,
+                review_date: f.review_date,
+                days_interval: f.days_interval,
+                days_remaining: f.days_remaining ?? 0,
+                is_due: f.is_due ?? true,
+                status: f.status || 'pending'
+              }));
+            } else {
+              // Automatically seed initial questions into Firestore for this student so it's linked
+              const seeded = await seedInitialStudentReviewQuestions(currentUser.uid, isAr);
+              if (seeded && seeded.length > 0) {
+                items = seeded.map(f => ({
+                  id: f.id || '',
+                  student_id: currentUser.uid,
+                  question: f.question,
+                  topic: f.topic,
+                  page: f.page,
+                  options: f.options,
+                  correct_answer: f.correct_answer,
+                  review_date: f.review_date,
+                  days_interval: f.days_interval,
+                  days_remaining: f.days_remaining ?? 0,
+                  is_due: f.is_due ?? true,
+                  status: f.status || 'pending'
+                }));
+              }
+            }
+          } catch (fsErr) {
+            console.warn('[Firestore] Scheduled reviews fetch error:', fsErr);
+          }
+        }
+
+        // 2. If Firestore did not yield items, check spaced-repetition API (which also queries Firestore Admin)
+        if (items.length === 0) {
+          try {
+            const queueRes = await fetch(`/api/spaced-repetition/queue?student_id=${studentId}`);
+            if (queueRes.ok) {
+              const queueData = await queueRes.json();
+              const backendItems: ScheduledQuestion[] = queueData.queue || [];
+              if (backendItems.length > 0) {
+                items = backendItems;
+              }
+            }
+          } catch (apiErr) {
+            console.warn('[API] Spaced repetition queue fetch error:', apiErr);
+          }
+        }
+
+        // 3. Fallback data so UI is always interactive even offline
         const fallbackData: ScheduledQuestion[] = [
           {
             id: 'sr_demo_1',
@@ -122,21 +188,13 @@ export const ScheduledReviewsModal: React.FC<ScheduledReviewsModalProps> = ({
           }
         ];
 
-        if (queueRes.ok) {
-          const queueData = await queueRes.json();
-          const items: ScheduledQuestion[] = queueData.queue || [];
-          if (items.length > 0) {
-            setQueue(items);
-            const dues = items.filter(item => item.is_due || (item.days_remaining !== undefined && item.days_remaining <= 0));
-            setDueQuestions(dues.length > 0 ? dues : items.slice(0, 2));
-          } else {
-            setQueue(fallbackData);
-            setDueQuestions(fallbackData.filter(i => i.is_due));
-          }
-        } else {
-          setQueue(fallbackData);
-          setDueQuestions(fallbackData.filter(i => i.is_due));
+        if (items.length === 0) {
+          items = fallbackData;
         }
+
+        setQueue(items);
+        const dues = items.filter(item => item.is_due || (item.days_remaining !== undefined && item.days_remaining <= 0));
+        setDueQuestions(dues.length > 0 ? dues : items.slice(0, 2));
       } catch (err) {
         console.warn('Error fetching spaced repetition:', err);
       } finally {
@@ -145,7 +203,7 @@ export const ScheduledReviewsModal: React.FC<ScheduledReviewsModalProps> = ({
     };
 
     fetchScheduledReviews();
-  }, [isOpen, isAr]);
+  }, [isOpen, isAr, currentUser?.uid]);
 
   if (!isOpen) return null;
 
@@ -170,12 +228,22 @@ export const ScheduledReviewsModal: React.FC<ScheduledReviewsModalProps> = ({
       setReviewedIds(prev => new Set(prev).add(currentActiveQ.id));
     }
 
-    // Inform backend of review result
+    const studentUid = currentUser?.uid;
+
+    // 1. Direct update to student's question in Firestore
+    if (studentUid && currentActiveQ.id) {
+      updateScheduledQuestionStatus(studentUid, currentActiveQ.id, correct).catch((err) => {
+        console.warn('[Firestore] Error updating question status:', err);
+      });
+    }
+
+    // 2. Also inform backend spaced-repetition API
     try {
       await fetch('/api/spaced-repetition/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          student_id: studentUid || 'STU_101',
           item_id: currentActiveQ.id,
           is_correct: correct
         })

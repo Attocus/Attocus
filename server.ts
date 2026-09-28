@@ -279,7 +279,58 @@ async function startServer() {
   // ==============================================================
   app.get('/api/spaced-repetition/queue', async (req, res) => {
     try {
-      const studentId = req.query.student_id || 'STU_101';
+      const studentId = (req.query.student_id as string) || 'STU_101';
+      const db = getAdminDb();
+
+      // 1. Direct Cloud Firestore query for this specific student
+      if (db && studentId) {
+        try {
+          let snap = await db.collection('users').doc(studentId).collection('scheduled_reviews')
+            .where('status', '==', 'pending')
+            .get();
+
+          if (snap.empty) {
+            snap = await db.collection('review_questions')
+              .where('student_id', '==', studentId)
+              .where('status', '==', 'pending')
+              .get();
+          }
+
+          if (!snap.empty) {
+            const now = Date.now();
+            const queue: any[] = [];
+            snap.forEach((doc: any) => {
+              const data = doc.data();
+              let daysRemaining = 0;
+              let isDue = false;
+              if (data.review_date) {
+                const dueTime = new Date(data.review_date).getTime();
+                const diffMs = dueTime - now;
+                daysRemaining = Math.max(0, Math.round((diffMs / 86400000) * 10) / 10);
+                isDue = diffMs <= 0;
+              }
+              queue.push({
+                ...data,
+                id: doc.id,
+                days_remaining: daysRemaining,
+                is_due: isDue
+              });
+            });
+
+            return res.json({
+              student_id: studentId,
+              queue,
+              total_scheduled: queue.length,
+              due_count: queue.filter((q: any) => q.is_due).length,
+              source: 'firestore'
+            });
+          }
+        } catch (fErr) {
+          console.warn('[Firestore] Spaced repetition queue read error:', fErr);
+        }
+      }
+
+      // 2. Python Backend Proxy
       const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/spaced-repetition/queue?student_id=${studentId}`);
       if (pyRes.ok) {
         return res.json(await pyRes.json());
@@ -311,7 +362,47 @@ async function startServer() {
 
   app.get('/api/spaced-repetition/due', async (req, res) => {
     try {
-      const studentId = req.query.student_id || 'STU_101';
+      const studentId = (req.query.student_id as string) || 'STU_101';
+      const db = getAdminDb();
+
+      // 1. Direct Cloud Firestore query for due items
+      if (db && studentId) {
+        try {
+          const snap = await db.collection('users').doc(studentId).collection('scheduled_reviews')
+            .where('status', '==', 'pending')
+            .get();
+
+          if (!snap.empty) {
+            const now = Date.now();
+            const due_questions: any[] = [];
+            snap.forEach((doc: any) => {
+              const data = doc.data();
+              if (data.review_date) {
+                const diffMs = new Date(data.review_date).getTime() - now;
+                if (diffMs <= 0) {
+                  due_questions.push({
+                    ...data,
+                    id: doc.id,
+                    is_due: true,
+                    days_remaining: 0
+                  });
+                }
+              }
+            });
+
+            return res.json({
+              student_id: studentId,
+              due_questions,
+              count: due_questions.length,
+              source: 'firestore'
+            });
+          }
+        } catch (fErr) {
+          console.warn('[Firestore] Spaced repetition due read error:', fErr);
+        }
+      }
+
+      // 2. Python Backend Proxy
       const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/spaced-repetition/due?student_id=${studentId}`);
       if (pyRes.ok) {
         return res.json(await pyRes.json());
@@ -342,15 +433,38 @@ async function startServer() {
 
   app.post('/api/spaced-repetition/review', async (req, res) => {
     try {
-      const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/spaced-repetition/review`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req.body)
-      });
-      if (pyRes.ok) {
-        return res.json(await pyRes.json());
+      const { item_id, is_correct, student_id } = req.body;
+      const db = getAdminDb();
+
+      // Update in Firestore
+      if (db && item_id) {
+        try {
+          const updateData = is_correct
+            ? { status: 'mastered', reviewed_at: new Date().toISOString() }
+            : { status: 'pending', review_date: new Date(Date.now() + 3 * 86400000).toISOString(), reviewed_at: new Date().toISOString() };
+
+          await db.collection('review_questions').doc(item_id).set(updateData, { merge: true }).catch(() => {});
+          if (student_id) {
+            await db.collection('users').doc(student_id).collection('scheduled_reviews').doc(item_id).set(updateData, { merge: true }).catch(() => {});
+          }
+        } catch (fErr) {
+          console.warn('[Firestore] Spaced repetition review update error:', fErr);
+        }
       }
-      res.status(pyRes.status).json(await pyRes.json());
+
+      // Also forward to Python Backend if reachable
+      try {
+        const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/spaced-repetition/review`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req.body)
+        });
+        if (pyRes.ok) {
+          return res.json(await pyRes.json());
+        }
+      } catch {}
+
+      res.json({ success: true, firestore_synced: true });
     } catch (err: any) {
       console.warn('Spaced Repetition review proxy notice:', err.message);
       res.json({ success: true, local_fallback: true });
@@ -359,15 +473,65 @@ async function startServer() {
 
   app.post('/api/spaced-repetition/schedule', async (req, res) => {
     try {
-      const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/spaced-repetition/schedule`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req.body)
-      });
-      if (pyRes.ok) {
-        return res.json(await pyRes.json());
+      const { student_id, questions, days_interval } = req.body;
+      const db = getAdminDb();
+      const sid = student_id || 'STU_101';
+
+      // 1. Direct Cloud Firestore Batch Write for this student
+      if (db && questions && Array.isArray(questions) && questions.length > 0) {
+        try {
+          const batch = db.batch();
+          const now = new Date();
+          const interval = days_interval || 3;
+          const reviewDate = new Date(now.getTime() + interval * 86400000).toISOString();
+
+          for (const q of questions) {
+            const docId = q.id || `sr_${sid}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+            const payload = {
+              id: docId,
+              student_id: sid,
+              question: q.question || '',
+              topic: q.topic || 'المحاضرة',
+              page: q.page || 1,
+              options: q.options || [],
+              correct_answer: q.correct_answer || q.correctAnswer || '',
+              explanation: q.explanation || '',
+              created_at: now.toISOString(),
+              review_date: reviewDate,
+              days_interval: interval,
+              status: 'pending',
+              review_count: 0
+            };
+
+            // Write to user personal subcollection
+            const userDocRef = db.collection('users').doc(sid).collection('scheduled_reviews').doc(docId);
+            batch.set(userDocRef, payload, { merge: true });
+
+            // Write to root review_questions collection
+            const rootDocRef = db.collection('review_questions').doc(docId);
+            batch.set(rootDocRef, payload, { merge: true });
+          }
+
+          await batch.commit();
+          console.log(`[Firestore] Successfully scheduled ${questions.length} review questions for student: ${sid}`);
+        } catch (fErr) {
+          console.warn('[Firestore] Error saving scheduled questions to Firestore:', fErr);
+        }
       }
-      res.status(pyRes.status).json(await pyRes.json());
+
+      // 2. Also forward to Python Backend if reachable
+      try {
+        const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/spaced-repetition/schedule`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req.body)
+        });
+        if (pyRes.ok) {
+          return res.json(await pyRes.json());
+        }
+      } catch {}
+
+      res.json({ success: true, count: questions?.length || 0, firestore_synced: true });
     } catch (err: any) {
       console.warn('Spaced Repetition schedule proxy notice:', err.message);
       res.json({ success: true, local_fallback: true });

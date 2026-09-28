@@ -26,5 +26,21 @@ service cloud.firestore {
         allow read, write: if request.auth != null;
       }
     }
+
+    // 4. الأسئلة المجدولة والتكرار المتباعد للطلاب
+    match /review_questions/{questionId} {
+      allow read, write: if true;
+    }
+
+    // 5. جلسات وملخصات واختبارات الطلاب
+    match /sessions/{sessionId} {
+      allow read, write: if true;
+    }
+    match /quizzes/{quizId} {
+      allow read, write: if true;
+    }
+    match /summaries/{summaryId} {
+      allow read, write: if true;
+    }
   }
 }

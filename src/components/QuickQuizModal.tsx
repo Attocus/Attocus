@@ -4,6 +4,7 @@ import { CheckCircle2, X, HelpCircle, Loader2, Sparkles } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getSlideLanguage } from '../utils/slideLanguage';
+import { saveStudentQuizAttempt, saveScheduledQuestionForStudent } from '../services/firestoreService';
 
 interface QuickQuizModalProps {
   isOpen: boolean;
@@ -258,24 +259,46 @@ export const QuickQuizModal: React.FC<QuickQuizModalProps> = ({
                   onClick={() => {
                     if (selectedOption) {
                       setSubmitted(true);
-                      if (selectedOption !== correctAnswer) {
+                      const isAnsCorrect = selectedOption === correctAnswer;
+                      const studentUid = currentUser?.uid;
+
+                      // 1. Log quiz attempt under student in Firestore
+                      if (studentUid) {
+                        saveStudentQuizAttempt(studentUid, {
+                          lectureTitle: lectureTitle || 'Lecture',
+                          slideNumber: slide.pageNumber || 1,
+                          question,
+                          topic: slide.topic || slide.title || lectureTitle || (isAr ? 'مفهوم رئيسي' : 'Core Concept'),
+                          selectedAnswer: selectedOption,
+                          correctAnswer,
+                          isCorrect: isAnsCorrect
+                        }).catch(() => {});
+                      }
+
+                      // 2. If missed, immediately tie this scheduled review question to student in Firestore
+                      if (!isAnsCorrect) {
+                        const questionItem = {
+                          id: `quick_missed_${slide.id}_${Date.now()}`,
+                          question,
+                          topic: slide.topic || slide.title || lectureTitle || (isAr ? 'مفهوم رئيسي' : 'Core Concept'),
+                          page: slide.pageNumber || 1,
+                          options,
+                          correct_answer: correctAnswer,
+                          explanation,
+                          days_interval: 3
+                        };
+
+                        if (studentUid) {
+                          saveScheduledQuestionForStudent(studentUid, questionItem).catch(() => {});
+                        }
+
+                        // Also push via spaced-repetition API (which updates both user and root collections)
                         fetch('/api/spaced-repetition/schedule', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
-                            student_id: currentUser?.uid || 'STU_101',
-                            questions: [
-                              {
-                                id: `quick_missed_${slide.id}_${Date.now()}`,
-                                question,
-                                topic: slide.topic || slide.title || lectureTitle || (isAr ? 'مفهوم رئيسي' : 'Core Concept'),
-                                page: slide.pageNumber || 1,
-                                options,
-                                correct_answer: correctAnswer,
-                                explanation,
-                                days_interval: 3
-                              }
-                            ],
+                            student_id: studentUid || 'STU_101',
+                            questions: [questionItem],
                             days_interval: 3
                           })
                         }).catch(e => console.warn('Could not schedule missed quick quiz:', e));
