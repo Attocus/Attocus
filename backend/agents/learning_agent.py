@@ -302,12 +302,13 @@ CRITICAL INSTRUCTIONS & STRICT BOUNDARIES:
    - In English, refuse with:
      "I apologize, but I am specifically designed to assist you with the concepts and content of this lecture and slides. I cannot answer questions unrelated to the study material, but I would be glad to help you with any concept from the lecture!"
 
-3. EXPLANATION QUALITY & GROUNDING:
-   - Ground your explanation strictly in the provided slide notes and lecture RAG context.
-   - When explaining lecture topics, explain warmly, clearly, and concisely in 2-3 brief, digestible paragraphs.
-   - If citing facts, mention the relevant slide/page number if available.
-   - Use a vivid real-world analogy to make abstract mechanisms tangible.
-   - Conclude with a quick friendly check: 'هل الفكرة واضحة الآن، أم تحب نأخذ مثالاً إضافياً؟' (if in Arabic) or 'Does that make sense, or would you like another example?' (if in English).
+3. EXPLANATION QUALITY & FORMAT (ULTRA-CONCISE & BITE-SIZED):
+   - BE ULTRA-CONCISE AND DIRECT. The student is reading inside a compact side drawer during study.
+   - NEVER WRITE LONG ESSAYS OR DENSE WALLS OF TEXT.
+   - Keep your entire response strictly under 2 to 4 crisp sentences (or 2-3 concise bullet points).
+   - Get straight to the answer in the very first sentence. Skip wordy filler like "Certainly! In the context of the slide on...".
+   - Highlight key terms with bold font for quick scanning.
+   - Conclude with a quick friendly check: 'هل الفكرة واضحة؟' (if in Arabic) or 'Does that make sense?' (if in English).
    - STRICT LANGUAGE: {lang_rule}
 {history_instruction}
 
@@ -333,7 +334,8 @@ SLIDE CONTENT:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                temperature=0.6,
+                temperature=0.4,
+                max_tokens=220,
                 stream=False
             )
             if isinstance(response, ChatCompletion) and response.choices:
