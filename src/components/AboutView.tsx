@@ -335,8 +335,8 @@ export const AboutView: React.FC<AboutViewProps> = ({
               className="flex items-center gap-2.5 p-1 -m-1 rounded-xl hover:opacity-85 transition-opacity group text-left"
               title={isAr ? 'العودة للمنصة الرئيسية' : 'Return to Workspace'}
             >
-              <div className="w-10 h-10 rounded-xl bg-[#0F172A] dark:bg-blue-600 flex items-center justify-center text-white shadow-sm ring-1 ring-black/5 group-hover:scale-105 transition-transform">
-                <GraduationCap className="w-5 h-5 text-blue-400 dark:text-white" />
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-xs ring-1 ring-black/5 dark:ring-white/20 group-hover:scale-105 transition-transform bg-white p-0.5">
+                <img src="/assets/logos/logo_squircle_eye.png" alt="ATTOCUS" className="w-full h-full object-contain" />
               </div>
               <div className={`flex flex-col ${isAr ? 'text-right' : 'text-left'}`}>
                 <div className="flex items-center gap-1.5">

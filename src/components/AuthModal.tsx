@@ -100,8 +100,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
         {/* رأس النافذة */}
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-[#0F172A] dark:bg-blue-600 text-white flex items-center justify-center mx-auto shadow-sm ring-1 ring-black/5">
-            <GraduationCap className="w-6 h-6 text-blue-400 dark:text-white" />
+          <div className="w-12 h-12 rounded-2xl overflow-hidden flex items-center justify-center mx-auto shadow-sm ring-1 ring-black/5 dark:ring-white/10 bg-[#0B0F19]">
+            <img src="/assets/logos/logo_dark_square_cheetah.png" alt="Attocus" className="w-full h-full object-cover" />
           </div>
           <h2 className="text-xl font-bold tracking-tight text-[#0F172A] dark:text-white">
             {mode === 'signin'

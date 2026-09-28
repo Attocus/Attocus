@@ -320,8 +320,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
           {/* اللوجو والاسم الأكاديمي */}
           <div className="flex items-center gap-3 shrink-0">
-            <div className="w-10 h-10 rounded-xl bg-[#0F172A] dark:bg-blue-600 flex items-center justify-center text-white shadow-sm ring-1 ring-black/5">
-              <GraduationCap className="w-5 h-5 text-blue-400 dark:text-white" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm ring-1 ring-black/5 dark:ring-white/20 bg-white p-0.5">
+              <img src="/assets/logos/logo_squircle_eye.png" alt="ATTOCUS Logo" className="w-full h-full object-contain hover:scale-105 transition-transform" />
             </div>
             <div className={`flex flex-col ${isAr ? 'text-right' : 'text-left'}`}>
               <span className="text-base font-bold tracking-wider text-[#0F172A] dark:text-white font-serif uppercase">
@@ -353,9 +353,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   {currentUser.photoURL ? (
                     <img src={currentUser.photoURL} alt="" className="w-6 h-6 rounded-full object-cover" />
                   ) : (
-                    <div className="w-6 h-6 rounded-full bg-[#0F172A] dark:bg-blue-600 text-white text-[11px] font-semibold flex items-center justify-center">
-                      {displayName.charAt(0)}
-                    </div>
+                    <img src="/assets/logos/logo_circle_eye.png" alt="" className="w-6 h-6 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700 bg-white" />
                   )}
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 max-w-[120px] truncate">
                     {displayName.split(' ')[0]}
@@ -820,8 +818,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {/* نبذة وشعار آبل الرسمي */}
             <div className={`lg:col-span-2 space-y-4 ${isAr ? 'text-right' : 'text-left'}`}>
               <div className={`flex items-center gap-3 ${isAr ? 'justify-start' : 'justify-start'}`}>
-                <div className="w-9 h-9 rounded-xl bg-[#0F172A] dark:bg-blue-600 flex items-center justify-center text-white shadow-sm">
-                  <GraduationCap className="w-5 h-5 text-blue-400 dark:text-white" />
+                <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-xs">
+                  <img src="/assets/logos/logo_dark_square_cheetah.png" alt="ATTOCUS Logo" className="w-full h-full object-cover" />
                 </div>
                 <span className="text-base font-bold tracking-wider text-[#0F172A] dark:text-white font-serif uppercase">
                   {t('app.title', 'ATTOCUS')}

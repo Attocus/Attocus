@@ -98,10 +98,8 @@ export const InfoPagesView: React.FC<InfoPagesViewProps> = ({
               className="flex items-center gap-2.5 group cursor-pointer"
               title={isAr ? 'العودة إلى لوحة التحكم' : 'Return to Dashboard'}
             >
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-[1px] shadow-sm">
-                <div className="w-full h-full bg-[#0B0F19] rounded-[11px] flex items-center justify-center">
-                  <GraduationCap className="w-4 h-4 text-blue-400" />
-                </div>
+              <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-xs bg-white ring-1 ring-black/5 dark:ring-white/20 p-0.5">
+                <img src="/assets/logos/logo_squircle_eye.png" alt="ATTOCUS" className="w-full h-full object-contain" />
               </div>
               <div className="flex flex-col text-right">
                 <span className="text-sm font-black tracking-wider text-slate-900 dark:text-white font-serif uppercase">

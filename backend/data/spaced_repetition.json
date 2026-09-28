@@ -911,6 +911,27 @@
       "days_interval": 3,
       "status": "pending",
       "review_count": 0
+    },
+    {
+      "id": "sr_TEST_STU_q101_1790579992",
+      "student_id": "TEST_STU",
+      "question_id": "q101",
+      "question": "What is polymorphism?",
+      "topic": "OOP",
+      "page": 2,
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "correct_answer": "B",
+      "explanation": "",
+      "created_at": "2026-09-28T07:19:52.024445+00:00",
+      "review_date": "2026-10-01T07:19:52.024445+00:00",
+      "days_interval": 3,
+      "status": "pending",
+      "review_count": 0
     }
   ]
 }

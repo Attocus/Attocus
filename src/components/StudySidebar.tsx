@@ -547,8 +547,8 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-slate-200 py-6 px-4 bg-slate-50/60 text-center space-y-1.5">
-            <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 mx-auto">
-              <VideoOff className="w-4 h-4" />
+            <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center mx-auto overflow-hidden shadow-xs">
+              <img src="/assets/logos/logo_circle_eye.png" alt="Focus Radar" className="w-8 h-8 object-contain" />
             </div>
             <p className="text-xs font-bold text-slate-700">{isAr ? 'التتبع بالكاميرا متوقف حالياً' : 'Camera tracking currently off'}</p>
             <p className="text-[11px] text-slate-400 leading-relaxed">
