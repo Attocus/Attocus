@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  GraduationCap,
   Sparkles,
   Brain,
   ShieldCheck,
@@ -29,7 +28,6 @@ import {
   Database,
   Activity,
   ArrowUpRight,
-  Check,
   Globe,
   BookOpen
 } from 'lucide-react';
@@ -49,116 +47,45 @@ interface TeamMember {
   nameEn: string;
   roleAr: string;
   roleEn: string;
-  academicAr: string;
-  academicEn: string;
-  bioAr: string;
-  bioEn: string;
   linkedin: string;
   avatarColor: string;
-  tagAr: string;
-  tagEn: string;
-  contributionsAr: string[];
-  contributionsEn: string[];
 }
 
 const TEAM_MEMBERS: TeamMember[] = [
   {
     nameAr: 'طيف العنزي',
     nameEn: 'Taif Alanzi',
-    roleAr: 'مؤسسة مشاركة ومهندسة ذكاء اصطناعي وكيلي',
-    roleEn: 'Co-Founder & Agentic AI Engineer',
-    academicAr: 'نظم معلومات',
-    academicEn: 'Information Systems',
-    tagAr: 'محرك تتبع التركيز وقواعد البيانات',
-    tagEn: 'Attention Tracking Engine & Databases',
+    roleAr: 'مهندسة ذكاء اصطناعي وكيلي',
+    roleEn: 'Agentic AI Engineer',
     avatarColor: 'from-amber-500 to-orange-600',
-    linkedin: 'https://www.linkedin.com/in/taif-alanzi-is',
-    bioAr: 'قادت هندسة وتطوير منظومة رصد وتتبع التركيز (Attention Tracking Engine) ومؤشرات التشتت وتنبيه الهاتف، وشاركت في تصميم وبناء قواعد البيانات، مع المساهمة الجماعية في تطوير واجهات المنصة وبناء تجربة المستخدم.',
-    bioEn: 'Spearheaded the real-time Attention & Focus Tracking engine and distraction heuristics, co-engineered database systems, and contributed collaboratively to the interactive frontend UI.',
-    contributionsAr: [
-      'هندسة وتطوير منظومة رصد التركيز واليقظة وتنبيهات الهاتف',
-      'المشاركة في تصميم وتكامل قواعد البيانات وحفظ البيانات الأكاديمية',
-      'المساهمة في بناء وتطوير واجهات المستخدم التفاعلية والعمل التكاملي المشترك'
-    ],
-    contributionsEn: [
-      'Engineered the real-time Attention & Focus Tracking engine and alert heuristics',
-      'Co-architected database persistence and schema design',
-      'Collaborative frontend UI development and full platform integration'
-    ]
+    linkedin: 'https://www.linkedin.com/in/taif-alanzi-is'
   },
   {
     nameAr: 'بارقة الجارالله',
     nameEn: 'Bariqa Aljarallah',
-    roleAr: 'مؤسسة مشاركة ومهندسة ذكاء اصطناعي وكيلي',
-    roleEn: 'Co-Founder & Agentic AI Engineer',
-    academicAr: 'علوم حاسب',
-    academicEn: 'Computer Science',
-    tagAr: 'وكيل التنسيق المركزي وقواعد البيانات',
-    tagEn: 'Orchestrator Agent & Databases',
+    roleAr: 'مهندسة ذكاء اصطناعي وكيلي',
+    roleEn: 'Agentic AI Engineer',
     avatarColor: 'from-emerald-600 to-teal-600',
-    linkedin: 'https://www.linkedin.com/in/bariqa-aljarallah?utm_source=share_via&utm_content=profile&utm_medium=member_ios',
-    bioAr: 'قادت هندسة وتطوير وكيل التنسيق الرئيسي (Orchestrator Agent) لإدارة وتوجيه شبكة الوكلاء الذكية، وشاركت في بناء وإدارة بنية قواعد البيانات، مع المساهمة الجماعية في تطوير واجهات المنصة وبنائها المشترك.',
-    bioEn: 'Architected the central Orchestrator Agent managing multi-agent coordination and cognitive workflows, co-built database infrastructure, and contributed collaboratively to the interactive UI.',
-    contributionsAr: [
-      'تطوير وهندسة وكيل التنسيق الرئيسي (Orchestrator Agent) وإدارة سير عمل الوكلاء',
-      'المشاركة في بناء وتكامل قواعد البيانات والربط السحابي للبيانات',
-      'المساهمة في بناء وتطوير واجهات المستخدم التفاعلية والعمل التكاملي المشترك'
-    ],
-    contributionsEn: [
-      'Architected and deployed the central Orchestrator Agent workflow',
-      'Co-engineered database integrations and data persistence',
-      'Collaborative frontend UI development and full platform integration'
-    ]
+    linkedin: 'https://www.linkedin.com/in/bariqa-aljarallah?utm_source=share_via&utm_content=profile&utm_medium=member_ios'
   },
   {
     nameAr: 'سكينة الرمضان',
     nameEn: 'Sukainah Alramadhan',
-    roleAr: 'مؤسسة مشاركة ومهندسة ذكاء اصطناعي وكيلي',
-    roleEn: 'Co-Founder & Agentic AI Engineer',
-    academicAr: 'ذكاء اصطناعي',
-    academicEn: 'Artificial Intelligence',
-    tagAr: 'كوتش التعلم والتدريب التفاعلي',
-    tagEn: 'Learning Coach Agent & AI Tutoring',
+    roleAr: 'مهندسة ذكاء اصطناعي وكيلي',
+    roleEn: 'Agentic AI Engineer',
     avatarColor: 'from-blue-600 to-indigo-600',
-    linkedin: 'https://sa.linkedin.com/in/sukainah-alramadhan/ar',
-    bioAr: 'قادت هندسة وتطوير كوتش التعلم الذكي (Learning Coach Agent) لتقديم الشرح التفاعلي والإجابة الذكية الموجهة للطلاب، مع المساهمة الجماعية في تطوير واجهات المنصة وبنائها المشترك.',
-    bioEn: 'Spearheaded the Learning Coach Agent delivering adaptive interactive explanations and personalized academic tutoring, alongside collaborative contributions to the frontend UI.',
-    contributionsAr: [
-      'تطوير وهندسة كوتش التعلم والشرح التفاعلي (Learning Coach Agent)',
-      'صياغة نماذج التوجيه المعرفي والاستيعاب التكيفي لأسئلة الطلاب',
-      'المساهمة في بناء وتطوير واجهات المستخدم التفاعلية والعمل التكاملي المشترك'
-    ],
-    contributionsEn: [
-      'Engineered the interactive Learning Coach Agent',
-      'Refined pedagogical heuristics for guided student explanations',
-      'Collaborative frontend UI development and full platform integration'
-    ]
+    linkedin: 'https://sa.linkedin.com/in/sukainah-alramadhan/ar'
   },
   {
     nameAr: 'رنا العصيمي',
     nameEn: 'Rana Alosami',
-    roleAr: 'مؤسسة مشاركة ومهندسة ذكاء اصطناعي وكيلي',
-    roleEn: 'Co-Founder & Agentic AI Engineer',
-    academicAr: 'هندسة حاسب',
-    academicEn: 'Computer Engineering',
-    tagAr: 'وكيل الاختبارات والتقييم الذكي',
-    tagEn: 'Quiz Agent & Active Recall',
+    roleAr: 'مهندسة ذكاء اصطناعي وكيلي',
+    roleEn: 'Agentic AI Engineer',
     avatarColor: 'from-purple-600 to-pink-600',
-    linkedin: 'https://www.linkedin.com/in/rana-alosaimi-7a81ab24a?utm_source=share_via&utm_content=profile&utm_medium=member_ios',
-    bioAr: 'قادت هندسة وتطوير وكيل الاختبارات الذكي (Quiz Agent) لتوليد أسئلة الاستدعاء النشط وتقييم الإجابات بدقة وفق محتوى المحاضرة، مع المساهمة الجماعية في تطوير واجهات المنصة وبنائها المشترك.',
-    bioEn: 'Spearheaded the intelligent Quiz Agent generating targeted active recall assessments and grounded evaluations, alongside collaborative contributions to the interactive UI.',
-    contributionsAr: [
-      'تطوير وهندسة وكيل الاختبارات والتقييم المعرفي (Quiz Agent)',
-      'بناء منطق صياغة أسئلة الاستدعاء النشط والتقييم الموضوعي المستند للمحاضرة',
-      'المساهمة في بناء وتطوير واجهات المستخدم التفاعلية والعمل التكاملي المشترك'
-    ],
-    contributionsEn: [
-      'Engineered the automated Quiz Agent for active recall testing',
-      'Designed grounded question generation and scoring heuristics',
-      'Collaborative frontend UI development and full platform integration'
-    ]
+    linkedin: 'https://www.linkedin.com/in/rana-alosaimi-7a81ab24a?utm_source=share_via&utm_content=profile&utm_medium=member_ios'
   }
 ];
+
 
 const TECH_STACK = [
   {
@@ -348,7 +275,7 @@ export const AboutView: React.FC<AboutViewProps> = ({
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-400 dark:text-slate-400 font-medium">
-                  {isAr ? 'عن المنصة وفريق التأسيس' : 'About & Co-Founders'}
+                  {isAr ? 'عن المنصة وفريق العمل' : 'About & Engineering Team'}
                 </span>
               </div>
             </button>
@@ -379,7 +306,7 @@ export const AboutView: React.FC<AboutViewProps> = ({
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <span>{isAr ? 'فريق التأسيس' : 'Co-Founders & Team'}</span>
+              <span>{isAr ? 'فريق العمل' : 'Engineering Team'}</span>
               {activeTab === 'developers' && (
                 <span className="absolute -bottom-1.5 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
               )}
@@ -571,17 +498,17 @@ export const AboutView: React.FC<AboutViewProps> = ({
       <section id="developers" className="py-16 px-6 sm:px-8 xl:px-12 border-b border-slate-200/60 dark:border-slate-800 bg-slate-50/50 dark:bg-[#0c101d]/40">
         <div className="max-w-5xl mx-auto space-y-12">
           <div className={`space-y-3 ${isAr ? 'text-right' : 'text-left'}`}>
-            <div className="inline-flex items-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400 tracking-wider uppercase">
+            <div className="inline-flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 tracking-wider uppercase">
               <Award className="w-4 h-4" />
-              <span>{isAr ? 'فريق التأسيس والهندسة البرمجية' : 'Co-Founding & Engineering Team'}</span>
+              <span>{isAr ? 'فريق العمل' : 'Our Team'}</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white font-serif">
-              {isAr ? 'فريق التأسيس والهندسة البرمجية' : 'Co-Founders & Core Engineering Team'}
+              {isAr ? 'فريق التطوير والهندسة البرمجية' : 'Engineering Team'}
             </h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">
               {isAr
-                ? 'فريق التأسيس المكون من مهندسات طموحات، قمن ببناء منصة Attocus بتعاون تكاملي كامل: حيث طُوّرت واجهات المنصة التفاعلية وبنيتها الأساسية بجهد جماعي مشترك، مع تخصص كل مؤسسة في هندسة وكيل ذكي وركيزة تقنية أساسية.'
-                : 'The passionate co-founding engineering team united to build Attocus collaboratively: jointly crafting the interactive UI and core platform, with each founder driving a specialized intelligent agent and technical pillar.'}
+                ? 'فريق العمل المكون من مهندسات طموحات قمن ببناء منصة Attocus بتعاون تكاملي كامل: وتطوير واجهاتها وبنيتها البرمجية وهندسة الوكلاء الأذكياء.'
+                : 'The passionate engineering team united to build Attocus collaboratively: crafting its interactive interface, backend architecture, and intelligent agents.'}
             </p>
           </div>
 
@@ -590,88 +517,34 @@ export const AboutView: React.FC<AboutViewProps> = ({
             {TEAM_MEMBERS.map((member, idx) => (
               <div
                 key={idx}
-                className="rounded-3xl bg-white dark:bg-[#111827] border border-slate-200/70 dark:border-slate-800 p-6 sm:p-7 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-6 group"
+                className="rounded-3xl bg-white dark:bg-[#111827] border border-slate-200/70 dark:border-slate-800 p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-5 group"
               >
-                <div className="space-y-4">
-                  {/* Top Bar: Avatar + Role Badge + GitHub */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3.5">
-                      <div className={`w-14 h-14 rounded-2xl bg-gradient-to-tr ${member.avatarColor} text-white font-bold text-lg flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0 font-serif`}>
-                        {isAr ? member.nameAr.split(' ')[0].charAt(0) : member.nameEn.split(' ')[0].charAt(0)}
-                      </div>
-                      <div className={isAr ? 'text-right' : 'text-left'}>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                            {isAr ? member.nameAr : member.nameEn}
-                          </h3>
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25">
-                            <Award className="w-3 h-3 text-amber-500" />
-                            <span>{isAr ? 'مؤسسة مشاركة' : 'Co-Founder'}</span>
-                          </span>
-                        </div>
-                        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-0.5">
-                          {isAr ? member.roleAr : member.roleEn}
-                        </p>
-                      </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3.5">
+                    <div className={`w-13 h-13 rounded-2xl bg-gradient-to-tr ${member.avatarColor} text-white font-bold text-lg flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0 font-serif`}>
+                      {isAr ? member.nameAr.split(' ')[0].charAt(0) : member.nameEn.split(' ')[0].charAt(0)}
                     </div>
-
-                    <a
-                      href={member.linkedin}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2.5 rounded-xl border border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 transition-all shrink-0"
-                      title={isAr ? 'الملف الشخصي على LinkedIn' : 'LinkedIn Profile'}
-                    >
-                      <Linkedin className="w-4 h-4" />
-                    </a>
+                    <div className={isAr ? 'text-right' : 'text-left'}>
+                      <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                        {isAr ? member.nameAr : member.nameEn}
+                      </h3>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold mt-0.5">
+                        {isAr ? member.roleAr : member.roleEn}
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Badges: Degree + Technical Tag */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 font-semibold border border-blue-500/25">
-                      🎓 {isAr ? member.academicAr : member.academicEn}
-                    </span>
-                    <span className="inline-block text-[10px] font-mono px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold border border-slate-200/60 dark:border-slate-700">
-                      {isAr ? member.tagAr : member.tagEn}
-                    </span>
-                  </div>
-
-                  {/* Bio */}
-                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                    {isAr ? member.bioAr : member.bioEn}
-                  </p>
-
-                  {/* Key Contributions */}
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                      {isAr ? 'أبرز الإنجازات في المنصة:' : 'Key Project Contributions:'}
-                    </span>
-                    <ul className="space-y-1 text-xs text-slate-600 dark:text-slate-400 font-medium">
-                      {(isAr ? member.contributionsAr : member.contributionsEn).map((c, cIdx) => (
-                        <li key={cIdx} className="flex items-start gap-2">
-                          <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                          <span>{c}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-
-                {/* Footer link to LinkedIn */}
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
                   <a
                     href={member.linkedin}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 transition-all text-xs font-semibold shrink-0"
+                    title={isAr ? 'الملف الشخصي على LinkedIn' : 'LinkedIn Profile'}
                   >
-                    <Linkedin className="w-3.5 h-3.5" />
-                    <span>{isAr ? 'حساب LinkedIn الرسمي' : 'Official LinkedIn Profile'}</span>
+                    <Linkedin className="w-4 h-4" />
+                    <span className="hidden sm:inline">{isAr ? 'LinkedIn' : 'LinkedIn'}</span>
                     <ArrowUpRight className="w-3.5 h-3.5" />
                   </a>
-                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold font-mono">
-                    {isAr ? 'مؤسسة مشاركة · Attocus' : 'Attocus Co-Founder'}
-                  </span>
                 </div>
               </div>
             ))}
