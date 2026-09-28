@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Sparkles, GraduationCap, ArrowRight, ArrowLeft,
+  ArrowRight, ArrowLeft,
   Zap, ChevronRight
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -161,24 +161,17 @@ export const IntroView: React.FC<IntroViewProps> = ({
       {/* ─── Hero Presentation ──────────────────────────────────────── */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 sm:px-12 py-10 lg:py-16 text-center max-w-4xl mx-auto space-y-7 my-auto">
 
-        {/* Signature Mascot Emblem (بدون خلفية فوق البادج) */}
-        <div className="flex justify-center -mb-1 animate-in fade-in zoom-in-90 duration-700">
+        {/* Signature Mascot Emblem */}
+        <div className="flex justify-center -mb-3 animate-in fade-in zoom-in-90 duration-700">
           <div className="relative group cursor-pointer">
             <div className="absolute -inset-4 bg-gradient-to-tr from-blue-500/30 via-cyan-400/20 to-indigo-500/20 rounded-full blur-2xl opacity-70 group-hover:opacity-100 transition-all duration-700 pointer-events-none" />
             <img
               src="/assets/logos/logo_cheetah_transparent.png?v=2"
               alt="Attocus Mascot"
-              className="relative w-24 h-24 sm:w-28 sm:h-28 object-contain drop-shadow-[0_10px_30px_rgba(59,130,246,0.4)] group-hover:scale-105 transition-transform duration-300"
+              className="relative w-28 h-28 sm:w-32 sm:h-32 object-contain drop-shadow-[0_10px_30px_rgba(59,130,246,0.4)] group-hover:scale-105 transition-transform duration-300"
             />
           </div>
         </div>
-
-        {/* Innovation Badge (بدون دائرة) */}
-        <div className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-cyan-500/10 border border-blue-500/30 text-blue-300 text-xs sm:text-sm font-medium shadow-inner animate-in fade-in slide-in-from-top-4 duration-700">
-          <Sparkles className="w-4 h-4 text-cyan-400 animate-pulse" />
-          <span>{isAr ? 'مستقبل المذاكرة المبنية على الفهم لا الحفظ' : 'The Socratic Intelligence Era in Modern Learning'}</span>
-        </div>
-
         {/* Dynamic Grand Title: ATTOCUS */}
         <div className="relative space-y-5">
           {/* Subtle Backglow */}
