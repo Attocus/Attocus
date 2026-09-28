@@ -170,7 +170,7 @@ class ExplainRequest(BaseModel):
     slide_content: str
     student_question: Optional[str] = None
     chat_history: Optional[List[Dict[str, Any]]] = None
-    language: Optional[str] = "ar"
+    language: Optional[str] = None
 
 class SpacedRepetitionReviewRequest(BaseModel):
     item_id: str
@@ -422,14 +422,24 @@ def submit_quiz(payload: QuizSubmitRequest):
 @app.post("/api/coach/explain")
 def explain_concept(payload: ExplainRequest):
     """Socratic / tutor explanation for difficult slide concepts without repeating past chat content."""
+    eff_lang = payload.language
+    if not eff_lang:
+        q = (payload.student_question or "").strip()
+        if any(c in q for c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"):
+            eff_lang = "en"
+        elif any(c in q for c in "ابتثجحخدذرزسشصضطظعغفقكلمنهويىةء"):
+            eff_lang = "ar"
+        else:
+            eff_lang = "en" if any(c in payload.slide_content for c in "abcdefghijklmnopqrstuvwxyz") else "ar"
+
     if payload.student_question and check_sql_injection(payload.student_question):
-        return {"explanation": get_safe_rejection_response(payload.language or "ar")}
+        return {"explanation": get_safe_rejection_response(eff_lang)}
     explanation = orchestrator.explain_slide(
         topic=payload.topic,
         slide_content=payload.slide_content,
         student_question=payload.student_question,
         chat_history=payload.chat_history,
-        language=payload.language or "ar"
+        language=eff_lang
     )
     return {"explanation": explanation}
 

@@ -192,6 +192,19 @@ Return ONLY valid JSON with this exact schema:
         Explains a difficult concept warmly, concisely, and builds upon chat history
         with multi-turn memory, SQL injection protection, and strict slide relevance.
         """
+        # Determine language dynamically based on student question, slide content, or explicit parameter
+        if student_question and student_question.strip():
+            has_arabic = bool(re.search(r"[\u0600-\u06FF]", student_question))
+            has_english = bool(re.search(r"[a-zA-Z]", student_question))
+            if has_english and not has_arabic:
+                language = "en"
+            elif has_arabic:
+                language = "ar"
+        elif not language:
+            has_arabic_slide = bool(re.search(r"[\u0600-\u06FF]", slide_content or ""))
+            has_english_slide = bool(re.search(r"[a-zA-Z]", slide_content or ""))
+            language = "ar" if (has_arabic_slide and not has_english_slide) else "en"
+
         user_query = student_question or (
             f"اشرح لي الفكرة المحورية لموضوع {topic} ببساطة وبشكل تطبيقي."
             if language == "ar"
@@ -214,7 +227,22 @@ Return ONLY valid JSON with this exact schema:
         if check_topic_boundary(user_query):
             return get_topic_boundary_rejection(topic, language)
 
-        # 5. RAG Grounding & Relevance Threshold (< 0.65)
+        # 5. Check for greetings or general slide explanation requests
+        user_lower = user_query.lower().strip()
+        GREETINGS = [
+            "اهلا", "أهلا", "مرحبا", "سلام", "السلام عليكم", "هلا", "اهلين", "صباح الخير", "مساء الخير",
+            "hello", "hi", "hey", "greetings", "good morning", "good evening", "howdy"
+        ]
+        is_greeting = any(g == user_lower or user_lower.startswith(g + " ") for g in GREETINGS) and len(user_lower.split()) <= 4
+
+        # Greet student warmly without off-topic rejection or awkward fallbacks
+        if is_greeting:
+            if language == "en":
+                return f"Hello! I am your AI study companion for \"{topic}\". How can I help you master this slide? Ask me anything about this concept and I'll explain it clearly!"
+            else:
+                return f"أهلاً بك! أنا رفيقك الذكي لمساعدتك في فهم \"{topic}\". اسألني عن أي نقطة أو مفهوم في هذه الشريحة ويسعدني توضيحه لك ببساطة!"
+
+        # 6. RAG Grounding & Relevance Threshold (< 0.65)
         rag_context_str = ""
         top_similarity = 1.0
         chunks: List[Dict[str, Any]] = []
@@ -227,14 +255,6 @@ Return ONLY valid JSON with this exact schema:
                     rag_context_str = "\n\nRELEVANT LECTURE CONTEXT (From Shared RAG):\n" + self.rag.format_context(chunks)
             except Exception as rag_err:
                 logging.getLogger("LearningCoach").warning(f"RAG retrieval error: {rag_err}")
-
-        # 5. Check for greetings or general slide explanation requests
-        user_lower = user_query.lower().strip()
-        GREETINGS = [
-            "اهلا", "أهلا", "مرحبا", "سلام", "السلام عليكم", "هلا", "اهلين", "صباح الخير", "مساء الخير",
-            "hello", "hi", "hey", "greetings", "good morning", "good evening"
-        ]
-        is_greeting = any(g in user_lower for g in GREETINGS) and len(user_lower.split()) <= 4
 
         GENERAL_EXPLAIN_PHRASES = [
             "اشرح", "وضح", "لخص", "ماهي الفكرة", "ما هي الفكرة", "عن ماذا", "وش السلايد", "وش الشريحة",
@@ -264,7 +284,7 @@ ANTI-REPETITION & CONTEXT DIRECTIVE:
 - Remember all previous points discussed, and if the student asks about something said earlier (e.g. their name or previous topic), answer accurately based on the history.
 - Directly address the student's immediate doubt or next question and build deeper intuition."""
 
-        lang_rule = "Respond in Arabic." if language == "ar" else "Respond in English."
+        lang_rule = "Respond strictly in English. Do NOT answer in Arabic." if language == "en" else "Respond strictly in Arabic. Do NOT answer in English unless quoting technical terms."
 
         system_prompt = f"""You are a warm, calm, academic tutor sitting right next to a university student.
 
@@ -275,20 +295,20 @@ CRITICAL INSTRUCTIONS & STRICT BOUNDARIES:
 
 2. STRICT ACADEMIC & LECTURE SCOPE (REJECT OFF-TOPIC QUERIES):
    - You are STRICTLY an academic tutor dedicated to THIS specific lecture and its slides.
+   - Polite greetings ("hi", "hello", "مرحبا", "هلا") and introductions ("my name is...") are ALWAYS warmly welcomed! Greet the student and ask how you can help them with the slide.
    - If the student asks about anything completely UNRELATED to the lecture, the slide, or the academic material (for example: cooking/food recipes, sports/football matches, movies, video games, unrelated coding projects, personal chit-chat, or general non-academic trivia), you MUST POLITELY REFUSE to answer!
    - In Arabic, refuse with:
      "أعتذر منك، أنا مخصص فقط لمساعدتك وشرح محتوى هذه المحاضرة والسلايدات. لا يمكنني الإجابة عن مواضيع خارج سياق المادة، لكن يسعدني جداً أن تسألني عن أي مفهوم أو نقطة في المحاضرة!"
    - In English, refuse with:
      "I apologize, but I am specifically designed to assist you with the concepts and content of this lecture and slides. I cannot answer questions unrelated to the study material, but I would be glad to help you with any concept from the lecture!"
-   - (Exception: polite greetings like "مرحبا" or introducing oneself like "اسمي فلان" are warmly accepted, then gently orient them towards the lecture).
 
 3. EXPLANATION QUALITY & GROUNDING:
    - Ground your explanation strictly in the provided slide notes and lecture RAG context.
    - When explaining lecture topics, explain warmly, clearly, and concisely in 2-3 brief, digestible paragraphs.
    - If citing facts, mention the relevant slide/page number if available.
    - Use a vivid real-world analogy to make abstract mechanisms tangible.
-   - Conclude with a quick friendly check: 'هل الفكرة واضحة الآن، أم تحب نأخذ مثالاً إضافياً؟' (or English equivalent).
-   - {lang_rule}
+   - Conclude with a quick friendly check: 'هل الفكرة واضحة الآن، أم تحب نأخذ مثالاً إضافياً؟' (if in Arabic) or 'Does that make sense, or would you like another example?' (if in English).
+   - STRICT LANGUAGE: {lang_rule}
 {history_instruction}
 
 SLIDE CONTENT:
@@ -362,7 +382,7 @@ CANDIDATE TUTOR ANSWER:
 Instructions:
 1. If the candidate answer is faithful to the lecture context, return the exact candidate answer without change.
 2. If the candidate answer introduces factual hallucinations outside the lecture context, remove or correct the unsupported claims and return the grounded answer in the same language.
-3. Return ONLY the final student-facing answer text.
+3. Return ONLY the final student-facing answer text in the SAME language ({'Arabic' if language == 'ar' else 'English'}). Do NOT translate or switch languages.
 """
         try:
             check_resp = self.client.chat.completions.create(

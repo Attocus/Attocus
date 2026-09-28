@@ -89,6 +89,10 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
     saveMessages(updatedWithUser);
     setIsLoading(true);
 
+    const userQHasArabic = /[\u0600-\u06FF]/.test(userQ);
+    const userQHasEnglish = /[a-zA-Z]/.test(userQ);
+    const detectedLang = userQHasArabic ? 'ar' : userQHasEnglish ? 'en' : (isAr ? 'ar' : 'en');
+
     try {
       const response = await fetch('/api/coach/explain', {
         method: 'POST',
@@ -98,7 +102,8 @@ export const ExplainDrawer: React.FC<ExplainDrawerProps> = ({
           currentSlide: slide,
           allSlides,
           question: userQ,
-          chatHistory: messages
+          chatHistory: messages,
+          language: detectedLang
         })
       });
 

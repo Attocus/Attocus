@@ -712,13 +712,19 @@ async function startServer() {
   // 1. Explain Agent (calls Python LearningCoachAgent first)
   app.post('/api/coach/explain', async (req, res) => {
     try {
-      const { lectureTitle, currentSlide, allSlides, question, chatHistory } = req.body;
+      const { lectureTitle, currentSlide, allSlides, question, chatHistory, language } = req.body;
+
+      // Detect language strictly based on question first, then slide content
+      const isArQuestion = (question?.match(/[\u0600-\u06FF]/g) || []).length > 0;
+      const isEnQuestion = (question?.match(/[a-zA-Z]/g) || []).length > 0;
+      const slideArabicChars = [currentSlide?.title, ...(currentSlide?.content || []), ...(currentSlide?.keyPoints || [])].join(' ').match(/[\u0600-\u06FF]/g)?.length || 0;
+      const slideLatinChars = [currentSlide?.title, ...(currentSlide?.content || []), ...(currentSlide?.keyPoints || [])].join(' ').match(/[a-zA-Z]/g)?.length || 0;
+      const effectiveLang = isArQuestion ? 'ar' : isEnQuestion ? 'en' : (language || (slideArabicChars > slideLatinChars ? 'ar' : 'en'));
 
       // 1. Check for SQL Injection
       if (isSqlInjection(question)) {
-        const isArQ = (question.match(/[\u0600-\u06FF]/g) || []).length > 0;
         return res.json({
-          answer: getSafeRejectionResponse(isArQ ? 'ar' : 'en'),
+          answer: getSafeRejectionResponse(effectiveLang),
           citedLecturePages: [currentSlide?.pageNumber || 1]
         });
       }
@@ -742,7 +748,8 @@ async function startServer() {
               `Key Points: ${(currentSlide?.keyPoints || []).join('\n')}`
             ].join('\n'),
             student_question: question,
-            chat_history: cleanHistory
+            chat_history: cleanHistory,
+            language: effectiveLang
           })
         });
         if (pyRes.ok) {
