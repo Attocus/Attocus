@@ -17,11 +17,38 @@
   <b>Attocus</b> is an intelligent, privacy-first study room designed to turn passive reading into deep mastery, active recall, and sustained attention. Powered by an orchestrated network of 4 specialized AI agents, native Cloud Firestore Vector Search (RAG), and client-side on-device computer vision attention telemetry.
 </p>
 
+<p align="center">
+  <img src="docs/images/03_study_room_workspace.png" alt="Attocus Interactive Study Workspace" width="100%" />
+</p>
+
 </div>
 
 ---
 
+## Platform Interface
+
+### 1. Interactive Study Workspace & High-DPI Canvas
+Turn slides and PDF lecture notes into an active cognitive workspace with sub-pixel drawing, annotations, intelligent focus tracking, and real-time agent intervention.
+
+<p align="center">
+  <img src="docs/images/03_study_room_workspace.png" alt="Interactive Study Room Workspace" width="95%" />
+</p>
+
+### 2. Multi-Agent Ecosystem in Action
+Active recall quiz generation, reciprocal Socratic dialogue, and adaptive tutoring powered by specialized agent workflows.
+
+| Quiz Agent (Active Recall) | Summary Agent (Socratic Reciprocal Dialogue) |
+| :---: | :---: |
+| <img src="docs/images/04_active_recall_quiz.png" alt="Active Recall Quiz" width="100%" /> | <img src="docs/images/05_socratic_summary.png" alt="Socratic Summary" width="100%" /> |
+
+| Learning Coach (Adaptive Explanations) | Student Dashboard & Cognitive Folders |
+| :---: | :---: |
+| <img src="docs/images/06_ai_coach_drawer.png" alt="AI Learning Coach" width="100%" /> | <img src="docs/images/02_home_dashboard.png" alt="Home Dashboard" width="100%" /> |
+
+---
+
 ## Key Features
+
 
 ### 1. Multi-Agent Architecture
 - **Orchestrator Agent (`OrchestratorAgent`)**: Coordinates session flow, delegates cognitive tasks, and synchronizes real-time agent responses.
