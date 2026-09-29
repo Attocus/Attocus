@@ -369,62 +369,9 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
 
-        // 1. إذا كان الـ WebSocket متصلاً، أرسل الإطارات لحظياً (5 FPS) لسيرفر البايثون
+        // Send frame to Python Attention Monitor (YOLO & MediaPipe - Zero OpenAI cost)
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
           socketRef.current.send(dataUrl);
-          return;
-        }
-
-        // 2. خطة الأمان الذكية (Smart Fallback): إذا كان المستخدم أونلاين على السيرفر ولم يتصل بالبايثون
-        // نقوم بتحليل الإطار عبر سيرفر Node.js المدمج بشكل مقنن (كل 3.5 ثوانٍ) لمنع الضغط
-        if (!isHttpAnalyzingRef.current) {
-          const now = Date.now();
-          if (now - lastHttpAnalysisTimeRef.current >= 3500) {
-            lastHttpAnalysisTimeRef.current = now;
-            isHttpAnalyzingRef.current = true;
-            try {
-              const res = await fetch('/api/coach/attention/analyze-frame', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imageBase64: dataUrl, language: isArRef.current ? 'ar' : 'en' })
-              });
-              if (res.ok) {
-                const data = await res.json();
-                const state = data.state || 'focused';
-                const msg = data.coachMessage || data.reason;
-
-                if (state === 'using_phone') {
-                  setIsPhoneVisible(true);
-                  triggerAudioAlert();
-                  callbacksRef.current.onTriggerPhoneDetected(
-                    msg || (isArRef.current ? 'تم رصد استخدام الجوال!' : 'Mobile phone detected!')
-                  );
-                } else if (state === 'sleeping') {
-                  setIsSleepyVisible(true);
-                  triggerAudioAlert();
-                  callbacksRef.current.onTriggerSleepingDetected(
-                    msg || (isArRef.current ? 'تم رصد إغلاق العينين أو علامات النعاس!' : 'Drowsiness detected!')
-                  );
-                } else if (state === 'away') {
-                  setIsAwayVisible(true);
-                  callbacksRef.current.onTriggerAwayDetected?.(
-                    msg || (isArRef.current ? 'تم رصد الابتعاد عن مكان المذاكرة.' : 'Stepped away from study desk detected.')
-                  );
-                } else if (state === 'distracted') {
-                  callbacksRef.current.onTriggerGazeDrift();
-                } else if (state === 'focused') {
-                  setIsPhoneVisible(false);
-                  setIsSleepyVisible(false);
-                  setIsAwayVisible(false);
-                  callbacksRef.current.onTriggerFocused();
-                }
-              }
-            } catch (fallbackErr) {
-              console.warn('[Smart Fallback] Frame analysis notice:', fallbackErr);
-            } finally {
-              isHttpAnalyzingRef.current = false;
-            }
-          }
         }
       }
     } catch (err) {
