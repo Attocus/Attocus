@@ -108,16 +108,17 @@ async function generateTextWithLLM(prompt: string, systemPrompt?: string): Promi
 
 async function startServer() {
   const app = express();
+  app.set('trust proxy', 1);
   const PORT = Number(process.env.PORT) || 3000;
   const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://127.0.0.1:8000';
 
   app.use(express.json({ limit: '10mb' }));
 
   // ─── Express Rate Limiting Guardrails ──────────────────────────────────────────
-  // 1. General API Limiter: 150 requests / 1 minute (Prevents DDoS and flooding)
+  // 1. General API Limiter: 1000 requests / 1 minute (Supports multi-user presentation)
   const apiLimiter = rateLimit({
     windowMs: 60 * 1000,
-    limit: 150,
+    limit: 1000,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     message: {
@@ -127,11 +128,11 @@ async function startServer() {
   });
   app.use('/api/', apiLimiter);
 
-  // 2. Strict AI / LLM & Quiz Generation Limiter: 30 requests / 1 minute
-  // (Prevents token exhaustion, loops, and rapid LLM credit burn)
+  // 2. AI / LLM & Quiz Generation Limiter: 500 requests / 1 minute
+  // (Prevents token exhaustion, loops, and supports 40+ concurrent users comfortably)
   const aiCoachLimiter = rateLimit({
     windowMs: 60 * 1000,
-    limit: 30,
+    limit: 500,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     message: {
@@ -140,7 +141,7 @@ async function startServer() {
     }
   });
 
-  // Apply strict limiter to heavy AI and LLM generation endpoints
+  // Apply limiter to heavy AI and LLM generation endpoints
   app.use('/api/coach/', aiCoachLimiter);
   app.use('/api/quiz/', aiCoachLimiter);
   app.use('/api/rag/upload', aiCoachLimiter);
@@ -193,6 +194,14 @@ async function startServer() {
       hasOpenAiKey: !!process.env.OPENAI_API_KEY,
       pythonBackendConnected: pythonConnected,
       pythonUrl: PYTHON_BACKEND_URL
+    });
+  });
+
+  // Client Runtime Configuration Endpoint
+  app.get('/api/config', (_req, res) => {
+    res.json({
+      wsUrl: process.env.WS_BACKEND_URL || process.env.VITE_WS_URL || null,
+      pythonBackendConnected: !!PYTHON_BACKEND_URL
     });
   });
 

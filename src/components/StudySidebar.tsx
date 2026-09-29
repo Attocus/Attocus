@@ -89,6 +89,8 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
   const awayAlertFiredRef = useRef<boolean>(false);
 
   const lastAudioPlayTimeRef = useRef<number>(0);
+  const lastHttpAnalysisTimeRef = useRef<number>(0);
+  const isHttpAnalyzingRef = useRef<boolean>(false);
 
   const callbacksRef = useRef({
     onTriggerPhoneDetected,
@@ -175,144 +177,172 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
       return;
     }
 
-    const socket = new WebSocket('ws://127.0.0.1:8000/ws/detect');
-    socketRef.current = socket;
-
-    socket.onopen = () => {
-      console.log('Connected to Python Attention Monitor WebSocket Server');
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        const now = Date.now();
-
-        // 1. كشف الجوال
-        if (data.phone_detected) {
-          setIsPhoneVisible(true);
-          lastPhoneSeenTimeRef.current = now;
-          if (!phoneStartTimeRef.current) phoneStartTimeRef.current = now;
-        } else {
-          setIsPhoneVisible(false);
-          if (
-            lastPhoneSeenTimeRef.current &&
-            now - lastPhoneSeenTimeRef.current > GRACE_PERIOD_MS
-          ) {
-            phoneStartTimeRef.current = null;
-            lastPhoneSeenTimeRef.current = null;
-            if (phoneAlertFiredRef.current) {
-              phoneAlertFiredRef.current = false;
-              callbacksRef.current.onTriggerFocused();
-            }
-          }
-        }
-
-        if (phoneStartTimeRef.current) {
-          const elapsed = now - phoneStartTimeRef.current;
-          if (elapsed >= PHONE_ALERT_THRESHOLD_MS) {
-            triggerAudioAlert();
-
-            if (!phoneAlertFiredRef.current) {
-              phoneAlertFiredRef.current = true;
-              callbacksRef.current.onTriggerPhoneDetected(
-                isArRef.current
-                  ? `تم رصد استخدام الجوال! (${data.confidence || 90}%)`
-                  : `Mobile phone usage detected! (${data.confidence || 90}%)`
-              );
-            }
-          }
-        }
-
-        // 2. كشف النعاس
-        if (data.is_sleepy) {
-          setIsSleepyVisible(true);
-          lastSleepySeenTimeRef.current = now;
-          if (!sleepyStartTimeRef.current) sleepyStartTimeRef.current = now;
-        } else {
-          setIsSleepyVisible(false);
-          if (
-            lastSleepySeenTimeRef.current &&
-            now - lastSleepySeenTimeRef.current > GRACE_PERIOD_MS
-          ) {
-            sleepyStartTimeRef.current = null;
-            lastSleepySeenTimeRef.current = null;
-            if (sleepAlertFiredRef.current) {
-              sleepAlertFiredRef.current = false;
-              callbacksRef.current.onTriggerFocused();
-            }
-          }
-        }
-
-        if (sleepyStartTimeRef.current) {
-          const elapsed = now - sleepyStartTimeRef.current;
-          if (elapsed >= SLEEP_ALERT_THRESHOLD_MS) {
-            triggerAudioAlert();
-
-            if (!sleepAlertFiredRef.current) {
-              sleepAlertFiredRef.current = true;
-              callbacksRef.current.onTriggerSleepingDetected(
-                isArRef.current
-                  ? 'تم رصد إغلاق العينين أو علامات النعاس!'
-                  : 'Signs of drowsiness or closed eyes detected!'
-              );
-            }
-          }
-        }
-
-        // 3. كشف مغادرة الكرسي
-        if (data.is_away) {
-          setIsAwayVisible(true);
-          lastAwaySeenTimeRef.current = now;
-          if (!awayStartTimeRef.current) awayStartTimeRef.current = now;
-        } else {
-          setIsAwayVisible(false);
-          if (
-            lastAwaySeenTimeRef.current &&
-            now - lastAwaySeenTimeRef.current > GRACE_PERIOD_MS
-          ) {
-            awayStartTimeRef.current = null;
-            lastAwaySeenTimeRef.current = null;
-            if (awayAlertFiredRef.current) {
-              awayAlertFiredRef.current = false;
-              callbacksRef.current.onTriggerFocused();
-            }
-          }
-        }
-
-        if (awayStartTimeRef.current) {
-          const elapsed = now - awayStartTimeRef.current;
-          if (elapsed >= AWAY_ALERT_THRESHOLD_MS) {
-            if (!awayAlertFiredRef.current) {
-              awayAlertFiredRef.current = true;
-              callbacksRef.current.onTriggerAwayDetected?.(
-                isArRef.current
-                  ? 'تم رصد الابتعاد عن مكان المذاكرة.'
-                  : 'Stepped away from study desk detected.'
-              );
-            }
-          }
-        }
-
-        // 4. استعادة حالة التركيز
-        if (
-          !phoneStartTimeRef.current &&
-          !sleepyStartTimeRef.current &&
-          !awayStartTimeRef.current &&
-          (phoneAlertFiredRef.current || sleepAlertFiredRef.current || awayAlertFiredRef.current)
-        ) {
-          phoneAlertFiredRef.current = false;
-          sleepAlertFiredRef.current = false;
-          awayAlertFiredRef.current = false;
-          callbacksRef.current.onTriggerFocused();
-        }
-      } catch (err) {
-        console.error('Error parsing WebSocket response:', err);
+    const getWebSocketUrl = (): string => {
+      const envUrl = (import.meta as any).env?.VITE_WS_URL;
+      if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+        return envUrl.trim();
       }
+
+      if (typeof window !== 'undefined') {
+        const isLocal =
+          window.location.hostname === 'localhost' ||
+          window.location.hostname === '127.0.0.1';
+
+        if (!isLocal) {
+          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          return `${proto}//${window.location.host}/ws/detect`;
+        }
+      }
+
+      return 'ws://127.0.0.1:8000/ws/detect';
     };
 
-    socket.onerror = (err) => {
-      console.error('WebSocket Error:', err);
-    };
+    const wsUrl = getWebSocketUrl();
+    let socket: WebSocket | null = null;
+    try {
+      socket = new WebSocket(wsUrl);
+      socketRef.current = socket;
+    } catch (wsErr) {
+      console.warn('[Attention] WebSocket creation skipped/failed:', wsErr);
+    }
+
+    if (socket) {
+      socket.onopen = () => {
+        console.log('[Attention] Connected to WebSocket Server:', wsUrl);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          const now = Date.now();
+
+          // 1. كشف الجوال
+          if (data.phone_detected) {
+            setIsPhoneVisible(true);
+            lastPhoneSeenTimeRef.current = now;
+            if (!phoneStartTimeRef.current) phoneStartTimeRef.current = now;
+          } else {
+            setIsPhoneVisible(false);
+            if (
+              lastPhoneSeenTimeRef.current &&
+              now - lastPhoneSeenTimeRef.current > GRACE_PERIOD_MS
+            ) {
+              phoneStartTimeRef.current = null;
+              lastPhoneSeenTimeRef.current = null;
+              if (phoneAlertFiredRef.current) {
+                phoneAlertFiredRef.current = false;
+                callbacksRef.current.onTriggerFocused();
+              }
+            }
+          }
+
+          if (phoneStartTimeRef.current) {
+            const elapsed = now - phoneStartTimeRef.current;
+            if (elapsed >= PHONE_ALERT_THRESHOLD_MS) {
+              triggerAudioAlert();
+
+              if (!phoneAlertFiredRef.current) {
+                phoneAlertFiredRef.current = true;
+                callbacksRef.current.onTriggerPhoneDetected(
+                  isArRef.current
+                    ? `تم رصد استخدام الجوال! (${data.confidence || 90}%)`
+                    : `Mobile phone usage detected! (${data.confidence || 90}%)`
+                );
+              }
+            }
+          }
+
+          // 2. كشف النعاس
+          if (data.is_sleepy) {
+            setIsSleepyVisible(true);
+            lastSleepySeenTimeRef.current = now;
+            if (!sleepyStartTimeRef.current) sleepyStartTimeRef.current = now;
+          } else {
+            setIsSleepyVisible(false);
+            if (
+              lastSleepySeenTimeRef.current &&
+              now - lastSleepySeenTimeRef.current > GRACE_PERIOD_MS
+            ) {
+              sleepyStartTimeRef.current = null;
+              lastSleepySeenTimeRef.current = null;
+              if (sleepAlertFiredRef.current) {
+                sleepAlertFiredRef.current = false;
+                callbacksRef.current.onTriggerFocused();
+              }
+            }
+          }
+
+          if (sleepyStartTimeRef.current) {
+            const elapsed = now - sleepyStartTimeRef.current;
+            if (elapsed >= SLEEP_ALERT_THRESHOLD_MS) {
+              triggerAudioAlert();
+
+              if (!sleepAlertFiredRef.current) {
+                sleepAlertFiredRef.current = true;
+                callbacksRef.current.onTriggerSleepingDetected(
+                  isArRef.current
+                    ? 'تم رصد إغلاق العينين أو علامات النعاس!'
+                    : 'Signs of drowsiness or closed eyes detected!'
+                );
+              }
+            }
+          }
+
+          // 3. كشف مغادرة الكرسي
+          if (data.is_away) {
+            setIsAwayVisible(true);
+            lastAwaySeenTimeRef.current = now;
+            if (!awayStartTimeRef.current) awayStartTimeRef.current = now;
+          } else {
+            setIsAwayVisible(false);
+            if (
+              lastAwaySeenTimeRef.current &&
+              now - lastAwaySeenTimeRef.current > GRACE_PERIOD_MS
+            ) {
+              awayStartTimeRef.current = null;
+              lastAwaySeenTimeRef.current = null;
+              if (awayAlertFiredRef.current) {
+                awayAlertFiredRef.current = false;
+                callbacksRef.current.onTriggerFocused();
+              }
+            }
+          }
+
+          if (awayStartTimeRef.current) {
+            const elapsed = now - awayStartTimeRef.current;
+            if (elapsed >= AWAY_ALERT_THRESHOLD_MS) {
+              if (!awayAlertFiredRef.current) {
+                awayAlertFiredRef.current = true;
+                callbacksRef.current.onTriggerAwayDetected?.(
+                  isArRef.current
+                    ? 'تم رصد الابتعاد عن مكان المذاكرة.'
+                    : 'Stepped away from study desk detected.'
+                );
+              }
+            }
+          }
+
+          // 4. استعادة حالة التركيز
+          if (
+            !phoneStartTimeRef.current &&
+            !sleepyStartTimeRef.current &&
+            !awayStartTimeRef.current &&
+            (phoneAlertFiredRef.current || sleepAlertFiredRef.current || awayAlertFiredRef.current)
+          ) {
+            phoneAlertFiredRef.current = false;
+            sleepAlertFiredRef.current = false;
+            awayAlertFiredRef.current = false;
+            callbacksRef.current.onTriggerFocused();
+          }
+        } catch (err) {
+          console.error('Error parsing WebSocket response:', err);
+        }
+      };
+
+      socket.onerror = (err) => {
+        console.warn('[Attention] WebSocket notice: Running in HTTP Vision fallback mode');
+      };
+    }
 
     return () => {
       if (socketRef.current) {
@@ -339,8 +369,62 @@ export const StudySidebar: React.FC<StudySidebarProps> = ({
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
 
+        // 1. إذا كان الـ WebSocket متصلاً، أرسل الإطارات لحظياً (5 FPS) لسيرفر البايثون
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
           socketRef.current.send(dataUrl);
+          return;
+        }
+
+        // 2. خطة الأمان الذكية (Smart Fallback): إذا كان المستخدم أونلاين على السيرفر ولم يتصل بالبايثون
+        // نقوم بتحليل الإطار عبر سيرفر Node.js المدمج بشكل مقنن (كل 3.5 ثوانٍ) لمنع الضغط
+        if (!isHttpAnalyzingRef.current) {
+          const now = Date.now();
+          if (now - lastHttpAnalysisTimeRef.current >= 3500) {
+            lastHttpAnalysisTimeRef.current = now;
+            isHttpAnalyzingRef.current = true;
+            try {
+              const res = await fetch('/api/coach/attention/analyze-frame', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageBase64: dataUrl, language: isArRef.current ? 'ar' : 'en' })
+              });
+              if (res.ok) {
+                const data = await res.json();
+                const state = data.state || 'focused';
+                const msg = data.coachMessage || data.reason;
+
+                if (state === 'using_phone') {
+                  setIsPhoneVisible(true);
+                  triggerAudioAlert();
+                  callbacksRef.current.onTriggerPhoneDetected(
+                    msg || (isArRef.current ? 'تم رصد استخدام الجوال!' : 'Mobile phone detected!')
+                  );
+                } else if (state === 'sleeping') {
+                  setIsSleepyVisible(true);
+                  triggerAudioAlert();
+                  callbacksRef.current.onTriggerSleepingDetected(
+                    msg || (isArRef.current ? 'تم رصد إغلاق العينين أو علامات النعاس!' : 'Drowsiness detected!')
+                  );
+                } else if (state === 'away') {
+                  setIsAwayVisible(true);
+                  callbacksRef.current.onTriggerAwayDetected?.(
+                    msg || (isArRef.current ? 'تم رصد الابتعاد عن مكان المذاكرة.' : 'Stepped away from study desk detected.')
+                  );
+                } else if (state === 'distracted') {
+                  callbacksRef.current.onTriggerGazeDrift();
+                } else if (state === 'focused') {
+                  setIsPhoneVisible(false);
+                  setIsSleepyVisible(false);
+                  setIsAwayVisible(false);
+                  callbacksRef.current.onTriggerFocused();
+                }
+              }
+            } catch (fallbackErr) {
+              console.warn('[Smart Fallback] Frame analysis notice:', fallbackErr);
+            } finally {
+              isHttpAnalyzingRef.current = false;
+            }
+          }
         }
       }
     } catch (err) {
