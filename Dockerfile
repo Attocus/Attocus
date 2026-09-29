@@ -11,7 +11,12 @@ RUN npm ci
 # Copy application source code
 COPY . .
 
+# Build Vite frontend and server bundle
+RUN npm run build
+
+ENV NODE_ENV=production
+ENV PORT=3000
 EXPOSE 3000
 
-# Start server
-CMD ["npm", "run", "dev"]
+# Start production server
+CMD ["npm", "start"]

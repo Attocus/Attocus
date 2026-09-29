@@ -30,6 +30,16 @@ function getAdminDb(): any {
       } catch (err) {
         console.warn('[Firebase Admin] init error:', err);
       }
+    } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      try {
+        const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        const adminApp = getAdminApps().length > 0 ? getAdminApps()[0] : initAdminApp({
+          credential: cert(sa)
+        });
+        adminDb = getAdminFirestore(adminApp);
+      } catch (err) {
+        console.warn('[Firebase Admin] env init error:', err);
+      }
     }
   }
   return adminDb;
@@ -243,6 +253,28 @@ async function startServer() {
     } catch (err: any) {
       console.error('RAG upload proxy error:', err);
       return res.status(500).json({ error: err.message || 'Failed to upload PDF to RAG service' });
+    }
+  });
+
+  // Voice Transcription Proxy
+  app.post('/api/transcribe', async (req, res) => {
+    try {
+      const headers: Record<string, string> = {};
+      if (req.headers['content-type']) {
+        headers['content-type'] = req.headers['content-type'] as string;
+      }
+      const pyRes = await fetch(`${PYTHON_BACKEND_URL}/api/transcribe`, {
+        method: 'POST',
+        headers,
+        body: req as any,
+        duplex: 'half'
+      } as any);
+
+      const data = await pyRes.json();
+      return res.status(pyRes.status).json(data);
+    } catch (err: any) {
+      console.error('Transcribe proxy error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to transcribe audio' });
     }
   });
 

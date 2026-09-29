@@ -789,7 +789,7 @@ export const StudyRoomView: React.FC<StudyRoomViewProps> = ({
       const formData = new FormData();
       formData.append('file', audioBlob, 'voice-note.webm');
 
-      const response = await fetch('http://localhost:8000/api/transcribe', {
+      const response = await fetch('/api/transcribe', {
         method: 'POST',
         body: formData
       });
